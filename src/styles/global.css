@@ -50,12 +50,19 @@
    * (`text-beamer-body` and up) — inherited text is a bug, not a small style.
    */
   .beamer-root {
-    font-size: calc(100vw / 120);
+    font-size: var(--wm-beamer-unit);
 
     /* Nobody is hovering on a projector, and a stray pointer on the screen is
      * visible to the whole room. docs/STYLEGUIDE.md §5. */
     cursor: none;
   }
+}
+
+/* The 16:9 area every beamer scene is drawn into. A projector reporting 4:3,
+ * 16:10 or 21:9 gets bars, not a second layout — docs/STYLEGUIDE.md §3. */
+@utility beamer-stage {
+  width: var(--wm-beamer-stage-width);
+  aspect-ratio: 16 / 9;
 }
 
 /* Projectors overscan and are rarely aligned perfectly — docs/STYLEGUIDE.md §3.

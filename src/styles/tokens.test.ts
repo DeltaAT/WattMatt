@@ -105,10 +105,16 @@ describe('tokens.css implements the normative documents', () => {
     }
   });
 
-  it('scales the beamer root with the viewport (docs/STYLEGUIDE.md §2)', () => {
+  it('scales the beamer root with the 16:9 stage (docs/STYLEGUIDE.md §2)', () => {
     const globalCss = readFileSync(join(REPO_ROOT, 'src/styles/global.css'), 'utf8');
     const beamerRoot = /\.beamer-root\s*\{([\s\S]*?)\}/.exec(globalCss)?.[1] ?? '';
-    expect(beamerRoot.replace(/\s+/g, '')).toContain('font-size:calc(100vw/120)');
+    expect(beamerRoot.replace(/\s+/g, '')).toContain('font-size:var(--wm-beamer-unit)');
+
+    // The unit follows the letterboxed stage, not the raw viewport: on a
+    // projector that is not 16:9 the two differ, and type sized to the
+    // viewport would overrun the stage it is drawn into (§3, issue #4).
+    expect(declaredTokens.get('--wm-beamer-stage-width')).toBe('min(100vw, calc(100vh * 16 / 9))');
+    expect(declaredTokens.get('--wm-beamer-unit')).toBe('calc(var(--wm-beamer-stage-width) / 120)');
   });
 });
 

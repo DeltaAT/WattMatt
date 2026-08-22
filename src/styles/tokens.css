@@ -75,8 +75,16 @@
    * 1080p and 4K share a layout without a single media query. 1 unit = 16px at
    * 1920px wide. `.beamer-root` in global.css sets its font-size to exactly
    * this, per docs/STYLEGUIDE.md §2.
+   *
+   * The unit follows the 16:9 stage, not the viewport. On a projector that is
+   * not 16:9 the scene is letterboxed rather than reflowed (§3), and a unit
+   * derived from the full viewport width would size type for a stage that is
+   * not there — on 21:9 the headline would run off the letterboxed edge. On an
+   * exactly 16:9 display `min()` picks the viewport width and this is the
+   * plain `100vw / 120` the styleguide names.
    */
-  --wm-beamer-unit: calc(100vw / 120);
+  --wm-beamer-stage-width: min(100vw, calc(100vh * 16 / 9));
+  --wm-beamer-unit: calc(var(--wm-beamer-stage-width) / 120);
   --wm-beamer-safe-area: 4%; /* projectors overscan — §3 */
 
   /* ---- typography ---- */
