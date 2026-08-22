@@ -1,13 +1,90 @@
 /*
- * Tailwind is wired in via `@tailwindcss/vite` (see vite.config.ts).
- * Design tokens, the `@theme` block and the offline-bundled fonts land here
- * with issue #3 — see docs/STYLEGUIDE.md. Until then this file only pulls in
- * Tailwind itself so the build pipeline is verifiable.
+ * Global stylesheet. Everything visual starts here:
+ *   tailwindcss  the framework, wired in via `@tailwindcss/vite`
+ *   fonts.css    the offline-bundled `@font-face` declarations
+ *   tokens.css   the design tokens and the Tailwind `@theme` mapping
+ *
+ * Rules in this file are limited to element defaults and the two window roots.
+ * Anything reusable belongs in `src/ui`, anything colour-shaped in tokens.css.
  */
-@import 'tailwindcss';
 
-html,
-body,
-#root {
-  height: 100%;
+@import 'tailwindcss';
+@import './fonts.css';
+@import './tokens.css';
+
+/*
+ * Element defaults go in `base` so a Tailwind utility can still override them.
+ * Unlayered CSS outranks every layer, which would make `cursor-auto` on a
+ * `.beamer-root` preview silently do nothing.
+ */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--wm-bg);
+    color: var(--wm-text);
+    font-family: var(--font-ui);
+    font-size: var(--text-host-sm); /* host body is 14px — docs/STYLEGUIDE.md §2 */
+    line-height: 1.45;
+
+    /* Tabular figures everywhere: group numbers, scores and clocks must not
+     * jitter as they change. docs/STYLEGUIDE.md §2. */
+    font-feature-settings:
+      'tnum' 1,
+      'cv05' 1;
+
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * The beamer window root.
+   *
+   * The font-size is resolution-relative so 720p, 1080p and 4K share one layout
+   * with no media queries (docs/STYLEGUIDE.md §2). Note what this means in
+   * practice: 1 unit is only 16px at 1080p, which is far below the 32px beamer
+   * floor. Beamer text must therefore always carry an explicit scale token
+   * (`text-beamer-body` and up) — inherited text is a bug, not a small style.
+   */
+  .beamer-root {
+    font-size: calc(100vw / 120);
+
+    /* Nobody is hovering on a projector, and a stray pointer on the screen is
+     * visible to the whole room. docs/STYLEGUIDE.md §5. */
+    cursor: none;
+  }
+}
+
+/* Projectors overscan and are rarely aligned perfectly — docs/STYLEGUIDE.md §3.
+ * Nothing important may sit in the outer 4%. */
+@utility beamer-safe-area {
+  padding: var(--wm-beamer-safe-area);
+}
+
+/* Tabular figures for a numeric display that sits inside a context which
+ * overrode the body's font-feature-settings (display font, third-party CSS). */
+@utility wm-tnum {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The display voice: Archivo at the top of its width axis. Weight is left to
+ * the caller, but docs/STYLEGUIDE.md §2 sets a floor of 500 on the beamer and
+ * 700–800 for headlines. */
+@utility wm-display {
+  font-family: var(--font-display);
+  font-stretch: var(--wm-font-stretch-expanded);
+}
+
+/* Host section labels: 12px uppercase with the tracking from §2. Safe for
+ * uppercase because labels are short; German text longer than three words must
+ * never be uppercased (docs/STYLEGUIDE.md §5). */
+@utility wm-label {
+  font-size: var(--text-host-xs);
+  letter-spacing: var(--wm-tracking-label);
+  text-transform: uppercase;
+  color: var(--wm-text-muted);
 }

@@ -1,0 +1,19 @@
+/*
+ * Offline-bundled webfonts (CLAUDE.md §2, docs/STYLEGUIDE.md §2).
+ *
+ * Both families come from Fontsource npm packages, so the `.woff2` files sit in
+ * node_modules after `pnpm install` and Vite copies them into the bundle. There
+ * is no Google Fonts link and no CDN anywhere in the build — the app must come
+ * up on an event laptop with no network.
+ *
+ * Only the variable-axis stylesheets are imported:
+ *   Inter    `wght` axis   — the UI family, weights 100–900 from one file.
+ *   Archivo  `wdth` axis   — display family. "Archivo Expanded" is this same
+ *                            variable font at the top of its width axis
+ *                            (`font-stretch: 125%`, see --wm-font-stretch-expanded).
+ *
+ * Both are OFL-1.1; the licences ship inside the packages.
+ */
+
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/archivo/wdth.css';
