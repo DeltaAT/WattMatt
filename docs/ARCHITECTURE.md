@@ -74,6 +74,43 @@ component → action → domain function (pure) → store commit
 - Snapshots are small (a few hundred KB at worst); no patching or diffing until profiling
   says otherwise.
 
+### The event contract
+
+| Event | Direction | Carries |
+| --- | --- | --- |
+| `state:snapshot` | host → beamer | The whole picture: revision, scene, `autoFollow`, tournament |
+| `beamer:scene` | host → beamer | Revision, scene and `autoFollow`, without the tournament payload |
+| `state:request-snapshot` | beamer → host | Nothing; its arrival is the message |
+| `beamer:heartbeat` | beamer → host | A beat counter |
+
+There is deliberately **no** event by which the beamer can change the tournament. Golden rule 4
+holds because the contract has no such message, not because the beamer chooses not to send one.
+
+`beamer:scene` exists so a blackout is not queued behind sixty-four groups of data. It is sent
+whenever a commit left the tournament payload untouched — keyed on the tournament rather than on
+the scene alone, because taking manual control changes `autoFollow` too, and a blackout that fell
+back to the heavy channel because of that would be slowest exactly when it must be fastest.
+
+Every message carries the store's `revision`. The beamer drops anything older than what it
+already holds, so an out-of-order delivery cannot walk the projector backwards into a round that
+has already finished.
+
+### Catching up without replaying
+
+A snapshot is flagged `live` or `catchUp`. A beamer that has just been reopened is answered with
+`catchUp`, and renders the scene **settled**: no entry animation. Replaying the draw because the
+projector was replugged would show the audience a draw that is not happening. The same guard
+covers a re-delivered scene, so a reconnect never restarts an animation mid-event.
+
+### Liveness
+
+`beamer:status` (from Rust) answers whether the *window* is open. The heartbeat answers a
+different question: whether the WebView inside it is still running. An open window whose renderer
+has died reports itself as perfectly fine while showing the room a frozen picture, so the host
+panel reads the heartbeat, not the window state. Three missed beats count as gone — one missed
+beat is a busy WebView mid-animation, and a light that flickers during every draw is a light the
+host learns to ignore.
+
 ### Beamer scene model
 
 The host does not send "screens", it sends a scene descriptor:
@@ -92,7 +129,8 @@ type BeamerScene =
 ```
 
 `autoFollow` (default on) makes the scene follow the tournament phase. The host can turn it
-off and drive the beamer manually at any moment — see issue *Beamer control center*.
+off and drive the beamer manually at any moment — see issue *Beamer control center*. Staging a
+scene by hand turns it off on the spot: manual control always wins (golden rule 3).
 
 ## 4. Module layout
 
@@ -108,13 +146,18 @@ src/
     bracket.ts         bracket construction, third-place match
     selectors.ts       derived data (standings, free tables, …)
   store/
-    tournamentStore.ts
+    tournamentStore.ts host-owned truth; `commit` bumps the revision
+    beamerStore.ts     the beamer's read-only mirror, frozen in dev
     actions/           one file per use case
     undo.ts
-    sync.ts            snapshot broadcast
+    sync.ts            snapshot broadcast, wired once per window
+    syncContract.ts    the typed event contract between the windows
+    heartbeat.ts       beamer liveness
+    session.ts         the one store each window owns
     persistence.ts     autosave orchestration
   platform/
     tauri.ts           the IPC boundary: invoke + listen, every payload Zod-parsed
+    windowSync.ts      the Tauri transport behind sync.ts
     beamerWindow.ts    monitor list, beamer placement, sleep inhibition
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
   windows/

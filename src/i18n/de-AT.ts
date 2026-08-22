@@ -15,6 +15,11 @@ export const deAT = {
     idleNotice: 'Bereit.',
     /** The windowed preview must be unmistakable, even from across the room. */
     previewBadge: 'Vorschau',
+    /**
+     * Shown for a scene the beamer knows about but cannot draw yet. The scene
+     * components arrive with issues #18, #19, #25 and #27.
+     */
+    scenePending: 'Ansicht wird vorbereitet.',
   },
 
   beamerControl: {
@@ -39,6 +44,18 @@ export const deAT = {
         'Kein zweiter Bildschirm gefunden. Der Beamer läuft als Fenster-Vorschau auf diesem Laptop.',
       previewMonitorLost:
         'Der gewählte Bildschirm ist nicht mehr da. Der Beamer läuft als Fenster-Vorschau, bis der Beamer wieder angesteckt wird.',
+    },
+
+    /**
+     * Whether the beamer's WebView is still answering. Distinct from whether
+     * the window is open: a live window with a dead renderer shows the audience
+     * a frozen picture and reports itself as fine.
+     */
+    liveness: {
+      label: 'Bildkanal:',
+      alive: 'Beamer meldet sich.',
+      silent: 'Beamer meldet sich nicht. Bild auf der Leinwand prüfen.',
+      notRunning: 'Beamer ist geschlossen.',
     },
 
     letterboxNotice:

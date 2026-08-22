@@ -17,8 +17,8 @@ import {
  * tournament noticing: open the beamer, close it, and move it to a different
  * monitor. None of them touches tournament state (CLAUDE.md golden rule 4).
  *
- * The live preview thumbnail from docs/STYLEGUIDE.md §4 needs the snapshot
- * channel and lands with issue #5.
+ * The live preview thumbnail from docs/STYLEGUIDE.md §4 lands with issue #28,
+ * on top of the snapshot channel issue #5 builds.
  */
 
 const HINT_TEXT: Record<BeamerHint, string> = {
@@ -30,7 +30,20 @@ const HINT_TEXT: Record<BeamerHint, string> = {
   previewMonitorLost: de.beamerControl.status.previewMonitorLost,
 };
 
-export function BeamerControlPanel({ status }: { status: BeamerStatus }) {
+export function BeamerControlPanel({
+  status,
+  beamerAlive,
+}: {
+  status: BeamerStatus;
+  /**
+   * Whether the beamer's WebView is answering the heartbeat (issue #5).
+   *
+   * Separate from `status.open`, and the more useful of the two: an open window
+   * whose renderer has died still reports itself open while showing the
+   * audience a frozen picture.
+   */
+  beamerAlive: boolean;
+}) {
   const summary = summariseBeamer(status);
   const monitors = sortMonitors(status.monitors);
 
@@ -57,6 +70,8 @@ export function BeamerControlPanel({ status }: { status: BeamerStatus }) {
       {summary.isLetterboxed ? (
         <p className="text-host-xs text-wm-text-faint">{de.beamerControl.letterboxNotice}</p>
       ) : null}
+
+      <LivenessRow open={status.open} alive={beamerAlive} />
 
       <div className="flex gap-2">
         {status.open ? (
@@ -95,6 +110,32 @@ export function BeamerControlPanel({ status }: { status: BeamerStatus }) {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * The picture channel, as opposed to the window.
+ *
+ * Silence while the window is open is the case worth shouting about: the host
+ * is looking at a control panel that says everything is fine, and the room is
+ * looking at a screen that stopped updating.
+ */
+function LivenessRow({ open, alive }: { open: boolean; alive: boolean }) {
+  const isWarning = open && !alive;
+  const text = !open
+    ? de.beamerControl.liveness.notRunning
+    : alive
+      ? de.beamerControl.liveness.alive
+      : de.beamerControl.liveness.silent;
+
+  return (
+    <p
+      className={`text-host-xs ${isWarning ? 'text-wm-live' : 'text-wm-text-faint'}`}
+      role={isWarning ? 'alert' : undefined}
+      data-liveness={!open ? 'closed' : alive ? 'alive' : 'silent'}
+    >
+      {`${de.beamerControl.liveness.label} ${text}`}
+    </p>
   );
 }
 

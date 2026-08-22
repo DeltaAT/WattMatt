@@ -24,9 +24,10 @@ const projector: MonitorInfo = {
   isPrimary: false,
 };
 
-function render(status: Partial<BeamerStatus>): string {
+function render(status: Partial<BeamerStatus>, beamerAlive = true): string {
   return renderToStaticMarkup(
     <BeamerControlPanel
+      beamerAlive={beamerAlive}
       status={{
         open: true,
         placement: 'projected',
@@ -107,5 +108,28 @@ describe('the beamer control panel', () => {
   it('survives a machine that reports no monitors at all', () => {
     const markup = render({ open: false, monitorId: null, monitors: [] });
     expect(markup).toContain(de.beamerControl.noMonitors);
+  });
+});
+
+describe('the beamer liveness readout', () => {
+  it('raises an alert when an open beamer has stopped answering', () => {
+    // The dangerous case: the window is open, the panel looks healthy, and the
+    // room is staring at a picture that stopped updating.
+    const markup = render({ open: true }, false);
+    expect(markup).toContain(de.beamerControl.liveness.silent);
+    expect(markup).toContain('data-liveness="silent"');
+    expect(markup).toContain('role="alert"');
+  });
+
+  it('says so plainly while the beamer is answering', () => {
+    const markup = render({ open: true }, true);
+    expect(markup).toContain(de.beamerControl.liveness.alive);
+    expect(markup).toContain('data-liveness="alive"');
+  });
+
+  it('does not cry wolf about a beamer nobody opened', () => {
+    const markup = render({ open: false, monitorId: null }, false);
+    expect(markup).toContain(de.beamerControl.liveness.notRunning);
+    expect(markup).toContain('data-liveness="closed"');
   });
 });
