@@ -73,11 +73,24 @@ export function createBeamerStore(
       if (!supersedes(incoming, current.snapshot)) {
         return;
       }
-      const animate =
-        incoming.delivery === 'live' && !isSameScene(incoming.scene, current.snapshot.scene);
+      const sameScene = isSameScene(incoming.scene, current.snapshot.scene);
+
       // `replace` matters: a merging setState would build a fresh, unfrozen
       // object and quietly undo the read-only guarantee.
-      store.setState(guard({ snapshot: incoming, animate }), true);
+      const write = (animate: boolean) => {
+        store.setState(guard({ snapshot: incoming, animate }), true);
+      };
+
+      // The same revision arriving twice is a re-delivery, not a change: React
+      // StrictMode mounts the beamer twice and so asks for a catch-up twice.
+      // Recomputing `animate` for it would settle a scene that is still
+      // animating, in front of the audience.
+      if (incoming.revision === current.snapshot.revision && sameScene) {
+        write(current.animate);
+        return;
+      }
+
+      write(incoming.delivery === 'live' && !sameScene);
     },
   };
 }

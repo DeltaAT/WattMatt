@@ -1,5 +1,5 @@
 import { BLACKOUT_SCENE, type BeamerScene } from '@/domain/beamerScene';
-import { commit, type TournamentStore } from '@/store/tournamentStore';
+import type { TournamentStore } from '@/store/tournamentStore';
 
 /**
  * Actions that decide what the beamer shows.
@@ -16,7 +16,7 @@ import { commit, type TournamentStore } from '@/store/tournamentStore';
  * `autoFollow` off — golden rule 3. The host turns it back on deliberately.
  */
 export function showScene(store: TournamentStore, scene: BeamerScene): void {
-  commit(store, () => ({ scene, autoFollow: false }));
+  store.commit(() => ({ scene, autoFollow: false }));
 }
 
 /** The panic button: black screen, immediately, whatever else is going on. */
@@ -31,5 +31,5 @@ export function blackout(store: TournamentStore): void {
  * auto-follow leaves the current picture alone rather than guessing.
  */
 export function setAutoFollow(store: TournamentStore, autoFollow: boolean): void {
-  commit(store, () => ({ autoFollow }));
+  store.commit(() => ({ autoFollow }));
 }

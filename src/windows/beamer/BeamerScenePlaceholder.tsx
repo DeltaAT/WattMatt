@@ -22,7 +22,7 @@ export function BeamerScenePlaceholder({
 }) {
   if (scene.id === 'BLACKOUT') {
     // Nothing at all: the whole point of a blackout is an empty screen.
-    return <div className="h-full w-full" data-scene="BLACKOUT" />;
+    return <div className="h-full w-full" data-scene="BLACKOUT" data-settled={settled} />;
   }
 
   if (scene.id === 'IDLE') {

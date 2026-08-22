@@ -9,7 +9,7 @@ import {
   type SyncTransport,
   type Unsubscribe,
 } from '@/store/syncContract';
-import { toSnapshot, type TournamentState, type TournamentStore } from '@/store/tournamentStore';
+import { toSnapshot, type TournamentStore } from '@/store/tournamentStore';
 
 /**
  * The one-way channel that makes "the beamer is a pure view" true
@@ -23,18 +23,6 @@ function reportSyncFailure(error: unknown): void {
   // Never throws onward: a failed broadcast must not take down the host window
   // mid-event. Proper surfacing lands with issue #30.
   console.error('beamer sync failed', error);
-}
-
-/**
- * Whether a commit left the tournament payload untouched.
- *
- * Those go out on the light channel. Keying this on the tournament rather than
- * on the scene alone is deliberate: taking manual control changes `autoFollow`
- * as well as the scene, and a blackout that fell back to the heavy channel
- * because of that would be slowest at the one moment it must be fastest.
- */
-function isPresentationOnlyChange(previous: TournamentState, next: TournamentState): boolean {
-  return previous.tournament === next.tournament;
 }
 
 export interface HostSync {
@@ -62,21 +50,22 @@ export async function startHostSync(
     send(SNAPSHOT_EVENT, toSnapshot(store.getState(), delivery));
   };
 
-  const unsubscribeStore = store.subscribe((next, previous) => {
-    // Only a commit moves the revision, so this cannot fire for a no-op write.
-    if (next.revision === previous.revision) {
+  // Commits that left the tournament alone go out on the light channel, so a
+  // blackout is not queued behind sixty-four groups. The decision comes from
+  // what the mutator returned, not from comparing states: a comparison would be
+  // reference equality, and an action that mutated the tournament in place
+  // would look unchanged and lose its data silently.
+  const unsubscribeStore = store.onCommit((next, meta) => {
+    if (meta.touchedTournament) {
+      send(SNAPSHOT_EVENT, toSnapshot(next, 'live'));
       return;
     }
-    if (isPresentationOnlyChange(previous, next)) {
-      send(SCENE_EVENT, {
-        revision: next.revision,
-        scene: next.scene,
-        autoFollow: next.autoFollow,
-        delivery: 'live',
-      });
-      return;
-    }
-    send(SNAPSHOT_EVENT, toSnapshot(next, 'live'));
+    send(SCENE_EVENT, {
+      revision: next.revision,
+      scene: next.scene,
+      autoFollow: next.autoFollow,
+      delivery: 'live',
+    });
   });
 
   // A beamer that just mounted has no idea what is going on. Its answer is
@@ -100,6 +89,18 @@ export async function startHostSync(
 export interface BeamerSync {
   stop(): Promise<void>;
 }
+
+/**
+ * How long the beamer waits for an answer before asking again, and how often.
+ *
+ * The request is fire-and-forget, and at startup both windows come up at once:
+ * Rust opens the beamer during setup, so the beamer can ask before the host has
+ * registered its listener. Without a retry that beamer sits on the idle screen
+ * until the host happens to commit something — which, at the start of an event,
+ * may be minutes.
+ */
+const REQUEST_RETRY_MS = 250;
+const REQUEST_ATTEMPTS = 8;
 
 /**
  * Starts the beamer half: subscribe, then ask for the current picture.
@@ -133,10 +134,32 @@ export async function startBeamerSync(
     ),
   );
 
-  await transport.emit(REQUEST_SNAPSHOT_EVENT, {}).catch(reportSyncFailure);
+  // Stops as soon as anything arrives: the host answers a catch-up with the
+  // current revision, so a delivered snapshot is the acknowledgement.
+  let answered = store.getState().snapshot.revision > 0;
+  const unsubscribeAnswer = store.subscribe(() => {
+    answered = true;
+  });
+
+  let attempts = 0;
+  const ask = () => {
+    transport.emit(REQUEST_SNAPSHOT_EVENT, {}).catch(reportSyncFailure);
+  };
+  ask();
+
+  const retry = setInterval(() => {
+    attempts += 1;
+    if (answered || attempts >= REQUEST_ATTEMPTS) {
+      clearInterval(retry);
+      return;
+    }
+    ask();
+  }, REQUEST_RETRY_MS);
 
   return {
     stop: async () => {
+      clearInterval(retry);
+      unsubscribeAnswer();
       for (const unlisten of unlisteners) {
         unlisten();
       }

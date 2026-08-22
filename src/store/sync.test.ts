@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { groupIdSchema, roundIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { startBeamerSync, startHostSync } from '@/store/sync';
+import { requestSnapshotSchema } from '@/store/syncContract';
 import { createLinkedTransports } from '@/store/testTransport';
-import { commit, createTournamentStore } from '@/store/tournamentStore';
+import { createTournamentStore } from '@/store/tournamentStore';
 
 const round = (value: string) => roundIdSchema.parse(value);
 
@@ -45,7 +46,7 @@ describe('the host to beamer channel', () => {
   it('carries tournament data, not just scenes', async () => {
     const { host, beamer } = await wiredPair();
 
-    commit(host, () => ({ tournament: groups(3) }));
+    host.commit(() => ({ tournament: groups(3) }));
 
     expect(beamer.getState().snapshot.tournament.groups).toHaveLength(3);
     expect(beamer.getState().snapshot.tournament.groups[1]?.name).toBe('Gruppe 2');
@@ -63,7 +64,7 @@ describe('the host to beamer channel', () => {
     const { host, beamer } = await wiredPair();
 
     showScene(host, { id: 'DRAW', roundId: round('r1') });
-    commit(host, () => ({ tournament: groups(2) }));
+    host.commit(() => ({ tournament: groups(2) }));
 
     // The scene did not change, so the second snapshot must not restart the
     // draw animation in front of the room.
@@ -77,7 +78,7 @@ describe('a beamer that is killed and reopened', () => {
     const { host, transports, beamerSync } = await wiredPair();
 
     // Mid-tournament: groups drawn, the draw scene is on the projector.
-    commit(host, () => ({ tournament: groups(24) }));
+    host.commit(() => ({ tournament: groups(24) }));
     showScene(host, { id: 'DRAW', roundId: round('r3') });
 
     // The projector is unplugged and the window dies.
@@ -103,7 +104,7 @@ describe('a beamer that is killed and reopened', () => {
     const host = createTournamentStore();
     await startHostSync(host, transports.host);
 
-    commit(host, () => ({ tournament: groups(8) }));
+    host.commit(() => ({ tournament: groups(8) }));
     showScene(host, { id: 'CEREMONY' });
 
     const beamer = createBeamerStore();
@@ -140,7 +141,7 @@ describe('the scene channel', () => {
     await startHostSync(host, transports.host);
     await startBeamerSync(beamer, transports.beamer);
 
-    commit(host, () => ({ tournament: groups(40) }));
+    host.commit(() => ({ tournament: groups(40) }));
 
     const seen: string[] = [];
     await transports.beamer.listen(
@@ -172,5 +173,64 @@ describe('the contract itself', () => {
     // Golden rule 4 holds because no such message exists, not because the
     // beamer chooses not to send one.
     expect(beamerToHost).toEqual(['state:request-snapshot', 'beamer:heartbeat']);
+  });
+});
+
+describe('a beamer that starts before the host is listening', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('asks again until it gets an answer', async () => {
+    const transports = createLinkedTransports();
+    const host = createTournamentStore();
+    host.commit(() => ({ scene: { id: 'CEREMONY' } }));
+
+    // Rust opens the beamer during setup, so it can come up first and ask
+    // before anyone is there to hear it.
+    const beamer = createBeamerStore();
+    await startBeamerSync(beamer, transports.beamer);
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'IDLE' });
+
+    await startHostSync(host, transports.host);
+    await vi.advanceTimersByTimeAsync(300);
+
+    // Without the retry this beamer shows the idle screen until the host
+    // happens to commit something, which at the start of an event is minutes.
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'CEREMONY' });
+  });
+
+  it('stops asking once answered, rather than retrying forever', async () => {
+    const transports = createLinkedTransports();
+    const host = createTournamentStore();
+    await startHostSync(host, transports.host);
+
+    let requests = 0;
+    await transports.host.listen('state:request-snapshot', requestSnapshotSchema, () => {
+      requests += 1;
+    });
+
+    const beamer = createBeamerStore();
+    await startBeamerSync(beamer, transports.beamer);
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    expect(requests).toBe(1);
+  });
+});
+
+describe('a re-delivered snapshot', () => {
+  it('does not settle a scene that is still animating', async () => {
+    const { host, beamer, transports } = await wiredPair();
+
+    showScene(host, { id: 'DRAW', roundId: round('r1') });
+    expect(beamer.getState().animate).toBe(true);
+
+    // React StrictMode mounts the beamer twice, so the host answers a second
+    // catch-up at the same revision while the draw is still animating.
+    await transports.host.emit('state:snapshot', {
+      ...beamer.getState().snapshot,
+      delivery: 'catchUp',
+    });
+
+    expect(beamer.getState().animate).toBe(true);
   });
 });

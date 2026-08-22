@@ -1,4 +1,4 @@
-import { createStore, type StoreApi } from 'zustand/vanilla';
+import { createStore } from 'zustand/vanilla';
 
 import { IDLE_SCENE, type BeamerScene } from '@/domain/beamerScene';
 import { EMPTY_TOURNAMENT, type Snapshot, type TournamentSnapshot } from '@/domain/snapshot';
@@ -30,31 +30,76 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   tournament: EMPTY_TOURNAMENT,
 };
 
-export type TournamentStore = StoreApi<TournamentState>;
+/** What a commit touched, reported to whoever is listening. */
+export interface CommitMeta {
+  /**
+   * Whether the commit rewrote the tournament payload.
+   *
+   * Read from the keys the mutator returned rather than by comparing the old
+   * and new state. A comparison would be reference equality, and an action that
+   * mutated the tournament in place would look unchanged — sending the beamer
+   * down the light channel and losing the data silently.
+   */
+  touchedTournament: boolean;
+}
+
+export type CommitListener = (state: TournamentState, meta: CommitMeta) => void;
+
+/**
+ * The host store's public handle.
+ *
+ * Deliberately narrower than zustand's `StoreApi`: there is no `setState`, so
+ * "every mutation goes through an action" is something the type system enforces
+ * rather than something a reviewer has to notice. Without this a component
+ * could write state that never bumps the revision, and the central broadcast
+ * would skip it without a sound.
+ */
+export interface TournamentStore {
+  getState(): TournamentState;
+  /** For React bindings via `useSyncExternalStore`. */
+  subscribe(listener: (state: TournamentState) => void): () => void;
+  /** For the sync and persistence layers, which need to know what changed. */
+  onCommit(listener: CommitListener): () => void;
+  commit(mutate: (state: TournamentState) => Partial<TournamentState>): void;
+}
 
 export function createTournamentStore(
   initial: TournamentState = INITIAL_TOURNAMENT_STATE,
 ): TournamentStore {
-  return createStore<TournamentState>(() => ({ ...initial }));
-}
+  const store = createStore<TournamentState>(() => ({ ...initial }));
+  const listeners = new Set<CommitListener>();
 
-/**
- * Applies one action and bumps the revision.
- *
- * The revision bump is the commit: everything downstream — broadcast, autosave,
- * undo — keys off it rather than off the individual fields, so a new action
- * never has to remember to notify anybody.
- *
- * A mutator that changes nothing still commits. "The host clicked and nothing
- * observable happened" is a bug report during an event; a redundant snapshot is
- * a few hundred KB.
- */
-export function commit(
-  store: TournamentStore,
-  mutate: (state: TournamentState) => Partial<TournamentState>,
-): void {
-  const current = store.getState();
-  store.setState({ ...current, ...mutate(current), revision: current.revision + 1 });
+  return {
+    getState: () => store.getState(),
+    subscribe: (listener) => store.subscribe(listener),
+    onCommit: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+
+    /**
+     * Applies one action and bumps the revision.
+     *
+     * The bump is the commit: everything downstream — broadcast, autosave, undo
+     * — keys off it rather than off the individual fields, so a new action never
+     * has to remember to notify anybody.
+     *
+     * A mutator that changes nothing still commits. "The host clicked and
+     * nothing observable happened" is a bug report during an event; a redundant
+     * snapshot is a few hundred KB.
+     */
+    commit: (mutate) => {
+      const current = store.getState();
+      const partial = mutate(current);
+      const next: TournamentState = { ...current, ...partial, revision: current.revision + 1 };
+      store.setState(next, true);
+
+      const meta: CommitMeta = { touchedTournament: 'tournament' in partial };
+      for (const listener of [...listeners]) {
+        listener(next, meta);
+      }
+    },
+  };
 }
 
 /** The snapshot that describes the store right now. */

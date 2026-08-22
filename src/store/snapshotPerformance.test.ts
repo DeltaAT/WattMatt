@@ -6,7 +6,7 @@ import { showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { startBeamerSync, startHostSync } from '@/store/sync';
 import { createLinkedTransports } from '@/store/testTransport';
-import { commit, createTournamentStore } from '@/store/tournamentStore';
+import { createTournamentStore } from '@/store/tournamentStore';
 
 /**
  * Issue #5 acceptance criterion: a 64-group snapshot round-trips in under
@@ -54,7 +54,7 @@ describe('snapshot round-trip performance', () => {
       const payload: TournamentSnapshot = { groups: [...tournament.groups] };
 
       const started = performance.now();
-      commit(host, () => ({ tournament: payload }));
+      host.commit(() => ({ tournament: payload }));
       durations.push(performance.now() - started);
 
       expect(beamer.getState().snapshot.tournament.groups).toHaveLength(64);
@@ -71,7 +71,7 @@ describe('snapshot round-trip performance', () => {
     await startHostSync(host, transports.host);
     await startBeamerSync(beamer, transports.beamer);
 
-    commit(host, () => ({ tournament: sixtyFourGroups() }));
+    host.commit(() => ({ tournament: sixtyFourGroups() }));
 
     const durations: number[] = [];
     for (let run = 0; run < RUNS; run += 1) {

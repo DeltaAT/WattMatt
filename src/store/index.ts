@@ -17,10 +17,11 @@ export {
   type Unsubscribe,
 } from '@/store/syncContract';
 export {
-  commit,
   createTournamentStore,
   INITIAL_TOURNAMENT_STATE,
   toSnapshot,
+  type CommitListener,
+  type CommitMeta,
   type TournamentState,
   type TournamentStore,
 } from '@/store/tournamentStore';
