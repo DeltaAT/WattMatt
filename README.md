@@ -52,7 +52,9 @@ pnpm install
 pnpm tauri dev        # runs host + beamer window
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint
+pnpm format           # prettier --write
 pnpm test             # domain unit tests
+pnpm test:coverage    # unit tests + coverage thresholds
 pnpm tauri build      # NSIS installer + portable exe in src-tauri/target/release
 ```
 

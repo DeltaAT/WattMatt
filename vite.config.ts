@@ -1,7 +1,8 @@
 import { fileURLToPath, URL } from 'node:url';
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
+
 import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 // Tauri injects this when developing against a device on the LAN. Unused for the
 // Windows desktop target, but leaving it in keeps `tauri dev --host` working.
@@ -41,6 +42,27 @@ export default defineConfig({
 
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tools/**/*.test.js'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      // Report on every source file, not just the ones a test happened to
+      // import — otherwise an untested module silently counts as covered.
+      // (Vitest 4 does this by default for everything matched by `include`.)
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/index.ts', 'src/main.tsx', 'src/vite-env.d.ts'],
+      thresholds: {
+        // src/domain is the part a wrong result cannot be argued with, so it
+        // carries the hard target from issue #2. The rest of the tree has no
+        // threshold yet; UI coverage numbers would be noise at this stage.
+        'src/domain/**': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+      },
+    },
   },
 });
