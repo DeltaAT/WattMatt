@@ -51,7 +51,15 @@ export default defineConfig({
       // import — otherwise an untested module silently counts as covered.
       // (Vitest 4 does this by default for everything matched by `include`.)
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/index.ts', 'src/main.tsx', 'src/vite-env.d.ts'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/**/index.ts',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        // Dev-only token review page (issue #3). Never part of a release bundle,
+        // so its coverage number would only dilute the ones that matter.
+        'src/dev/**',
+      ],
       thresholds: {
         // src/domain is the part a wrong result cannot be argued with, so it
         // carries the hard target from issue #2. The rest of the tree has no

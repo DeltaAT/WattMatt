@@ -135,3 +135,52 @@ with a live preview thumbnail of exactly what the audience sees.
 - No pure white surfaces anywhere in the beamer window.
 - No thin borders on the beamer: minimum 2 px, 4 px for emphasis.
 - Nothing on the beamer may depend on hover — nobody is hovering on a projector.
+
+## 6. Tokens in code
+
+The tokens above are implemented in `src/styles/tokens.css`, which is the **only** file in the
+repository allowed to contain a colour literal. `src/styles/tokens.test.ts` enforces that, checks
+every token in this document against the file, and asserts the contrast targets in §1.
+
+| Where | What |
+| --- | --- |
+| `src/styles/tokens.css` | `:root` block with the tokens exactly as named here, plus the Tailwind `@theme` mapping |
+| `src/styles/fonts.css` | `@font-face` for both families, from local Fontsource packages |
+| `src/styles/global.css` | element defaults, `.beamer-root`, and the custom utilities below |
+
+Tokens reach components as Tailwind utilities, not as raw `var()`:
+
+- colour — `bg-wm-surface`, `text-wm-win`, `border-wm-border-strong`, …
+- radii — `rounded-wm-sm` … `rounded-wm-xl`
+- type — `text-host-xs` … `text-host-2xl`, `text-beamer-caption` … `text-beamer-hero`
+- easing — `ease-out`, `ease-in-out`, `ease-dramatic`, `ease-exit` (the first two deliberately
+  replace Tailwind's weaker built-ins, see [MOTION.md](MOTION.md) §3)
+- spacing — the numeric utilities (`p-1` = 4 px … `p-24` = 96 px) land on the scale in §3
+- durations — `duration-[var(--dur-base)]`; Tailwind has no theme namespace for them
+
+Four project utilities carry rules that are easy to forget:
+
+| Utility | Effect |
+| --- | --- |
+| `wm-display` | Archivo at `font-stretch: 125%` — the "Expanded" of §2 |
+| `wm-tnum` | `font-feature-settings: 'tnum' 1` for a numeric display whose context lost the body default |
+| `wm-label` | 12 px uppercase with `.04em` tracking, muted — the host label style of §2 |
+| `beamer-safe-area` | the 4 % inset of §3 |
+
+### The beamer unit
+
+`--wm-beamer-unit: calc(100vw / 120)` is the whole beamer type scale: `.beamer-root` sets its
+`font-size` to it, and every `text-beamer-*` token is a multiple of it. The tokens use the unit
+rather than `rem` on purpose — `rem` resolves against `<html>` and would ignore `.beamer-root`
+entirely.
+
+One consequence is worth knowing before it bites: one unit is only 16 px at 1080p, far below the
+32 px floor. **Beamer text must always carry an explicit `text-beamer-*` token.** Inherited text
+on the beamer is a bug, not a small style.
+
+### Reviewing tokens
+
+`pnpm dev`, then open `?window=tokens`. The page renders every token — swatches with their live
+computed value and contrast ratio, both type scales, spacing, radii and a motion playground. It is
+dev-only and is dropped from a release build. The beamer scale renders there at true projected
+size, so the only honest way to sign off on §2 is to put that page on the actual beamer.

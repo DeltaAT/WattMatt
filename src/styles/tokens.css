@@ -1,0 +1,204 @@
+/*
+ * WattMatt design tokens — the single source of truth for colour, spacing,
+ * radii, type and motion.
+ *
+ * This is the ONLY file in the repository that may contain a colour literal
+ * (docs/STYLEGUIDE.md §5, enforced by src/styles/tokens.test.ts). Everything
+ * else references a token, either as `var(--wm-…)` or through the Tailwind
+ * utilities generated from the `@theme` block below.
+ *
+ * Two blocks, on purpose:
+ *   `:root`   the tokens exactly as docs/STYLEGUIDE.md and docs/MOTION.md name
+ *             them. Those documents are normative; the names match verbatim so
+ *             a reader can diff the doc against this file.
+ *   `@theme`  the Tailwind v4 mapping that turns tokens into utilities
+ *             (`bg-wm-surface`, `text-wm-win`, `rounded-wm-lg`, `ease-dramatic`).
+ *             It mostly points at the `:root` values rather than repeating them.
+ */
+
+:root {
+  /* ---- colour: base (docs/STYLEGUIDE.md §1) ---- */
+  --wm-bg: #0e1116; /* never #000 — projectors band and crush it */
+  --wm-bg-elevated: #161b22;
+  --wm-surface: #1c232d;
+  --wm-surface-hover: #232c38;
+  --wm-border: #2a3340;
+  --wm-border-strong: #3b4757;
+
+  /* ---- colour: text ---- */
+  --wm-text: #f2f5f9; /* never #FFF — reduces halation on a bright beamer */
+  --wm-text-muted: #9aa7b8;
+  --wm-text-faint: #6b7787;
+
+  /* ---- colour: brand ---- */
+  --wm-accent: #4c8dff;
+  --wm-accent-strong: #2e6bff;
+  --wm-accent-soft: #16223a;
+
+  /* ---- colour: status ---- */
+  --wm-win: #2fd07a;
+  --wm-win-bg: #0f3a28;
+  --wm-lose: #ff5a5a;
+  --wm-lose-bg: #3d1620;
+  --wm-live: #ffb020; /* match running */
+  --wm-live-bg: #3a2a0c;
+  --wm-idle: #6b7787;
+
+  /* ---- colour: podium ---- */
+  --wm-gold: #f5c542;
+  --wm-silver: #c9d1d9;
+  --wm-bronze: #cd7f32;
+
+  /* ---- spacing: 8 px grid (docs/STYLEGUIDE.md §3) ----
+   * Named tokens for hand-written CSS. The Tailwind numeric scale below lands
+   * on the same values (p-1 = 4px … p-24 = 96px), so components normally use
+   * the utility and never touch these.
+   */
+  --wm-space-4: 0.25rem;
+  --wm-space-8: 0.5rem;
+  --wm-space-12: 0.75rem;
+  --wm-space-16: 1rem;
+  --wm-space-24: 1.5rem;
+  --wm-space-32: 2rem;
+  --wm-space-48: 3rem;
+  --wm-space-64: 4rem;
+  --wm-space-96: 6rem;
+
+  /* ---- radii ---- */
+  --wm-radius-sm: 6px;
+  --wm-radius-md: 10px;
+  --wm-radius-lg: 16px;
+  --wm-radius-xl: 24px; /* beamer cards */
+
+  /* ---- beamer geometry ----
+   * One resolution-relative unit drives the whole beamer type scale, so 720p,
+   * 1080p and 4K share a layout without a single media query. 1 unit = 16px at
+   * 1920px wide. `.beamer-root` in global.css sets its font-size to exactly
+   * this, per docs/STYLEGUIDE.md §2.
+   */
+  --wm-beamer-unit: calc(100vw / 120);
+  --wm-beamer-safe-area: 4%; /* projectors overscan — §3 */
+
+  /* ---- typography ---- */
+  --wm-font-stretch-expanded: 125%; /* Archivo's wdth axis maxes at 125% */
+  --wm-tracking-label: 0.04em; /* host labels, 12px uppercase — §2 */
+
+  /* ---- motion: duration (docs/MOTION.md §3) ---- */
+  --dur-instant: 100ms; /* press feedback */
+  --dur-fast: 160ms; /* host hover, colour change */
+  --dur-base: 240ms; /* host dialogs, panels */
+  --dur-slow: 400ms; /* beamer scene crossfade */
+  --dur-reveal: 600ms; /* beamer single reveal */
+  --dur-story: 1200ms; /* beamer choreographed sequence step */
+
+  /* ---- motion: stagger ---- */
+  --stagger-tight: 40ms; /* host lists */
+  --stagger-wide: 80ms; /* beamer cards */
+}
+
+/*
+ * `static` because this is a token system: every token must reach the
+ * stylesheet whether or not a utility happens to reference it yet. Without it
+ * Tailwind tree-shakes unused theme variables, and `var(--text-beamer-hero)`
+ * in a hand-written rule would silently resolve to nothing.
+ */
+@theme static {
+  /*
+   * Colour utilities: bg-wm-surface, text-wm-win, border-wm-border-strong, …
+   * Values point at the `:root` tokens above so there is exactly one place a
+   * colour is written down.
+   */
+  --color-wm-bg: var(--wm-bg);
+  --color-wm-bg-elevated: var(--wm-bg-elevated);
+  --color-wm-surface: var(--wm-surface);
+  --color-wm-surface-hover: var(--wm-surface-hover);
+  --color-wm-border: var(--wm-border);
+  --color-wm-border-strong: var(--wm-border-strong);
+
+  --color-wm-text: var(--wm-text);
+  --color-wm-text-muted: var(--wm-text-muted);
+  --color-wm-text-faint: var(--wm-text-faint);
+
+  --color-wm-accent: var(--wm-accent);
+  --color-wm-accent-strong: var(--wm-accent-strong);
+  --color-wm-accent-soft: var(--wm-accent-soft);
+
+  --color-wm-win: var(--wm-win);
+  --color-wm-win-bg: var(--wm-win-bg);
+  --color-wm-lose: var(--wm-lose);
+  --color-wm-lose-bg: var(--wm-lose-bg);
+  --color-wm-live: var(--wm-live);
+  --color-wm-live-bg: var(--wm-live-bg);
+  --color-wm-idle: var(--wm-idle);
+
+  --color-wm-gold: var(--wm-gold);
+  --color-wm-silver: var(--wm-silver);
+  --color-wm-bronze: var(--wm-bronze);
+
+  /* 8px grid: the numeric spacing utilities are multiples of 4px, so the
+   * scale 4 8 12 16 24 32 48 64 96 is reachable as p-1 p-2 p-3 p-4 p-6 p-8
+   * p-12 p-16 p-24. */
+  --spacing: 0.25rem;
+
+  /* rounded-wm-sm … rounded-wm-xl */
+  --radius-wm-sm: var(--wm-radius-sm);
+  --radius-wm-md: var(--wm-radius-md);
+  --radius-wm-lg: var(--wm-radius-lg);
+  --radius-wm-xl: var(--wm-radius-xl);
+
+  /* Font stacks. Both families are bundled locally (see fonts.css); the
+   * generic fallbacks only matter if a woff2 fails to decode. */
+  --font-ui: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Archivo Variable', 'Segoe UI', system-ui, sans-serif;
+
+  /*
+   * Beamer type scale (docs/STYLEGUIDE.md §2). Multiples of the beamer unit
+   * rather than `rem`, because `rem` resolves against <html> and would ignore
+   * `.beamer-root` entirely.
+   */
+  --text-beamer-hero: calc(var(--wm-beamer-unit) * 10); /* 160px @1080p */
+  --text-beamer-hero--line-height: 1;
+  --text-beamer-hero--font-weight: 800;
+  --text-beamer-h1: calc(var(--wm-beamer-unit) * 6); /* 96px */
+  --text-beamer-h1--line-height: 1.05;
+  --text-beamer-h1--font-weight: 800;
+  --text-beamer-h2: calc(var(--wm-beamer-unit) * 4); /* 64px */
+  --text-beamer-h2--line-height: 1.1;
+  --text-beamer-h2--font-weight: 700;
+  --text-beamer-h3: calc(var(--wm-beamer-unit) * 3); /* 48px */
+  --text-beamer-h3--line-height: 1.15;
+  --text-beamer-h3--font-weight: 700;
+  --text-beamer-body: calc(var(--wm-beamer-unit) * 2); /* 32px — the floor */
+  --text-beamer-body--line-height: 1.3;
+  --text-beamer-body--font-weight: 500;
+  --text-beamer-caption: calc(var(--wm-beamer-unit) * 1.5); /* 24px, chrome only */
+  --text-beamer-caption--line-height: 1.3;
+  --text-beamer-caption--font-weight: 500;
+
+  /* Host type scale: 12 / 14 / 16 / 20 / 24 / 32 px. Body is host-sm. */
+  --text-host-xs: 0.75rem;
+  --text-host-xs--line-height: 1.4;
+  --text-host-sm: 0.875rem;
+  --text-host-sm--line-height: 1.45;
+  --text-host-base: 1rem;
+  --text-host-base--line-height: 1.5;
+  --text-host-lg: 1.25rem;
+  --text-host-lg--line-height: 1.4;
+  --text-host-xl: 1.5rem;
+  --text-host-xl--line-height: 1.3;
+  --text-host-2xl: 2rem;
+  --text-host-2xl--line-height: 1.2;
+
+  --tracking-wm-label: var(--wm-tracking-label);
+
+  /*
+   * Easing (docs/MOTION.md §3). `--ease-out` and `--ease-in-out` deliberately
+   * shadow Tailwind's defaults: MOTION.md calls the CSS built-ins too weak, and
+   * a component author writing `ease-out` should get the project curve without
+   * having to remember a second name.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); /* enter, reveal, feedback */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); /* on-screen movement */
+  --ease-dramatic: cubic-bezier(0.16, 1, 0.3, 1); /* beamer reveals */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1); /* exits only */
+}
