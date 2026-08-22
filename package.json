@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "vite",
@@ -14,14 +14,22 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "husky"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@tauri-apps/api": "^2"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "@eslint/js": "^9.39.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2",
@@ -29,8 +37,15 @@
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.46.0",
@@ -38,6 +53,18 @@
     "vitest": "^4.1.11"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver"
+    ]
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

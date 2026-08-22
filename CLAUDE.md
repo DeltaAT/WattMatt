@@ -59,11 +59,29 @@ beat cleverness every single time.
 ```bash
 pnpm tauri dev            # dev, both windows
 pnpm test                 # unit tests
-pnpm test -- --watch
+pnpm test:watch
+pnpm test:coverage        # enforces >= 90 % on src/domain
 pnpm typecheck            # tsc --noEmit
-pnpm lint
+pnpm lint                 # eslint, incl. the WattMatt rules below
+pnpm lint:fix
+pnpm format               # prettier --write
 pnpm tauri build          # release artefacts
 ```
+
+### Rules the machine enforces
+
+These are not style preferences, they are the two conventions most likely to slip. Both
+fail `pnpm lint` and therefore CI:
+
+- **No user-visible text outside `src/i18n/`.** Literal text in JSX children is rejected
+  whatever language it is in, and any string containing `äöüßÄÖÜ` is rejected anywhere
+  outside the locale file.
+- **`src/domain/**` stays pure.** `Math.random()`, `Date.now()`, `new Date()` and `fetch`
+  are rejected there; take an injected `Rng` or `Clock` instead. `Math.random()` is banned
+  across the whole codebase per golden rule 7.
+
+Commit messages are checked against Conventional Commits by a `commit-msg` hook and again
+in CI. Staged files are linted and formatted by a `pre-commit` hook.
 
 ---
 

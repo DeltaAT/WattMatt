@@ -1,0 +1,11 @@
+dist/
+coverage/
+node_modules/
+pnpm-lock.yaml
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/
+
+# Documentation is normative hand-maintained prose (CLAUDE.md §9: changes go
+# through an issue). Reflowing it would bury real edits under formatting churn.
+*.md

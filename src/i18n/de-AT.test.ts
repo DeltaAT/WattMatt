@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 // Imported through the alias on purpose: this is what proves the `@/*` path
 // mapping is wired identically in tsconfig, Vite and Vitest (issue #1).
 import { de, deAT } from '@/i18n';
