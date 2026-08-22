@@ -1,0 +1,13 @@
+/*
+ * Tailwind is wired in via `@tailwindcss/vite` (see vite.config.ts).
+ * Design tokens, the `@theme` block and the offline-bundled fonts land here
+ * with issue #3 — see docs/STYLEGUIDE.md. Until then this file only pulls in
+ * Tailwind itself so the build pipeline is verifiable.
+ */
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+}

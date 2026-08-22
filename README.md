@@ -44,12 +44,14 @@ The exact, normative algorithm lives in [`docs/TOURNAMENT-RULES.md`](docs/TOURNA
 
 ## Quick start
 
-> Requires Node 20+, pnpm 9+, Rust stable (MSVC toolchain) and the
+> Requires Node 20+, pnpm 10+, Rust stable (MSVC toolchain) and the
 > Visual Studio Build Tools. Internet is needed **to build**, never **to run**.
 
 ```bash
 pnpm install
 pnpm tauri dev        # runs host + beamer window
+pnpm typecheck        # tsc --noEmit
+pnpm lint             # eslint
 pnpm test             # domain unit tests
 pnpm tauri build      # NSIS installer + portable exe in src-tauri/target/release
 ```
