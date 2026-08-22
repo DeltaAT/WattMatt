@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { de } from '@/i18n';
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
+import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
 
 /**
@@ -15,6 +16,9 @@ import { useBeamerStatus } from '@/windows/useBeamerStatus';
  */
 export function HostWindow() {
   const status = useBeamerStatus();
+  // Starts the host half of the snapshot channel for the window's lifetime
+  // (docs/ARCHITECTURE.md §3) and reports whether the beamer is answering.
+  const beamerAlive = useBeamerAlive();
 
   useSleepInhibitor(status.open);
 
@@ -25,7 +29,7 @@ export function HostWindow() {
         <p className="text-host-sm text-wm-text-muted">{de.app.bootstrapNotice}</p>
       </main>
 
-      <BeamerControlPanel status={status} />
+      <BeamerControlPanel status={status} beamerAlive={beamerAlive} />
     </div>
   );
 }
