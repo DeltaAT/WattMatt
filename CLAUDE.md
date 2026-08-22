@@ -135,6 +135,28 @@ An issue is done when **all** of these hold:
 - [ ] Undo of the new action restores the previous state exactly.
 - [ ] Docs updated if behaviour, schema or terminology changed.
 
+### How this list gets checked
+
+**Do not verify your own work in the session that produced it.** By then you are already
+convinced it works, and that is exactly the state in which people tick boxes they never
+checked.
+
+Start a fresh session and hand the branch to the **`dod-reviewer`** subagent
+([`.claude/agents/dod-reviewer.md`](.claude/agents/dod-reviewer.md)). It re-reads the issue
+and the diff with clean context, re-runs the gates itself rather than trusting any claim that
+they passed, and reports against the list above. It is deliberately read-only: it reports
+findings and never fixes them.
+
+Two rules it enforces, worth internalising even when working without it:
+
+- **A box nobody can produce evidence for counts as failed, not passed.** "Probably fine" is
+  a failure.
+- **A green test suite is not evidence on its own.** Every edge case named in the issue needs
+  a test that would actually fail if the logic were wrong.
+
+CI (issue #2) is the hard gate underneath all of this — the lint rules for German strings and
+for `Math.random()` in `src/domain` are objective and cannot be reasoned past.
+
 ---
 
 ## 8. Things that will bite you
