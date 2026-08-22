@@ -1,3 +1,2 @@
-// Barrel placeholder — populated by the issue that owns this module
-// (see docs/ARCHITECTURE.md §4).
-export {};
+export { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
+export { HostWindow } from '@/windows/host/HostWindow';

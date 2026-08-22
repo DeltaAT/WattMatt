@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Baseline capability for the main window. Permissions are added per issue, never in bulk.",
-  "windows": ["main"],
+  "description": "Baseline capability for the host and beamer windows. Permissions are added per issue, never in bulk. The beamer needs the same core set because it listens for the events the host broadcasts (docs/ARCHITECTURE.md §3).",
+  "windows": ["host", "beamer"],
   "permissions": ["core:default"]
 }

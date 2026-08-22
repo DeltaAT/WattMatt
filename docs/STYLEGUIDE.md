@@ -166,13 +166,25 @@ Four project utilities carry rules that are easy to forget:
 | `wm-tnum` | `font-feature-settings: 'tnum' 1` for a numeric display whose context lost the body default |
 | `wm-label` | 12 px uppercase with `.04em` tracking, muted — the host label style of §2 |
 | `beamer-safe-area` | the 4 % inset of §3 |
+| `beamer-stage` | the 16:9 area a scene is drawn into; the surplus becomes letterbox bars (§3) |
 
 ### The beamer unit
 
-`--wm-beamer-unit: calc(100vw / 120)` is the whole beamer type scale: `.beamer-root` sets its
-`font-size` to it, and every `text-beamer-*` token is a multiple of it. The tokens use the unit
-rather than `rem` on purpose — `rem` resolves against `<html>` and would ignore `.beamer-root`
-entirely.
+`--wm-beamer-unit` is the whole beamer type scale: `.beamer-root` sets its `font-size` to it, and
+every `text-beamer-*` token is a multiple of it. The tokens use the unit rather than `rem` on
+purpose — `rem` resolves against `<html>` and would ignore `.beamer-root` entirely.
+
+The unit is one 120th of the **stage**, not of the viewport:
+
+```css
+--wm-beamer-stage-width: min(100vw, calc(100vh * 16 / 9));
+--wm-beamer-unit: calc(var(--wm-beamer-stage-width) / 120);
+```
+
+On a 16:9 display `min()` picks `100vw` and this is exactly the `100vw / 120` above. On anything
+else the two differ, and that difference is the point: §3 letterboxes rather than reflows, so a
+unit derived from the full viewport would size type for a stage that is not there — on 21:9 the
+headline would run past the letterboxed edge. The `beamer-stage` utility draws the stage itself.
 
 One consequence is worth knowing before it bites: one unit is only 16 px at 1080p, far below the
 32 px floor. **Beamer text must always carry an explicit `text-beamer-*` token.** Inherited text

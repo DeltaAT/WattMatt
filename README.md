@@ -58,6 +58,11 @@ pnpm test:coverage    # unit tests + coverage thresholds
 pnpm tauri build      # NSIS installer + portable exe in src-tauri/target/release
 ```
 
+With a second monitor attached, `pnpm tauri dev` opens the beamer fullscreen on it. With a
+single screen it opens as a windowed 16:9 preview instead and says so in the host panel — the
+app is fully usable either way. Both windows are the same bundle, told apart by `?window=host`
+and `?window=beamer`, so `pnpm dev` in a browser can serve either one.
+
 ## Repository layout
 
 ```text

@@ -26,7 +26,35 @@ monitor enumeration and window placement.
 - On startup Rust enumerates monitors. If a second monitor exists, the beamer window opens
   fullscreen on it. If not, it opens as a resizable preview window and the host is told so.
 - The host can reassign the beamer to a different monitor at any time without losing state.
+  Reassigning moves the existing window; the WebView is never reloaded, so the scene it is
+  showing survives the move.
 - Closing the beamer window never affects the tournament. Reopening restores the current scene.
+
+### Which monitor the beamer gets
+
+Two rules, and they are the reason `windows.rs` picks rather than takes the first entry:
+
+- **Automatic selection only ever picks a non-primary monitor.** Windows enumerates monitors in
+  whatever order the ports were detected, so "the second one in the list" is not a thing. If
+  nothing non-primary is attached, the beamer becomes a windowed 16:9 preview rather than
+  covering the laptop screen and burying the controls.
+- **An explicit choice by the host always wins**, including the laptop screen (golden rule 3).
+  The control panel flags that case, because it hides the host UI.
+
+The remembered choice is an id, re-validated against a fresh enumeration every time. A monitor
+that disappears is never silently replaced by the laptop screen: the beamer moves to another
+non-primary monitor if one exists, and otherwise drops to a preview with the reason shown.
+
+Rust re-reads the monitor set every two seconds and pushes a `beamer:status` event when it
+changed — Tauri surfaces no display-change event, and a host who has to click to discover that
+the projector fell out has already lost the room. Unplugging demotes the beamer to a preview,
+replugging promotes it straight back.
+
+### Staying awake
+
+Windows is told to hold off sleep and the screensaver through `SetThreadExecutionState`
+(`power.rs`). The state is per-thread and dies with the thread, so a dedicated long-lived thread
+holds it rather than whichever pool thread happened to serve the command.
 
 ## 3. State flow
 
@@ -85,7 +113,13 @@ src/
     undo.ts
     sync.ts            snapshot broadcast
     persistence.ts     autosave orchestration
+  platform/
+    tauri.ts           the IPC boundary: invoke + listen, every payload Zod-parsed
+    beamerWindow.ts    monitor list, beamer placement, sleep inhibition
+    beamerSummary.ts   pure reading of a placement: is the audience seeing this?
   windows/
+    route.ts           `?window=` → host | beamer
+    useBeamerStatus.ts live placement, shared by both windows
     host/              panels, dialogs, control center
     beamer/scenes/     one component per BeamerScene id
   ui/                  Button, Card, GroupChip, TableChip, motion presets
@@ -94,6 +128,7 @@ src-tauri/src/
   main.rs
   fs.rs                atomic write, backups, recovery
   windows.rs           monitor enumeration, window placement
+  power.rs             holds off sleep and the screensaver during an event
   logging.rs           rolling log file
 ```
 

@@ -1,3 +1,3 @@
-// Barrel placeholder — populated by the issue that owns this module
-// (see docs/ARCHITECTURE.md §4).
-export {};
+export { BeamerSurface } from '@/windows/beamer/BeamerSurface';
+export { BeamerWindow } from '@/windows/beamer/BeamerWindow';
+export { LetterboxStage } from '@/windows/beamer/LetterboxStage';
