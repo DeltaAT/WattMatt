@@ -9,14 +9,14 @@
 //! runs on a pool thread which may well be gone a second later, so the request
 //! is handed to one long-lived thread that outlives every command.
 
-use std::sync::mpsc::{sync_channel, SyncSender};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 
 /// Owns the thread that holds the execution state. Lives in Tauri's managed
 /// state, so it is dropped only when the app exits — at which point the channel
 /// closes, the thread releases the state and ends.
 pub struct SleepInhibitor {
-    requests: Mutex<SyncSender<bool>>,
+    requests: Mutex<Sender<bool>>,
 }
 
 impl Default for SleepInhibitor {
@@ -27,10 +27,21 @@ impl Default for SleepInhibitor {
 
 impl SleepInhibitor {
     pub fn new() -> Self {
-        // Depth 1 is enough: the value is a level, not a queue of work, and a
-        // sender that would block simply means a newer request is already on
-        // its way.
-        let (requests, incoming) = sync_channel::<bool>(1);
+        Self::with_applier(apply)
+    }
+
+    /// Spawns the thread that owns the execution state. Split out of
+    /// [`Self::new`] so tests can observe what would have reached Windows.
+    fn with_applier<F>(apply: F) -> Self
+    where
+        F: Fn(bool) + Send + 'static,
+    {
+        // Unbounded on purpose. A bounded channel has to discard something once
+        // it is full, and `try_send` discards the *incoming* value — so a burst
+        // ending in `false` would drop the release and leave
+        // ES_DISPLAY_REQUIRED latched for the rest of the session. Requests
+        // only happen when the beamer opens or closes, so nothing accumulates.
+        let (requests, incoming) = channel::<bool>();
 
         std::thread::spawn(move || {
             for active in incoming {
@@ -49,9 +60,9 @@ impl SleepInhibitor {
     /// Repeat calls are harmless — Windows treats the state as a level.
     pub fn set(&self, active: bool) {
         let requests = self.requests.lock().expect("sleep inhibitor lock");
-        // A full channel means an unread request is already pending; the newer
-        // value would win anyway, so dropping this one changes nothing.
-        let _ = requests.try_send(active);
+        // Fails only once the worker thread is gone, which happens at shutdown
+        // after the execution state has already been released.
+        let _ = requests.send(active);
     }
 }
 
@@ -92,4 +103,86 @@ fn apply(_active: bool) {}
 #[tauri::command]
 pub fn set_sleep_inhibited(inhibitor: tauri::State<'_, SleepInhibitor>, active: bool) {
     inhibitor.set(active);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::Receiver;
+    use std::time::Duration;
+
+    // Generous: these only ever wait on a thread that has already been woken.
+    const TIMEOUT: Duration = Duration::from_secs(5);
+
+    struct Harness {
+        inhibitor: SleepInhibitor,
+        entered: Receiver<()>,
+        release: Sender<()>,
+        applied: Receiver<bool>,
+    }
+
+    /// Parks the worker inside its first `apply` until `release` is sent, so a
+    /// test can make requests queue up deterministically, then reports every
+    /// value the worker applied.
+    fn harness() -> Harness {
+        let (applied_tx, applied) = channel::<bool>();
+        let (entered_tx, entered) = channel::<()>();
+        let (release, release_rx) = channel::<()>();
+        let release_rx = Mutex::new(release_rx);
+        let first = AtomicBool::new(true);
+
+        let inhibitor = SleepInhibitor::with_applier(move |active| {
+            if first.swap(false, Ordering::SeqCst) {
+                let _ = entered_tx.send(());
+                let _ = release_rx.lock().expect("release lock").recv();
+            }
+            let _ = applied_tx.send(active);
+        });
+
+        Harness {
+            inhibitor,
+            entered,
+            release,
+            applied,
+        }
+    }
+
+    #[test]
+    fn requests_reach_windows_in_order() {
+        let h = harness();
+
+        h.inhibitor.set(true);
+        h.entered.recv_timeout(TIMEOUT).expect("worker started");
+        h.inhibitor.set(false);
+        h.release.send(()).expect("release worker");
+
+        assert_eq!(h.applied.recv_timeout(TIMEOUT).ok(), Some(true));
+        assert_eq!(h.applied.recv_timeout(TIMEOUT).ok(), Some(false));
+    }
+
+    /// Regression for the depth-1 `sync_channel`: `try_send` discarded the
+    /// *incoming* value once the buffer was full, so the closing `false` was
+    /// thrown away and the display stayed forced on for the rest of the
+    /// session. Every request must survive a backed-up queue.
+    #[test]
+    fn a_backed_up_queue_still_delivers_the_final_release() {
+        let h = harness();
+
+        h.inhibitor.set(true);
+        h.entered.recv_timeout(TIMEOUT).expect("worker started");
+
+        // The worker is parked inside apply(true); these pile up behind it.
+        h.inhibitor.set(true);
+        h.inhibitor.set(true);
+        h.inhibitor.set(false);
+        h.release.send(()).expect("release worker");
+
+        let mut applied = Vec::new();
+        for _ in 0..4 {
+            applied.push(h.applied.recv_timeout(TIMEOUT).expect("applied"));
+        }
+
+        assert_eq!(applied, vec![true, true, true, false]);
+    }
 }
