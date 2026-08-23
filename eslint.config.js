@@ -18,6 +18,35 @@ const wattmatt = {
   },
 };
 
+/**
+ * What `src/domain` may not import (ARCHITECTURE.md §5). Split from the I/O
+ * group below because the two are lifted separately: a domain *test* may read
+ * a file to check the code against it, but no domain file — test or not —
+ * has any business importing React or reaching up into another layer.
+ */
+const DOMAIN_FORBIDDEN_IMPORTS = [
+  {
+    group: ['react', 'react-*', 'react-dom/*', 'zustand', 'zustand/*'],
+    message: 'src/domain is framework-free (ARCHITECTURE.md §5). Keep React in the UI.',
+  },
+  {
+    group: ['@tauri-apps/*'],
+    message: 'src/domain never talks to Tauri (ARCHITECTURE.md §5). Use @/platform.',
+  },
+  {
+    group: ['@/store/*', '@/platform/*', '@/ui/*', '@/windows/*', '@/i18n', '@/i18n/*'],
+    message:
+      'src/domain sits at the bottom of the layering (ARCHITECTURE.md §4) and imports no other layer.',
+  },
+];
+
+const DOMAIN_FORBIDDEN_IO_IMPORTS = [
+  {
+    group: ['node:*', 'fs', 'fs/*', 'path', 'os', 'child_process'],
+    message: 'src/domain performs no I/O (ARCHITECTURE.md §5). File access lives in Rust.',
+  },
+];
+
 export default tseslint.config(
   {
     ignores: ['dist/**', 'coverage/**', 'src-tauri/**', 'node_modules/**'],
@@ -36,6 +65,9 @@ export default tseslint.config(
     rules: {
       // CLAUDE.md §6: no `any`, named exports only.
       '@typescript-eslint/no-explicit-any': 'error',
+      // Omitting a field by destructuring it out next to a rest element is the
+      // clearest way to drop one, and the discarded name is unused by design.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
       '@typescript-eslint/consistent-type-imports': [
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
@@ -134,6 +166,19 @@ export default tseslint.config(
           message: 'src/domain performs no I/O (ARCHITECTURE.md §5), and WattMatt is offline.',
         },
       ],
+
+      /**
+       * Issue #7 acceptance criterion: zero React, Tauri or I/O imports in
+       * src/domain. Purity is what makes the tournament reproducible from
+       * (seed, ordered host decisions), and an import is how it would leak —
+       * a single `useState` here and the draw logic can no longer be replayed
+       * in a test. The layering direction is one-way: everything may import
+       * the domain, the domain imports nobody.
+       */
+      'no-restricted-imports': [
+        'error',
+        { patterns: [...DOMAIN_FORBIDDEN_IMPORTS, ...DOMAIN_FORBIDDEN_IO_IMPORTS] },
+      ],
     },
   },
 
@@ -143,6 +188,21 @@ export default tseslint.config(
     files: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.js'],
     rules: {
       'wattmatt/no-hardcoded-german': 'off',
+    },
+  },
+
+  /**
+   * A domain test may read a file to check the code against it —
+   * src/domain/schema.test.ts validates the example in docs/FILE-FORMAT.md by
+   * reading the document, which is the opposite of impurity leaking into the
+   * domain. Only the I/O group is lifted: React, Tauri and the other layers
+   * stay banned, because a domain test importing a store or a component means
+   * the boundary moved and nobody noticed.
+   */
+  {
+    files: ['src/domain/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: DOMAIN_FORBIDDEN_IMPORTS }],
     },
   },
 

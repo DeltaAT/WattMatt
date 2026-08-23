@@ -35,6 +35,7 @@ describe('the beamer store', () => {
         id: 'g1' as never,
         number: 1,
         name: null,
+        status: 'ACTIVE',
       });
     }).toThrow(TypeError);
   });

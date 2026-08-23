@@ -54,6 +54,13 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Undo | Rückgängig |
 | Blackout | Bildschirm aus |
 | Performance mode | Performance-Modus |
+| Bracket node | Turnierbaum-Knoten |
+| Repechage draw | Auslosung der Hoffnungsrunde |
+| Participant label | Teilnehmer-Bezeichnung |
+
+Stored enum values are **English**, like every other identifier (CLAUDE.md rule 1): the file
+holds `ROUND_OF_16` and `GROUP`, and `de-AT.ts` turns them into *Achtelfinale* and *Gruppe*.
+See docs/OPEN-QUESTIONS.md #21.
 
 ## UI copy conventions
 

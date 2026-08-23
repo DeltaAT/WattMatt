@@ -17,6 +17,7 @@ function groups(count: number): TournamentSnapshot {
       id: groupIdSchema.parse(`g${index + 1}`),
       number: index + 1,
       name: `Gruppe ${index + 1}`,
+      status: 'ACTIVE' as const,
     })),
   };
 }

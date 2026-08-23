@@ -34,7 +34,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "rngCursor": 42,                  // how many values have been consumed
 
   "settings": {
-    "participantLabel": "GRUPPE",   // GRUPPE | TEAM | SPIELER — affects German UI only
+    "participantLabel": "GROUP",    // GROUP | TEAM | PLAYER — affects German UI only
     "namingAt": 16,                 // field size at which names are required
     "performanceMode": false
   },
@@ -46,6 +46,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   ],
 
   "groups": [
+    // name is null until the naming phase. status: ACTIVE | ELIMINATED
     { "id": "grp_1", "number": 1, "name": null, "status": "ACTIVE" }
   ],
 
@@ -71,17 +72,19 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
   "repechage": {
     "target": 16,
-    "draws": [ { "groupId": "grp_9", "accepted": true } ],
-    "fallbackUsed": null
+    "draws": [ { "groupId": "grp_9", "accepted": true } ],  // accepted null = not yet answered
+    "fallbackUsed": null            // null | BYES | REOPEN_DECLINED
   },
 
   "bracket": {
     "size": 16,
     "nodes": [
-      { "id": "bn_1", "round": "ACHTELFINALE", "slotA": "grp_3", "slotB": "grp_12",
+      // ROUND_OF_16 | QUARTER_FINAL | SEMI_FINAL | FINAL | THIRD_PLACE.
+      // English per CLAUDE.md rule 1; the German names are UI copy in de-AT.ts.
+      { "id": "bn_1", "round": "ROUND_OF_16", "slotA": "grp_3", "slotB": "grp_12",
         "winnerId": null, "nextNodeId": "bn_9", "tableId": null }
     ],
-    "thirdPlaceNodeId": "bn_15"
+    "thirdPlaceNodeId": "bn_15"     // null at size 2 — nobody left to play for third
   },
 
   "log": [
@@ -107,3 +110,13 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
    state — the snapshot fields are authoritative. Undo works on an in-memory snapshot stack.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
+
+   **Not implemented yet — issue #12 owns it.** `tournamentFileSchema` (issue #7) parses
+   *strictly*: an unknown field is dropped, not preserved. This is deliberate rather than
+   overlooked. The v1 schema is the only one that has ever existed, so there is no forward
+   field to preserve yet; and making the schema permissive today would disarm the test that
+   guards the schema itself, which asserts that the example above survives a parse
+   unchanged. Under a permissive schema an unknown key round-trips untouched, so a field
+   added to this document but forgotten in the schema would pass silently — exactly the
+   regression that test exists to catch. Issue #12 introduces preservation together with
+   the version negotiation that makes it meaningful.

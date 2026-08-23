@@ -12,7 +12,16 @@ describe('the snapshot envelope', () => {
     const sent = snapshot({
       revision: 7,
       scene: { id: 'BRACKET' },
-      tournament: { groups: [{ id: groupIdSchema.parse('g1'), number: 1, name: 'Die Rasenden' }] },
+      tournament: {
+        groups: [
+          {
+            id: groupIdSchema.parse('g1'),
+            number: 1,
+            name: 'Die Rasenden',
+            status: 'ACTIVE',
+          },
+        ],
+      },
       delivery: 'live',
     });
 
