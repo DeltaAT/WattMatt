@@ -27,6 +27,7 @@ fn main() {
             fs::write_tournament,
             fs::list_tournaments,
             fs::list_backups,
+            fs::backup_before_migration,
             session::pending_recovery,
             session::dismiss_recovery,
             session::mark_session_document,

@@ -9,6 +9,7 @@ laptop, continue. No hidden state outside the file except UI preferences.
 | --- | --- |
 | Default library | `%APPDATA%/WattMatt/tournaments/` |
 | Backups | next to the file: `name.wattmatt.bak1` … `.bak3` |
+| Pre-migration copy | next to the file: `name.wattmatt.v1.bak` (rule 7) |
 | Session marker | `%APPDATA%/WattMatt/session.json` (never tournament data) |
 | Logs | `%APPDATA%/WattMatt/logs/` |
 | UI preferences | `%APPDATA%/WattMatt/settings.json` (never tournament data) |
@@ -112,11 +113,10 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
 ## Rules
 
-Rules 1 to 6 are live. #9 landed the atomic write and the "open a backup instead" answer;
+All seven rules are live. #9 landed the atomic write and the "open a backup instead" answer;
 #10 landed the rotation, the debounced autosave and the crash recovery; #11 landed the writer
-behind the action log. Rule 7 is issue #12's:
-it is listed as a task on #9, and moving it is recorded on that issue and in
-docs/OPEN-QUESTIONS.md #27 rather than decided here.
+behind the action log; #12 landed the migration framework, the refusal of a newer file and the
+preservation of unknown fields.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.
@@ -188,12 +188,54 @@ docs/OPEN-QUESTIONS.md #27 rather than decided here.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
 
-   **Not implemented yet — issue #12 owns it.** `tournamentFileSchema` (issue #7) parses
-   *strictly*: an unknown field is dropped, not preserved. This is deliberate rather than
-   overlooked. The v1 schema is the only one that has ever existed, so there is no forward
-   field to preserve yet; and making the schema permissive today would disarm the test that
-   guards the schema itself, which asserts that the example above survives a parse
-   unchanged. Under a permissive schema an unknown key round-trips untouched, so a field
-   added to this document but forgotten in the schema would pass silently — exactly the
-   regression that test exists to catch. Issue #12 introduces preservation together with
-   the version negotiation that makes it meaningful.
+   Three things happen when a file is opened (`openTournamentAt` in
+   `src/store/persistence.ts`), and the order is the whole design.
+
+   **The version is read before the file is parsed.** A v1 file cannot satisfy a v4 schema,
+   so anything that parsed first could only ever report a merely-old file as corrupt.
+   `readSchemaVersion` reads the one field and places it: current, outdated, newer, or not
+   one of ours at all.
+
+   **A newer file is refused, never opened partially.** The host is told *Diese Datei stammt
+   aus einer neueren Version von WattMatt* and is deliberately **not** offered a backup: the
+   `bak1`…`bak3` beside it were written by that same newer build and refuse in exactly the
+   same way. A build that does not know what a field means cannot judge whether dropping it
+   loses a round, and the first save would be how the host found out.
+
+   **An outdated file is copied aside before it is migrated**, to
+   `name.wattmatt.v<from>.bak` — outside the rotating chain of rule 3, which covers minutes
+   during a busy round and would push the pre-migration state off the end long before anyone
+   wanted it. The copy is made once and never overwritten; the first one is the true original.
+   If it cannot be made, the file is **not opened**. That is the one place where a failed
+   backup is fatal rather than best effort: the autosave rewrites the file in the new format
+   within half a second of the host's first click, and without the copy the file as the
+   previous version wrote it stops existing at that moment.
+
+   The migration itself is pure and in memory (`src/domain/migrations/`). Nothing on the open
+   path writes to the file, which is what makes "a migration that fails never overwrites the
+   original" a property of the code rather than a promise.
+
+   **Unknown top-level fields are carried, not dropped.** `tournamentFileSchema` describes
+   what this build knows; anything else at the top level is picked up by `carriedFields`,
+   held beside the tournament in the store, and written back by `withCarriedFields` on every
+   save. That is what lets an older WattMatt open a newer build's file, record a winner, and
+   hand the file back with the newer build's fields intact. Nested objects still parse
+   strictly, and `schema.test.ts` leans on it: a field added to `settings` or to a `match`
+   here but forgotten in the schema fails the round-trip assertion. The top level has its own
+   guard instead — `covers every top-level field of the documented example` — which does not
+   depend on strictness (docs/OPEN-QUESTIONS.md #27).
+
+### Adding a migration
+
+1. Change `tournamentSchema` and bump `SCHEMA_VERSION` in `src/domain/schema.ts`.
+2. Add `src/domain/migrations/v<n>_to_v<n+1>.ts` exporting one `Migration`. It takes the raw
+   JSON of the old version and returns the raw JSON of the new one. It may throw: a field the
+   new version needs and the old file cannot supply is a refusal, not a guess.
+3. Append it to `MIGRATIONS` in `src/domain/migrations/registry.ts`. The array has to be
+   contiguous up to `SCHEMA_VERSION`; `runner.test.ts` asserts it, because a gap is a file
+   that opens on the laptop of whoever wrote the migration and refuses on the host's.
+4. Copy a file written by the *previous* build into `tests/fixtures/` as `v<n>.wattmatt`.
+   `fixtures.test.ts` finds it by name and opens every fixture through the real runner.
+   Fixtures are archives — never regenerate one, or it stops being a file from an older
+   version and the test stops proving anything.
+5. Update the example above and this document if the shape changed.

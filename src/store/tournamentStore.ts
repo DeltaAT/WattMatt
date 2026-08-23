@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
 import { IDLE_SCENE, type BeamerScene } from '@/domain/beamerScene';
+import { NO_CARRIED_FIELDS, type CarriedFields } from '@/domain/schema';
 import {
   EMPTY_TOURNAMENT,
   toTournamentSnapshot,
@@ -90,6 +91,16 @@ export interface TournamentState {
   document: Tournament | null;
   file: FileState;
   /**
+   * Top-level fields of the file this tournament was read from that this build
+   * does not know, written back out on every save (docs/FILE-FORMAT.md rule 7).
+   *
+   * Beside the tournament rather than inside it, for the same reason the path
+   * is: they are a property of the file, not of the event. Nothing in
+   * `src/domain` reads them, no action changes them, and the beamer never sees
+   * them — `toSnapshot` picks its fields by name.
+   */
+  carried: CarriedFields;
+  /**
    * What the beamer is sent (docs/ARCHITECTURE.md §3). Derived from `document`,
    * never assigned by an action.
    */
@@ -114,6 +125,7 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   autoFollow: true,
   document: null,
   file: UNSAVED_FILE,
+  carried: NO_CARRIED_FIELDS,
   tournament: EMPTY_TOURNAMENT,
   history: EMPTY_HISTORY,
 };

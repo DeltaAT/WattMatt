@@ -9,14 +9,14 @@ import { tournamentSchema } from '@/domain/types';
  * `Tournament` is what the store owns and what every domain function operates
  * on; `TournamentFile` is that plus the two stamps only a file needs: which
  * schema wrote it, and which build. Keeping them apart means the migration
- * framework (issue #12) can read the version off a file without the rest of
- * the app carrying a `schemaVersion` field it never reads.
+ * framework (`@/domain/migrations`) can read the version off a file without the
+ * rest of the app carrying a `schemaVersion` field it never reads.
  */
 
 /**
  * Bumped on any breaking change, with a migration alongside it
- * (docs/FILE-FORMAT.md rule 7). Issue #12 owns that framework; v1 is the
- * only version that has ever existed, so nothing migrates yet.
+ * (docs/FILE-FORMAT.md rule 7, `@/domain/migrations/registry`). v1 is the only
+ * version that has ever existed, so nothing migrates yet.
  */
 export const SCHEMA_VERSION = 1;
 
@@ -32,12 +32,18 @@ export type AppStamp = z.infer<typeof appStampSchema>;
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *
- * Parsing is strict: an unknown field is dropped, not preserved, which
- * FILE-FORMAT.md rule 7 will eventually forbid. Rule 7 is issue #12's, and the
- * deferral is agreed on issue #9 rather than assumed — docs/OPEN-QUESTIONS.md
- * #27. Making this permissive now would disarm `schema.test.ts`, which detects
- * a field forgotten in the schema precisely because an unknown key does *not*
- * survive the round trip.
+ * The schema describes the fields this build *knows*. A top-level field it does
+ * not know is not part of `TournamentFile` and never reaches the store — it is
+ * carried beside it by `carriedFields` and put back by `withCarriedFields`, so
+ * a file written by a later build survives being opened and saved by this one
+ * (docs/FILE-FORMAT.md rule 7).
+ *
+ * Deliberately at the top level only. Nested objects still parse strictly, and
+ * `schema.test.ts` leans on it: a field added to `settings` or to a `match` but
+ * forgotten here fails the round-trip assertion instead of being dropped on the
+ * host's next save. The top-level equivalent of that guard is
+ * `covers every field of the documented example`, which does not depend on
+ * strictness at all.
  */
 export const tournamentFileSchema = z
   .object({
@@ -47,3 +53,70 @@ export const tournamentFileSchema = z
   .extend(tournamentSchema.shape);
 
 export type TournamentFile = z.infer<typeof tournamentFileSchema>;
+
+/**
+ * A tournament file at *some* schema version.
+ *
+ * `TournamentFile` pins `schemaVersion` to the literal this build writes, which
+ * is what makes the schema refuse a file it does not understand. Everything
+ * that works on a file *whatever* version it came from — the migration runner's
+ * target, and stripping the stamps back off — wants the widened form instead.
+ */
+export type TournamentFileLike = Omit<TournamentFile, 'schemaVersion'> & { schemaVersion: number };
+
+/** Every top-level key this build writes and understands. */
+export const KNOWN_FILE_FIELDS: readonly string[] = Object.keys(tournamentFileSchema.shape);
+
+const KNOWN: ReadonlySet<string> = new Set(KNOWN_FILE_FIELDS);
+
+/**
+ * Top-level fields of an opened file that this build does not know.
+ *
+ * They belong to the file, not to the tournament: nothing in `src/domain` reads
+ * them, no action can change them, and they are written back out untouched.
+ * That is the whole of forward compatibility — an older build opening a file
+ * from a newer one must hand it back with the newer build's fields intact,
+ * rather than quietly stripping the half it could not read.
+ */
+export type CarriedFields = Readonly<Record<string, unknown>>;
+
+export const NO_CARRIED_FIELDS: CarriedFields = Object.freeze({});
+
+export function carriedFields(json: unknown): CarriedFields {
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) {
+    return NO_CARRIED_FIELDS;
+  }
+
+  const carried: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(json)) {
+    // `__proto__` is an own property when it came through JSON.parse, and
+    // writing it back with `=` would set a prototype rather than a field. A
+    // file cannot smuggle one through us; it is dropped like the nonsense it is.
+    if (KNOWN.has(key) || key === '__proto__') {
+      continue;
+    }
+    carried[key] = value;
+  }
+  return Object.keys(carried).length === 0 ? NO_CARRIED_FIELDS : carried;
+}
+
+/**
+ * The file as it goes to disk: what this build knows, plus what it carried.
+ *
+ * Known fields win, and the order is deliberate — a carried key that collides
+ * with one this build owns is a stale copy of a field the tournament is now
+ * authoritative for, and writing it over the real one would resurrect it.
+ */
+export function withCarriedFields(
+  file: TournamentFile,
+  carried: CarriedFields,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...file };
+  for (const [key, value] of Object.entries(carried)) {
+    if (KNOWN.has(key) || key === '__proto__') {
+      continue;
+    }
+    merged[key] = value;
+  }
+  return merged;
+}

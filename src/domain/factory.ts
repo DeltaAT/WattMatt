@@ -1,5 +1,5 @@
 import { tournamentIdSchema } from '@/domain/ids';
-import { SCHEMA_VERSION, type TournamentFile } from '@/domain/schema';
+import { SCHEMA_VERSION, type TournamentFile, type TournamentFileLike } from '@/domain/schema';
 import type { Clock, Settings, Tournament } from '@/domain/types';
 
 /**
@@ -70,8 +70,15 @@ export function toTournamentFile(tournament: Tournament, appVersion: string): To
   };
 }
 
-/** Strip the file stamps back off, yielding what the store owns. */
-export function fromTournamentFile(file: TournamentFile): Tournament {
+/**
+ * Strip the file stamps back off, yielding what the store owns.
+ *
+ * Takes the widened `TournamentFileLike` rather than `TournamentFile`: by the
+ * time a file reaches here it has been through the migration runner, and what
+ * that hands back is a file at the version this build reads — which is the same
+ * thing, one `SCHEMA_VERSION` bump later.
+ */
+export function fromTournamentFile(file: TournamentFileLike): Tournament {
   const { schemaVersion: _schemaVersion, app: _app, ...tournament } = file;
   return tournament;
 }

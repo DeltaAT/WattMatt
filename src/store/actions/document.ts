@@ -1,4 +1,5 @@
 import { IDLE_SCENE } from '@/domain/beamerScene';
+import { NO_CARRIED_FIELDS, type CarriedFields } from '@/domain/schema';
 import type { Tournament } from '@/domain/types';
 import { UNSAVED_FILE, type TournamentStore } from '@/store/tournamentStore';
 
@@ -30,16 +31,27 @@ export function setNewDocument(store: TournamentStore, tournament: Tournament): 
   store.commit(() => ({ document: tournament, file: UNSAVED_FILE, ...startingOver() }));
 }
 
-/** Replaces whatever was open with a tournament read from `path`. */
+/**
+ * Replaces whatever was open with a tournament read from `path`.
+ *
+ * `carried` is what the file held and this build does not understand
+ * (docs/FILE-FORMAT.md rule 7). It travels with the document because it belongs
+ * to the file the document came from: opening a second tournament must not
+ * write the first one's unknown fields into it.
+ */
 export function setOpenedDocument(
   store: TournamentStore,
   tournament: Tournament,
   path: string,
+  carried: CarriedFields = NO_CARRIED_FIELDS,
 ): void {
   store.commit(() => ({
     document: tournament,
     file: { status: 'saved', path },
+    // After the reset, not before it: `startingOver` clears `carried`, and the
+    // fields this file brought are the one thing that must survive that.
     ...startingOver(),
+    carried,
   }));
 }
 
@@ -98,5 +110,8 @@ export function closeDocument(store: TournamentStore): void {
  * a new document is not a moment the host has taken manual control in.
  */
 function startingOver() {
-  return { scene: IDLE_SCENE, autoFollow: true };
+  // `carried` is reset here rather than only where it is set: a tournament
+  // created or closed after one was opened from a newer build's file must not
+  // inherit that file's unknown fields and write them into its own.
+  return { scene: IDLE_SCENE, autoFollow: true, carried: NO_CARRIED_FIELDS };
 }

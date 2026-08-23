@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA } from '@/domain/migrations';
 import { fixedClock } from '@/domain/testFixtures';
 import {
   TournamentFileError,
@@ -35,6 +36,10 @@ export interface FakeFiles {
   metrics: { peakConcurrentWrites: number };
   failWrite(error: Error | null): void;
   failRead(error: Error | null): void;
+  /** Makes the pre-migration safety copy impossible (docs/FILE-FORMAT.md rule 7). */
+  failMigrationBackup(error: Error | null): void;
+  /** Every pre-migration copy that was made, as `path -> backup path`. */
+  migrationBackups: Map<string, string>;
   noDirectory(): void;
   setBackups(entries: BackupEntry[]): void;
   /** Holds every write open until the returned function is called. */
@@ -44,8 +49,10 @@ export interface FakeFiles {
 export function fakeFiles(initial: Record<string, string> = {}): FakeFiles {
   const disk = new Map(Object.entries(initial));
   const writes: string[] = [];
+  const migrationBackups = new Map<string, string>();
   let readFailure: Error | null = null;
   let writeFailure: Error | null = null;
+  let migrationBackupFailure: Error | null = null;
   let directory: string | null = LIBRARY;
   let backups: BackupEntry[] = [];
   let gate: Promise<void> | null = null;
@@ -88,6 +95,23 @@ export function fakeFiles(initial: Record<string, string> = {}): FakeFiles {
         bytes: 0,
       })),
     listBackups: async () => backups,
+    backUpForMigration: async (path: string, version: number) => {
+      if (migrationBackupFailure) {
+        throw migrationBackupFailure;
+      }
+      const contents = disk.get(path);
+      if (contents === undefined) {
+        throw new TournamentFileError('notFound', 'missing', path);
+      }
+      // Named the way src-tauri/src/fs.rs names it, and never overwritten: the
+      // first copy is the file as the older version wrote it.
+      const target = `${path}.v${version}.bak`;
+      if (!disk.has(target)) {
+        disk.set(target, contents);
+      }
+      migrationBackups.set(path, target);
+      return target;
+    },
     directory: async () => directory,
   };
 
@@ -102,6 +126,10 @@ export function fakeFiles(initial: Record<string, string> = {}): FakeFiles {
     failRead(error: Error | null) {
       readFailure = error;
     },
+    failMigrationBackup(error: Error | null) {
+      migrationBackupFailure = error;
+    },
+    migrationBackups,
     noDirectory() {
       directory = null;
     },
@@ -135,6 +163,7 @@ export function fakeDeps(
     newSeed: () => 'seed_test',
     appVersion: '0.1.0',
     fallbackFileBase: 'Turnier',
+    schema: CURRENT_SCHEMA,
     ...overrides,
   };
 }

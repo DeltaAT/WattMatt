@@ -171,6 +171,23 @@ export async function listTournaments(): Promise<TournamentEntry[]> {
   }
 }
 
+/**
+ * Copies a tournament aside before it is migrated to a newer schema
+ * (docs/FILE-FORMAT.md rule 7), and returns where the copy went.
+ *
+ * The only file call in this module that neither swallows its failure nor has a
+ * fallback, and deliberately so: everything else here answers "what is in the
+ * library" and can honestly answer "nothing". This one is the reason a host can
+ * still get at the tournament as the previous version wrote it, and a migration
+ * that proceeds without it is one nobody can take back.
+ */
+export async function backUpBeforeMigration(path: string, version: number): Promise<string> {
+  if (!isTauriRuntime()) {
+    throw noBackend();
+  }
+  return invokeFile('backup_before_migration', z.string(), { path, version });
+}
+
 /** The backups of one tournament file, most recent first. */
 export async function listBackups(path: string): Promise<BackupEntry[]> {
   if (!isTauriRuntime()) {

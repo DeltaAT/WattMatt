@@ -1,8 +1,10 @@
+import { CURRENT_SCHEMA } from '@/domain/migrations';
 import { de } from '@/i18n';
 import { systemClock } from '@/platform/clock';
 import { generateTournamentId } from '@/platform/id';
 import { generateSeed } from '@/platform/seed';
 import {
+  backUpBeforeMigration,
   listBackups,
   listTournaments,
   pickTournamentSaveTarget,
@@ -44,6 +46,7 @@ export function createPersistenceDeps(appVersion: string): PersistenceDeps {
       write: writeTournamentFile,
       list: listTournaments,
       listBackups,
+      backUpForMigration: backUpBeforeMigration,
       directory: tournamentsDirectory,
     },
     dialogs: {
@@ -55,6 +58,7 @@ export function createPersistenceDeps(appVersion: string): PersistenceDeps {
     newSeed: generateSeed,
     appVersion,
     fallbackFileBase: de.file.fallbackName,
+    schema: CURRENT_SCHEMA,
   };
 }
 
