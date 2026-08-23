@@ -81,8 +81,13 @@ export function createRng(seed: string, cursor = 0): Rng {
   }
 
   function int(maxExclusive: number): number {
-    if (!Number.isInteger(maxExclusive) || maxExclusive < 1) {
-      throw new Error(`RNG range must be a positive integer, got ${maxExclusive}`);
+    // The upper bound is not fussiness. One draw carries 32 bits, so a range
+    // above 2^32 cannot be filled uniformly — and worse, `UINT32_RANGE %
+    // maxExclusive` is then `UINT32_RANGE`, which makes `limit` zero and the
+    // rejection loop below spin forever. A frozen host window mid-event is the
+    // worst failure this app has; it fails loudly here instead.
+    if (!Number.isInteger(maxExclusive) || maxExclusive < 1 || maxExclusive > UINT32_RANGE) {
+      throw new Error(`RNG range must be an integer in [1, 2^32], got ${maxExclusive}`);
     }
 
     // Rejection sampling. `value % max` alone is biased toward the low end

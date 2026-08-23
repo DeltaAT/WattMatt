@@ -19,9 +19,18 @@ describe('generateSeed', () => {
 
   it('produces a seed the RNG accepts and can replay', () => {
     const seed = generateSeed();
-    const first = Array.from({ length: 10 }, () => createRng(seed).next());
-    const second = Array.from({ length: 10 }, () => createRng(seed).next());
-    expect(first).toEqual(second);
+
+    // One RNG drawn ten times, not ten RNGs drawn once — the earlier version
+    // of this test built a fresh generator per iteration and so compared the
+    // same single value against itself, which a broken stream would survive.
+    const drawTen = () => {
+      const rng = createRng(seed);
+      return Array.from({ length: 10 }, () => rng.next());
+    };
+
+    const first = drawTen();
+    expect(first).toEqual(drawTen());
+    expect(new Set(first).size, 'a replayable stream still has to vary').toBe(10);
   });
 
   /*
@@ -35,5 +44,7 @@ describe('generateSeed', () => {
     const drawsA = Array.from({ length: 10 }, () => a.next());
     const drawsB = Array.from({ length: 10 }, () => b.next());
     expect(drawsA).not.toEqual(drawsB);
+    // Not merely "the arrays differ": no single draw may coincide either.
+    expect(drawsA.filter((value, index) => value === drawsB[index])).toEqual([]);
   });
 });

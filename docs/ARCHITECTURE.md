@@ -213,6 +213,17 @@ Resuming is O(1): mulberry32 advances its state by a constant, so the state afte
 is `initial + n × step`. The tests check that seek against an actual replay rather than
 trusting the arithmetic.
 
+**The generator is part of the file format.** A tournament stores `(rngSeed, rngCursor)` and
+nothing else about the stream, so changing mulberry32 or the xmur3 seed hash silently
+replays every saved tournament differently — including the one someone is disputing. Golden
+vectors in `rng.test.ts` pin the stream; changing it is a `schemaVersion` bump and a
+migration (docs/FILE-FORMAT.md rule 7), never a refactor.
+
+Two halves of this are not wired yet, by design: issue #9 calls `generateSeed()` when a
+tournament is created, and issue #16 writes `rng.cursor` back after each draw. See
+docs/OPEN-QUESTIONS.md #23 — until both land, a reopened tournament would restart its
+stream.
+
 Schemas and types are one definition, not two: every entity is declared as a Zod schema and
 its TypeScript type is `z.infer`red from it. A schema that drifts from its type is then not
 expressible, and the thing the compiler checks against is the same thing that parses data at

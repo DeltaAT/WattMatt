@@ -35,6 +35,47 @@ describe('determinism', () => {
   });
 });
 
+/*
+ * The algorithm is part of the file format, not an implementation detail.
+ *
+ * A tournament file stores `(rngSeed, rngCursor)` and nothing else about the
+ * stream, so the numbers below are what turn those two fields back into the
+ * draw that actually happened. Change mulberry32 or the xmur3 seed hash and
+ * every tournament ever saved silently replays differently — including the one
+ * a participant is disputing.
+ *
+ * These are characterisation values: recorded from this implementation, not
+ * derived from an external reference. They prove nothing about the quality of
+ * the generator (the distribution test does that). Their whole job is to make
+ * a change to the algorithm impossible to land by accident. If a change is
+ * intended, it needs a schemaVersion bump and a migration (FILE-FORMAT rule 7),
+ * and these values are updated deliberately as part of it.
+ */
+describe('golden vectors (the stream is part of the file format)', () => {
+  const GOLDEN_SEED = 'wattmatt-v1';
+
+  it('produces the recorded floats', () => {
+    const rng = createRng(GOLDEN_SEED);
+    expect(Array.from({ length: 8 }, () => rng.next())).toEqual([
+      0.3882599361240864, 0.6811052528209984, 0.48921187431551516, 0.6820903695188463,
+      0.09736869600601494, 0.1735365935601294, 0.012422752799466252, 0.6895048602018505,
+    ]);
+  });
+
+  it('produces the recorded integers', () => {
+    const rng = createRng(GOLDEN_SEED);
+    expect(Array.from({ length: 8 }, () => rng.int(1000))).toEqual([
+      728, 786, 1, 830, 365, 994, 317, 825,
+    ]);
+  });
+
+  it('produces the recorded shuffle', () => {
+    expect(createRng(GOLDEN_SEED).shuffle([1, 2, 3, 4, 5, 6, 7, 8])).toEqual([
+      5, 4, 3, 6, 8, 2, 7, 1,
+    ]);
+  });
+});
+
 describe('the cursor', () => {
   it('starts where it was told to', () => {
     expect(createRng(SEED).cursor).toBe(0);
@@ -143,9 +184,30 @@ describe('int', () => {
 
   it('rejects a range that cannot produce a value', () => {
     const rng = createRng(SEED);
-    expect(() => rng.int(0)).toThrow(/positive integer/);
-    expect(() => rng.int(-3)).toThrow(/positive integer/);
-    expect(() => rng.int(2.5)).toThrow(/positive integer/);
+    expect(() => rng.int(0)).toThrow(/\[1, 2\^32\]/);
+    expect(() => rng.int(-3)).toThrow(/\[1, 2\^32\]/);
+    expect(() => rng.int(2.5)).toThrow(/\[1, 2\^32\]/);
+  });
+
+  /*
+   * A range above 2^32 used to hang: `UINT32_RANGE % maxExclusive` is then
+   * UINT32_RANGE itself, so `limit` became 0 and the rejection loop spun
+   * forever. Unreachable from an array length, but `int` is public API and a
+   * frozen host window mid-event is this app's worst failure mode.
+   *
+   * The 2 s timeout is the assertion: a regression hangs the suite rather than
+   * failing it, and a hung suite is a much worse diagnostic than a red one.
+   */
+  it('rejects a range wider than the generator instead of hanging', { timeout: 2000 }, () => {
+    const rng = createRng(SEED);
+    expect(() => rng.int(2 ** 32 + 1)).toThrow(/\[1, 2\^32\]/);
+    expect(() => rng.int(Number.MAX_SAFE_INTEGER)).toThrow(/\[1, 2\^32\]/);
+  });
+
+  it('accepts the full generator range as an upper bound', () => {
+    const value = createRng(SEED).int(2 ** 32);
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThan(2 ** 32);
   });
 });
 
@@ -252,5 +314,31 @@ describe('shuffle distribution', () => {
         ).toBeLessThan(TOLERANCE);
       }
     }
+
+    /*
+     * The per-cell bound above is a local check, and a loose one: a correct
+     * shuffle already uses about 70 % of it, so a bias spread thinly across
+     * many cells could stay under it everywhere. Chi-square over the whole
+     * table catches exactly that — it accumulates small deviations instead of
+     * looking at each in isolation, at no extra runtime since it reuses the
+     * counts already gathered.
+     *
+     * An 8x8 position table has (8-1)^2 = 49 degrees of freedom, since every
+     * row and every column is constrained to sum to RUNS. Chi-square(49) has
+     * mean 49 and sd ~9.9, so the bound below sits about 5 sd out. The run is
+     * seeded and therefore deterministic: this cannot flake.
+     */
+    let chiSquare = 0;
+    for (let element = 0; element < SIZE; element += 1) {
+      for (let position = 0; position < SIZE; position += 1) {
+        const observed = counts[element]?.[position] ?? 0;
+        chiSquare += (observed - EXPECTED) ** 2 / EXPECTED;
+      }
+    }
+
+    expect(
+      chiSquare,
+      `chi-square over the 8x8 position table was ${chiSquare.toFixed(1)}, expected ~49`,
+    ).toBeLessThan(100);
   });
 });
