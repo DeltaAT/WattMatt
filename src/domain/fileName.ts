@@ -72,16 +72,17 @@ export function uniqueFileName(fileName: string, taken: Iterable<string>): strin
   }
 
   const base = tournamentNameFromFileName(fileName);
-  // Bounded rather than `while (true)`: a host with 999 tournaments of the same
-  // name has a different problem, and an unbounded loop in the save path hangs
-  // the window instead of reporting anything.
-  for (let suffix = 2; suffix < 1000; suffix += 1) {
+  // Terminates by pigeonhole rather than by a fixed cap: `used` is finite, so
+  // at most `used.size` of the candidates below can be taken and the one after
+  // those is free. The cap this replaced returned the *taken* name once it ran
+  // out, which is one tournament silently overwriting another — the failure
+  // this function exists to prevent, reintroduced by the guard against a hang.
+  for (let suffix = 2; ; suffix += 1) {
     const candidate = `${base} (${suffix}).${TOURNAMENT_FILE_EXTENSION}`;
     if (!used.has(candidate.toLowerCase())) {
       return candidate;
     }
   }
-  return fileName;
 }
 
 /** The sanitised stem, or `''` when the name consisted only of unusable parts. */

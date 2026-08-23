@@ -111,7 +111,8 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 Rules 1 and 2 are live as of issue #9: `src-tauri/src/fs.rs` does the temp-file-fsync-rename
 dance and `src/store/persistence.ts` refuses a file that does not parse, offering the newest
 backup instead. Rules 3, 4 and 5 belong to issue #10 — #9 only *finds* backups, it never writes
-one. Rule 7 is issue #12's, for the reason spelled out under it.
+one. Rule 7 is issue #12's: it is listed as a task on #9, and moving it is recorded on that issue
+and in docs/OPEN-QUESTIONS.md #27 rather than decided here.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.

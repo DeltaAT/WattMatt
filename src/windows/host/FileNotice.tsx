@@ -47,8 +47,13 @@ export function FileNotice({
         )
       ) : null}
 
+      {/*
+        `dismiss`, not `cancel`: the notice reports something that has already
+        happened, and there is nothing left to call off (CLAUDE.md §1 — the
+        word the host reads has to be the right one, not merely a German one).
+      */}
       <button type="button" className={ACTION_CLASS} onClick={onDismiss}>
-        {de.common.cancel}
+        {de.common.dismiss}
       </button>
     </div>
   );

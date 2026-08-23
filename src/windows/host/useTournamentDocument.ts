@@ -81,21 +81,35 @@ export function useTournamentDocument(): TournamentDocument {
   useEffect(refreshLibrary, [refreshLibrary]);
 
   /**
-   * Runs one file operation.
+   * Runs one file operation, after every operation queued before it.
    *
-   * Serialised through `busy` rather than allowed to overlap: two saves racing
-   * onto the same path would both go through the atomic write and the loser
-   * would silently win.
+   * Genuinely serialised, not merely flagged: `busy` disables the toolbar, but
+   * it does not disable the window's close button or the unsaved-changes
+   * dialog, so a save can still be issued while one is in flight. Two of them
+   * racing onto the same path both go through the atomic write, and the one
+   * that finishes second wins — which during an event is the older tournament
+   * overwriting the newer one.
+   *
+   * `busy` therefore counts what is outstanding rather than tracking the last
+   * caller: it has to stay on until the queue is empty, or the toolbar comes
+   * back while an operation is still waiting its turn.
    */
-  const run = useCallback(
-    (operation: () => Promise<void>) => {
-      setBusy(true);
-      operation()
-        .catch(reportFailure)
-        .finally(() => setBusy(false));
-    },
-    [setBusy],
-  );
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const outstanding = useRef(0);
+
+  const run = useCallback((operation: () => Promise<void>) => {
+    outstanding.current += 1;
+    setBusy(true);
+    queue.current = queue.current
+      .then(operation)
+      .catch(reportFailure)
+      .finally(() => {
+        outstanding.current -= 1;
+        if (outstanding.current === 0) {
+          setBusy(false);
+        }
+      });
+  }, []);
 
   const create = useCallback(
     (name: string) => {

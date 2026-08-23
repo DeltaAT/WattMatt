@@ -20,6 +20,11 @@ export const deAT = {
   common: {
     undo: 'Rückgängig',
     cancel: 'Abbrechen',
+    /**
+     * Closes a message that reports something already over. Distinct from
+     * `cancel`, which calls off an action the host could still go through with.
+     */
+    dismiss: 'Ausblenden',
   },
 
   /** Everything around the `.wattmatt` file itself (docs/FILE-FORMAT.md). */

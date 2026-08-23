@@ -103,4 +103,22 @@ describe('uniqueFileName', () => {
   it('collides case-insensitively, because the file system does', () => {
     expect(uniqueFileName('Sommer.wattmatt', ['sommer.WATTMATT'])).toBe('Sommer (2).wattmatt');
   });
+
+  /**
+   * A host who runs the same weekly tournament for years is not a hypothetical,
+   * and the answer must never be a name that is already someone else's file:
+   * `createTournamentDocument` writes straight to whatever comes back, so a
+   * taken name here is a tournament overwritten without a word.
+   */
+  it('never answers with a name that is taken, however many there are', () => {
+    const taken = ['Sommer.wattmatt'];
+    for (let suffix = 2; suffix <= 1200; suffix += 1) {
+      taken.push(`Sommer (${suffix}).wattmatt`);
+    }
+
+    const result = uniqueFileName('Sommer.wattmatt', taken);
+
+    expect(result).toBe('Sommer (1201).wattmatt');
+    expect(taken).not.toContain(result);
+  });
 });

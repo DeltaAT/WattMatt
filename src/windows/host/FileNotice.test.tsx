@@ -75,6 +75,18 @@ describe('FileNotice', () => {
     );
   });
 
+  /**
+   * The notice is about something that already failed. Offering "Abbrechen"
+   * asks the host to call off an action that is over — the wrong word, and the
+   * kind of wrong that only shows up in front of an audience.
+   */
+  it('dismisses rather than cancels', () => {
+    const markup = render({ kind: 'saveFailed', errorKind: 'io' });
+
+    expect(markup).toContain(de.common.dismiss);
+    expect(markup).not.toContain(de.common.cancel);
+  });
+
   it('is an alert, so it is announced rather than merely drawn', () => {
     expect(render({ kind: 'saveFailed', errorKind: 'io' })).toContain('role="alert"');
   });
