@@ -105,12 +105,14 @@ export const deAT = {
      * the stick is about to be written in a format their other laptop may not
      * read — and because the copy of the original is only useful to someone who
      * knows it is there (CLAUDE.md golden rule 3).
+     *
+     * One sentence and no heading, unlike `recovery` below: every notice in the
+     * `FileNotice` strip is a single line, and a heading only this one carried
+     * would make it look like the more important of the two things the host can
+     * be told there.
      */
-    migrated: {
-      title: 'Turnier auf das aktuelle Format gebracht',
-      body: (params: { from: number }) =>
-        `Die Datei wurde mit einer älteren Version von WattMatt (Format ${params.from}) angelegt und beim Öffnen auf das aktuelle Format gebracht. Die ursprüngliche Datei liegt unverändert daneben.`,
-    },
+    migrated: (params: { from: number }) =>
+      `Die Datei wurde mit einer älteren Version von WattMatt (Format ${params.from}) angelegt und beim Öffnen auf das aktuelle Format gebracht. Die ursprüngliche Datei liegt unverändert daneben.`,
 
     /**
      * Offered when the last session did not exit cleanly (docs/FILE-FORMAT.md

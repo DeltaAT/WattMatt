@@ -115,7 +115,7 @@ function messageFor(notice: Notice): string {
     return openMessage(notice.reason);
   }
   if (notice.kind === 'migrated') {
-    return de.file.migrated.body({ from: notice.from });
+    return de.file.migrated({ from: notice.from });
   }
   if (notice.kind === 'notWritten') {
     return de.error.fileNotWritten;

@@ -191,7 +191,7 @@ describe('FileNotice', () => {
   it('reports a migrated file as news rather than as a failure', () => {
     const markup = render({ kind: 'migrated', from: 1 });
 
-    expect(markup).toContain(de.file.migrated.body({ from: 1 }));
+    expect(markup).toContain(de.file.migrated({ from: 1 }));
     expect(markup).toContain('role="status"');
     expect(markup).not.toContain('role="alert"');
     expect(markup).toContain(de.common.dismiss);

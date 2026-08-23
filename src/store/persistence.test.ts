@@ -709,6 +709,37 @@ describe('schema versioning', () => {
     ) as Record<string, unknown>;
     expect(written).not.toHaveProperty('namingDone');
   });
+
+  /**
+   * `carried` is deliberately outside `UndoDocument` (issue #11): it belongs to
+   * the file, not to a decision inside the tournament, and nothing the host can
+   * do changes it. That reasoning is only worth anything if taking a decision
+   * back does not quietly drop the fields on the way — an undo mid-event
+   * followed by the autosave 500 ms later is exactly when it would happen, and
+   * the file would come back stripped with nobody having done anything wrong.
+   */
+  it('keeps the unknown fields through an undo and a redo', async () => {
+    const { store, files } = setup({ [path]: v1({ namingDone: true }) });
+    await openTournamentAt(store, deps(files), path);
+    store.commit(
+      (state) => ({
+        document: state.document === null ? null : { ...state.document, rngCursor: 99 },
+      }),
+      { undoLabel: 'Sieger festgelegt', log: { action: 'MATCH_WINNER_SET', payload: {} } },
+    );
+
+    expect(store.undo()).toBe(true);
+    expect(store.getState().carried).toEqual({ namingDone: true });
+    await saveTournament(store, deps(files));
+    expect(JSON.parse(files.disk.get(path) ?? 'null')).toMatchObject({ namingDone: true });
+
+    expect(store.redo()).toBe(true);
+    await saveTournament(store, deps(files));
+    expect(JSON.parse(files.disk.get(path) ?? 'null')).toMatchObject({
+      namingDone: true,
+      rngCursor: 99,
+    });
+  });
 });
 
 /**

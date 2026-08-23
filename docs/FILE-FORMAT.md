@@ -218,12 +218,20 @@ preservation of unknown fields.
    **Unknown top-level fields are carried, not dropped.** `tournamentFileSchema` describes
    what this build knows; anything else at the top level is picked up by `carriedFields`,
    held beside the tournament in the store, and written back by `withCarriedFields` on every
-   save. That is what lets an older WattMatt open a newer build's file, record a winner, and
-   hand the file back with the newer build's fields intact. Nested objects still parse
-   strictly, and `schema.test.ts` leans on it: a field added to `settings` or to a `match`
-   here but forgotten in the schema fails the round-trip assertion. The top level has its own
-   guard instead — `covers every top-level field of the documented example` — which does not
-   depend on strictness (docs/OPEN-QUESTIONS.md #27).
+   save.
+
+   Note what case this actually serves, because it is *not* the refusal above. A file from a
+   higher `schemaVersion` never gets this far — it is refused. What is carried is a field at a
+   version this build does read: a later build added a top-level field **without** a breaking
+   change, so it did not bump the version, and the file still parses here. An older WattMatt
+   can then open it, record a winner and hand it back with that field intact instead of
+   silently deleting it on the first autosave. The same applies to a field a *migration* left
+   behind that the new schema does not name.
+
+   Nested objects still parse strictly, and `schema.test.ts` leans on it: a field added to
+   `settings` or to a `match` here but forgotten in the schema fails the round-trip assertion.
+   The top level has its own guard instead — `covers every top-level field of the documented
+   example` — which does not depend on strictness (docs/OPEN-QUESTIONS.md #27).
 
 ### Adding a migration
 
@@ -231,6 +239,12 @@ preservation of unknown fields.
 2. Add `src/domain/migrations/v<n>_to_v<n+1>.ts` exporting one `Migration`. It takes the raw
    JSON of the old version and returns the raw JSON of the new one. It may throw: a field the
    new version needs and the old file cannot supply is a refusal, not a guess.
+
+   **A step that renames or removes a top-level field must delete the old key.** Leaving it
+   behind does not drop it — the carrying above picks it up as a field this build does not
+   know and writes it back out on every save for the rest of the file's life, next to the new
+   one. Rule 7 preserves what it cannot explain, and a key a migration meant to retire looks
+   exactly like a key from a newer build.
 3. Append it to `MIGRATIONS` in `src/domain/migrations/registry.ts`. The array has to be
    contiguous up to `SCHEMA_VERSION`; `runner.test.ts` asserts it, because a gap is a file
    that opens on the laptop of whoever wrote the migration and refuses on the host's.

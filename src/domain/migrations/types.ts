@@ -19,7 +19,10 @@ export type RawTournamentFile = Record<string, unknown>;
 export interface Migration {
   /** The `schemaVersion` this step reads. */
   readonly from: number;
-  /** What it writes. Always `from + 1` — see `assertContiguous` in the runner. */
+  /**
+   * What it writes. Always `from + 1`: the chain is one version at a time, and
+   * `runner.test.ts` asserts the registry is contiguous up to `SCHEMA_VERSION`.
+   */
   readonly to: number;
   /**
    * Returns the migrated file. Must not mutate its input: the runner keeps the
