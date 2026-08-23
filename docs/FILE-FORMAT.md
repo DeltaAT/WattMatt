@@ -14,6 +14,14 @@ laptop, continue. No hidden state outside the file except UI preferences.
 
 The host may save anywhere via *Speichern unter…*.
 
+The default library is created on first use, not on install, and is listed straight from disk:
+the start screen's *Zuletzt verwendet* is that listing, newest first, rather than a remembered
+list of files (docs/OPEN-QUESTIONS.md #25). A tournament is written into it the moment it is
+created, under a file name derived from its name and made unique against what is already there
+(#26) — so autosave has a target from the first click and a flat battery during setup costs
+nothing. `%APPDATA%/WattMatt` is deliberately the product name rather than the bundle
+identifier; see #24.
+
 ## Encoding
 
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
@@ -99,6 +107,11 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 ```
 
 ## Rules
+
+Rules 1 and 2 are live as of issue #9: `src-tauri/src/fs.rs` does the temp-file-fsync-rename
+dance and `src/store/persistence.ts` refuses a file that does not parse, offering the newest
+backup instead. Rules 3, 4 and 5 belong to issue #10 — #9 only *finds* backups, it never writes
+one. Rule 7 is issue #12's, for the reason spelled out under it.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.

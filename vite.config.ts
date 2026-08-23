@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -8,9 +9,20 @@ import { defineConfig } from 'vitest/config';
 // Windows desktop target, but leaving it in keeps `tauri dev --host` working.
 const host = process.env['TAURI_DEV_HOST'];
 
+// Stamped into every .wattmatt file as `app.version` (docs/FILE-FORMAT.md).
+// Read here, at build time, rather than by importing package.json into the
+// bundle: only the version belongs in a release, not the dependency tree.
+const { version } = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
+) as { version: string };
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
 
   resolve: {
     alias: {

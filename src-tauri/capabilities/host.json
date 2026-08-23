@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "host",
+  "description": "What only the control window may do. The beamer is a pure view (CLAUDE.md golden rule 4): it never opens a file dialog and never closes a window, so it is not listed here. Permissions are added per issue, never in bulk.",
+  "windows": ["host"],
+  "permissions": [
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "core:window:allow-destroy",
+    "core:window:allow-close"
+  ]
+}

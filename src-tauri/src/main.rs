@@ -10,6 +10,7 @@ use tauri::{Manager, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(windows::BeamerState::default())
         .manage(power::SleepInhibitor::default())
         .invoke_handler(tauri::generate_handler![
@@ -19,6 +20,11 @@ fn main() {
             windows::close_beamer,
             windows::focus_host,
             power::set_sleep_inhibited,
+            fs::tournaments_directory,
+            fs::read_tournament,
+            fs::write_tournament,
+            fs::list_tournaments,
+            fs::list_backups,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

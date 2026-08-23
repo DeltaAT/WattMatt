@@ -1,7 +1,13 @@
 import { createStore } from 'zustand/vanilla';
 
 import { IDLE_SCENE, type BeamerScene } from '@/domain/beamerScene';
-import { EMPTY_TOURNAMENT, type Snapshot, type TournamentSnapshot } from '@/domain/snapshot';
+import {
+  EMPTY_TOURNAMENT,
+  toTournamentSnapshot,
+  type Snapshot,
+  type TournamentSnapshot,
+} from '@/domain/snapshot';
+import type { Tournament } from '@/domain/types';
 
 /**
  * The single source of truth, in the host window (docs/ARCHITECTURE.md §3).
@@ -12,6 +18,35 @@ import { EMPTY_TOURNAMENT, type Snapshot, type TournamentSnapshot } from '@/doma
  * and it is where the undo stack hooks in at issue #11.
  */
 
+/**
+ * Where the open tournament lives, and whether the copy on disk is current.
+ *
+ * Kept beside the tournament rather than inside it: none of it belongs in the
+ * `.wattmatt` file, and a file that recorded its own path would be wrong the
+ * moment it was copied onto a USB stick.
+ *
+ * A union rather than `path` plus a `dirty` flag (CLAUDE.md §6): the pair can
+ * express "clean, but never written", and a host trusting that combination
+ * closes the window on a tournament that exists nowhere.
+ */
+export type FileState =
+  /**
+   * Never reached disk. Since a new tournament is written to the library as it
+   * is created (issue #9), this only survives a first write that failed.
+   */
+  | { status: 'unsaved' }
+  /** The file on disk is the tournament in memory. */
+  | { status: 'saved'; path: string }
+  /** On disk, but behind what the host has done since. */
+  | { status: 'modified'; path: string };
+
+export const UNSAVED_FILE: FileState = { status: 'unsaved' };
+
+/** The path the tournament was last written to, if it has one. */
+export function filePath(file: FileState): string | null {
+  return file.status === 'unsaved' ? null : file.path;
+}
+
 export interface TournamentState {
   /**
    * Bumped by every commit. The beamer uses it to order messages; issue #10
@@ -20,6 +55,19 @@ export interface TournamentState {
   revision: number;
   scene: BeamerScene;
   autoFollow: boolean;
+  /**
+   * The whole tournament the host owns — what gets written to disk. `null`
+   * means no tournament is open and the host is looking at the start screen.
+   *
+   * Authoritative. `tournament` below is a projection of this, recomputed by
+   * `commit`; no action writes the projection itself.
+   */
+  document: Tournament | null;
+  file: FileState;
+  /**
+   * What the beamer is sent (docs/ARCHITECTURE.md §3). Derived from `document`,
+   * never assigned by an action.
+   */
   tournament: TournamentSnapshot;
 }
 
@@ -27,8 +75,15 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   revision: 0,
   scene: IDLE_SCENE,
   autoFollow: true,
+  document: null,
+  file: UNSAVED_FILE,
   tournament: EMPTY_TOURNAMENT,
 };
+
+/** Whether the tournament in memory has moved on from the one on disk. */
+export function hasUnsavedChanges(state: TournamentState): boolean {
+  return state.document !== null && state.file.status !== 'saved';
+}
 
 /** What a commit touched, reported to whoever is listening. */
 export interface CommitMeta {
@@ -92,9 +147,27 @@ export function createTournamentStore(
       const current = store.getState();
       const partial = mutate(current);
       const next: TournamentState = { ...current, ...partial, revision: current.revision + 1 };
+
+      // The beamer's copy is derived here, once, rather than by each action.
+      // An action that changed the tournament and forgot to re-project it would
+      // leave the projector a decision behind while the host screen looks
+      // correct — the failure golden rule 4 exists to prevent.
+      const touchedDocument = 'document' in partial;
+      if (touchedDocument) {
+        next.tournament = next.document ? toTournamentSnapshot(next.document) : EMPTY_TOURNAMENT;
+      }
+
+      // Same reasoning for the dirty flag: an action that changed the
+      // tournament without saying so would let the host close the window on
+      // work that was never written. Only an action that decided the file
+      // state itself — opening, saving, closing — is left alone.
+      if (touchedDocument && !('file' in partial) && current.file.status !== 'unsaved') {
+        next.file = { status: 'modified', path: current.file.path };
+      }
+
       store.setState(next, true);
 
-      const meta: CommitMeta = { touchedTournament: 'tournament' in partial };
+      const meta: CommitMeta = { touchedTournament: touchedDocument || 'tournament' in partial };
       for (const listener of [...listeners]) {
         listener(next, meta);
       }

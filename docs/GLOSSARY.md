@@ -58,6 +58,20 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Repechage draw | Auslosung der Hoffnungsrunde |
 | Participant label | Teilnehmer-Bezeichnung |
 
+## Files
+
+| English (code) | German (UI) | Notes |
+| --- | --- | --- |
+| Tournament file | Turnierdatei | One tournament per `.wattmatt` file |
+| Tournament library | Turnierordner | `%APPDATA%\WattMatt\tournaments` |
+| Backup | Sicherung | `.bak1` … `.bak3` beside the file |
+| To save | speichern | |
+| Save as | Speichern unter… | |
+| To open | öffnen | |
+| To close (a tournament) | schließen | |
+| Unsaved changes | Ungespeicherte Änderungen | |
+| Start screen | Startbildschirm | Shown while no tournament is open |
+
 Stored enum values are **English**, like every other identifier (CLAUDE.md rule 1): the file
 holds `ROUND_OF_16` and `GROUP`, and `de-AT.ts` turns them into *Achtelfinale* and *Gruppe*.
 See docs/OPEN-QUESTIONS.md #21.
