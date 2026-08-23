@@ -122,10 +122,16 @@ docs/OPEN-QUESTIONS.md #27 rather than decided here.
    current → `.bak1` (`rotate_backups` in `src-tauri/src/fs.rs`, called by the
    `write_tournament` command so an autosave and an explicit *Speichern* behave identically).
 
-   Two details are load-bearing. The chain is walked **oldest first**, or `bak1` lands on a
-   `bak2` that has not moved yet and three recovery points collapse into one. And the last
-   step is a **copy, not a rename**: a rename would leave the tournament with no file at its
-   own path for the length of the write that follows.
+   Three details are load-bearing. The chain is walked **oldest first**, or `bak1` lands on a
+   `bak2` that has not moved yet and three recovery points collapse into one. The last step is
+   a **copy, not a rename**: a rename would leave the tournament with no file at its own path
+   for the length of the write that follows.
+
+   And the rotation happens **between the temp write and the rename**, not before both. A save
+   that fails, fails while writing the temp file — so putting the rotation after it means a
+   failed save spends nothing. Rotating first would push `bak3` off the end on every failed
+   attempt: three tries onto a full disk and the chain is three copies of the file already on
+   disk, exactly when the depth is needed.
 
 4. **Autosave** is debounced at 500 ms after the last committed action, and forced
    immediately on round close, phase change, window close and app exit
@@ -140,9 +146,11 @@ docs/OPEN-QUESTIONS.md #27 rather than decided here.
    from them mid-event (CLAUDE.md golden rule 3).
 
    A write that fails leaves the tournament `modified` and raises a warning the host cannot
-   dismiss, which clears itself when a write succeeds. A tournament that changed *while* the
-   bytes were in flight also stays `modified`: the file holds the revision that was
-   serialised, not the one the host has now.
+   dismiss, which clears itself when a write succeeds. It also **tries again by itself** after
+   `AUTOSAVE_RETRY_MS`, so a host who pushes the USB stick back in between rounds does not
+   have to click anything for the tournament to be written. A tournament that changed *while*
+   the bytes were in flight also stays `modified`: the file holds the `documentRevision` that
+   was serialised, not the one the host has now.
 
 5. **Recovery.** `%APPDATA%/WattMatt/session.json` is written when the app starts and deleted
    when it exits cleanly (`src-tauri/src/session.rs`), and it records which tournament the

@@ -89,7 +89,11 @@ export function useTournamentDocument(): TournamentDocument {
   const [busy, setBusy] = useState(false);
   const [recents, setRecents] = useState<TournamentEntry[]>([]);
   const [library, setLibrary] = useState<string | null>(null);
-  const [notice, setNotice] = useState<FileNotice | null>(null);
+  /**
+   * The notices that report one thing that already happened. The autosave's
+   * warning is deliberately *not* in here — see `notice` below.
+   */
+  const [transientNotice, setTransientNotice] = useState<FileNotice | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [recovery, setRecovery] = useState<RecoveryOffer | null>(null);
   const [autosaveState, setAutosaveState] = useState<AutosaveState>(IDLE_AUTOSAVE);
@@ -178,18 +182,30 @@ export function useTournamentDocument(): TournamentDocument {
   }, [deps, enqueue]);
 
   /**
-   * The autosave's failure is a condition, not an event, so it drives the
-   * notice rather than raising one: it appears when writing stops working and
-   * disappears by itself the moment a write succeeds.
+   * What the host is shown, with the autosave's warning on top.
+   *
+   * Derived rather than stored, and that is the whole point. A stored notice
+   * is overwritten by the next file operation that reports anything — so a
+   * failed manual save would replace the autosave warning with a *dismissible*
+   * one, the host would dismiss it, and the event would carry on with nothing
+   * being written and no sign of it. Deriving it makes "cannot be dismissed
+   * while the autosave is broken" a property of the code rather than a promise
+   * (issue #10, "never a silent no-op").
+   *
+   * The failure is a condition, not an event: it appears when writing stops
+   * working and goes when a write succeeds, without anyone acting on it.
    */
+  const notice: FileNotice | null =
+    autosaveState.failure === null
+      ? transientNotice
+      : { kind: 'autosaveFailed', errorKind: autosaveState.failure };
+
+  // A one-off notice from before the autosave broke has been overtaken by it,
+  // and must not resurface as news once the warning clears.
   useEffect(() => {
-    const failure = autosaveState.failure;
-    setNotice((current) => {
-      if (failure !== null) {
-        return { kind: 'autosaveFailed', errorKind: failure };
-      }
-      return current?.kind === 'autosaveFailed' ? null : current;
-    });
+    if (autosaveState.failure !== null) {
+      setTransientNotice(null);
+    }
   }, [autosaveState.failure]);
 
   // Which tournament a crash would have to hand back (src-tauri/src/session.rs).
@@ -210,7 +226,7 @@ export function useTournamentDocument(): TournamentDocument {
     (name: string) => {
       run(async () => {
         const outcome = await createTournamentDocument(tournamentStore, deps, { name });
-        setNotice(
+        setTransientNotice(
           outcome.status === 'unwritten' ? { kind: 'notWritten', errorKind: outcome.kind } : null,
         );
         refreshLibrary();
@@ -223,7 +239,7 @@ export function useTournamentDocument(): TournamentDocument {
     (path: string) => {
       run(async () => {
         const outcome = await openTournamentAt(tournamentStore, deps, path);
-        setNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+        setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
       });
     },
     [deps, run],
@@ -232,14 +248,14 @@ export function useTournamentDocument(): TournamentDocument {
   const openWithDialog = useCallback(() => {
     run(async () => {
       const outcome = await openTournamentWithDialog(tournamentStore, deps);
-      setNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+      setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
     });
   }, [deps, run]);
 
   const save = useCallback(() => {
     run(async () => {
       const outcome = await saveTournament(tournamentStore, deps);
-      setNotice(
+      setTransientNotice(
         outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
       );
       refreshLibrary();
@@ -249,7 +265,7 @@ export function useTournamentDocument(): TournamentDocument {
   const saveAs = useCallback(() => {
     run(async () => {
       const outcome = await saveTournamentAs(tournamentStore, deps);
-      setNotice(
+      setTransientNotice(
         outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
       );
       refreshLibrary();
@@ -258,7 +274,7 @@ export function useTournamentDocument(): TournamentDocument {
 
   const finishDocument = useCallback(() => {
     closeTournamentDocument(tournamentStore);
-    setNotice(null);
+    setTransientNotice(null);
     refreshLibrary();
   }, [refreshLibrary]);
 
@@ -301,7 +317,7 @@ export function useTournamentDocument(): TournamentDocument {
           // A save the host cancelled, or one that failed, must not be followed
           // by the close they only agreed to on the strength of it.
           if (outcome.status !== 'saved') {
-            setNotice(
+            setTransientNotice(
               outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
             );
             return;
@@ -369,8 +385,9 @@ export function useTournamentDocument(): TournamentDocument {
     saveAs,
     requestClose,
     answerUnsaved,
-    dismissNotice: () =>
-      setNotice((current) => (current?.kind === 'autosaveFailed' ? current : null)),
+    // Only ever reaches a one-off notice: the autosave warning is derived and
+    // its component offers no dismiss button at all.
+    dismissNotice: () => setTransientNotice(null),
     recover,
     declineRecovery,
   };

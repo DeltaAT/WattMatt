@@ -23,6 +23,17 @@ import type { TournamentState, TournamentStore } from '@/store/tournamentStore';
  */
 export const AUTOSAVE_DEBOUNCE_MS = 500;
 
+/**
+ * How long a broken autosave waits before trying again.
+ *
+ * Without a retry, a failure is only reconsidered on the host's next decision —
+ * so a host who pushed the USB stick back in between rounds would have nothing
+ * written until they clicked something, while the warning kept telling them so.
+ * Longer than the debounce because nothing is waiting on it: the host has been
+ * told, and hammering a disk that is not there helps nobody.
+ */
+export const AUTOSAVE_RETRY_MS = 5_000;
+
 /** What the autosave is doing right now, for the host's status line. */
 export interface AutosaveState {
   activity: 'idle' | 'pending' | 'saving';
@@ -132,6 +143,9 @@ export function startAutosave(store: TournamentStore, options: AutosaveOptions):
       }
 
       if (outcome.status === 'failed') {
+        // Nothing else will ask again until the host commits something, and the
+        // condition that broke it is usually one they can fix on the spot.
+        retry();
         settle({ failure: outcome.kind });
         return;
       }
@@ -144,12 +158,29 @@ export function startAutosave(store: TournamentStore, options: AutosaveOptions):
     return queue;
   };
 
-  const schedule = () => {
+  const after = (delayMs: number) => {
     cancelTimer();
     timer = setTimeout(() => {
       timer = null;
       void attempt();
-    }, debounceMs);
+    }, delayMs);
+  };
+
+  /**
+   * Tries again later, without disturbing a debounce that is already counting.
+   *
+   * A commit that arrived during the failed write has scheduled its own, sooner
+   * attempt; replacing it with the slower retry would make the host wait longer
+   * precisely because they kept working.
+   */
+  const retry = () => {
+    if (timer === null && !stopped) {
+      after(AUTOSAVE_RETRY_MS);
+    }
+  };
+
+  const schedule = () => {
+    after(debounceMs);
     // A write already in flight keeps its label: the host reading "Wird
     // gespeichert…" is being told the truth, and flicking back to "pending"
     // because they typed a character would only make the line twitch.
@@ -189,6 +220,14 @@ export function startAutosave(store: TournamentStore, options: AutosaveOptions):
     },
     flush: async () => {
       cancelTimer();
+      // Checked before joining the queue, not inside it. `flush` is what the
+      // window's close button waits on, and the queue it shares with the host's
+      // own file operations can be held by a native dialog the host has not
+      // answered yet — so a close with nothing to write must not wait on it.
+      if (!needsAutosave(store.getState())) {
+        settle();
+        return;
+      }
       await attempt();
     },
     stop: () => {

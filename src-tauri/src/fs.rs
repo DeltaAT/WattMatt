@@ -182,10 +182,12 @@ pub fn read_file(path: &Path) -> Result<String> {
 
 /// Writes the temp file and flushes it, without touching the target.
 ///
-/// Split out of [`write_atomic`] so the half that may fail is separable from
+/// Split out of [`save_tournament`] so the half that may fail is separable from
 /// the half that must not: a test can leave a temp file behind and prove the
 /// previous tournament is still intact, which is the acceptance criterion
-/// "killing the process mid-write leaves the previous file intact".
+/// "killing the process mid-write leaves the previous file intact". It is also
+/// what lets the rotation sit *after* the step that fails, so a save that
+/// cannot happen spends no recovery point.
 fn write_temp(path: &Path, contents: &str) -> Result<PathBuf> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -206,22 +208,44 @@ fn write_temp(path: &Path, contents: &str) -> Result<PathBuf> {
     Ok(temp)
 }
 
-pub fn write_atomic(path: &Path, contents: &str) -> Result<()> {
-    let temp = write_temp(path, contents)?;
-
-    // `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows: the target
-    // either still holds the old tournament or already holds the new one, never
-    // half of either.
-    if let Err(error) = fs::rename(&temp, path) {
+/// Puts the finished temp file in place of the target.
+///
+/// `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows: the target either
+/// still holds the old tournament or already holds the new one, never half of
+/// either.
+fn commit_temp(temp: &Path, path: &Path) -> Result<()> {
+    if let Err(error) = fs::rename(temp, path) {
         // A temp file left lying around would be overwritten by the next write
         // anyway, but removing it keeps a failed save from looking like a
         // half-finished one to anyone reading the folder. Best effort: the
         // write has already failed and that is what the host is about to hear.
-        let _ = fs::remove_file(&temp);
+        let _ = fs::remove_file(temp);
         return Err(FileError::from_io(&error, path));
     }
-
     Ok(())
+}
+
+/// Saves a tournament: temp file, rotation, rename
+/// (docs/FILE-FORMAT.md rules 2 and 3).
+///
+/// The one writer. Rotation is part of *saving a tournament* rather than of
+/// writing a file, and there is deliberately no second entry point without it:
+/// the autosave of issue #10 and an explicit "Speichern" are the same call, and
+/// a save that quietly left no recoverable previous version behind would be
+/// indistinguishable from one that did until the host needed it.
+///
+/// The order is the part that matters. Rotating first and writing afterwards
+/// would spend a recovery point on every *failed* save — three attempts onto a
+/// full disk, and `bak3` has been pushed off the end and replaced by three
+/// copies of the file that is already there, exactly when the host needs the
+/// depth. Writing the temp file first puts the step that actually fails before
+/// the step that costs something, so a save that cannot happen changes nothing.
+pub fn save_tournament(path: &Path, contents: &str) -> Result<()> {
+    let temp = write_temp(path, contents)?;
+
+    rotate_backups(path);
+
+    commit_temp(&temp, path)
 }
 
 // ---------------------------------------------------------------------------
@@ -364,17 +388,9 @@ pub fn read_tournament(path: String) -> Result<String> {
     read_file(Path::new(&path))
 }
 
-/// Rotates the backups, then writes (docs/FILE-FORMAT.md rules 2 and 3).
-///
-/// Rotation lives in the command rather than in [`write_atomic`] because it is
-/// a property of *saving a tournament*, not of writing a file: the autosave of
-/// issue #10 and an explicit "Speichern" are the same call and must both leave
-/// a recoverable previous version behind.
 #[tauri::command]
 pub fn write_tournament(path: String, contents: String) -> Result<()> {
-    let path = Path::new(&path);
-    rotate_backups(path);
-    write_atomic(path, &contents)
+    save_tournament(Path::new(&path), &contents)
 }
 
 #[tauri::command]
@@ -436,7 +452,7 @@ mod tests {
         // laptop-A-to-laptop-B copy has to survive both.
         let contents = "{\n  \"name\": \"Sommerturnier Grün\"\n}\n";
 
-        write_atomic(&path, contents).expect("write");
+        save_tournament(&path, contents).expect("write");
 
         assert_eq!(read_file(&path).expect("read"), contents);
     }
@@ -446,7 +462,7 @@ mod tests {
         let dir = TempDir::new("no-temp");
         let path = dir.join("t.wattmatt");
 
-        write_atomic(&path, "{}").expect("write");
+        save_tournament(&path, "{}").expect("write");
 
         assert!(!temp_path(&path).exists(), "temp file survived the write");
     }
@@ -456,8 +472,8 @@ mod tests {
         let dir = TempDir::new("replace");
         let path = dir.join("t.wattmatt");
 
-        write_atomic(&path, "first").expect("first write");
-        write_atomic(&path, "second").expect("second write");
+        save_tournament(&path, "first").expect("first write");
+        save_tournament(&path, "second").expect("second write");
 
         assert_eq!(read_file(&path).expect("read"), "second");
     }
@@ -469,7 +485,7 @@ mod tests {
     fn a_write_interrupted_before_the_rename_leaves_the_previous_file_intact() {
         let dir = TempDir::new("interrupted");
         let path = dir.join("t.wattmatt");
-        write_atomic(&path, "the tournament as it stood").expect("first write");
+        save_tournament(&path, "the tournament as it stood").expect("first write");
 
         let temp = write_temp(&path, "half of the next save").expect("temp write");
 
@@ -502,7 +518,7 @@ mod tests {
         let dir = TempDir::new("mkdir");
         let path = dir.join("nested").join("t.wattmatt");
 
-        write_atomic(&path, "{}").expect("write");
+        save_tournament(&path, "{}").expect("write");
 
         assert_eq!(read_file(&path).expect("read"), "{}");
     }
@@ -540,8 +556,8 @@ mod tests {
     #[test]
     fn listing_returns_tournaments_and_ignores_everything_else() {
         let dir = TempDir::new("listing");
-        write_atomic(&dir.join("a.wattmatt"), "{}").expect("write a");
-        write_atomic(&dir.join("b.wattmatt"), "{}").expect("write b");
+        save_tournament(&dir.join("a.wattmatt"), "{}").expect("write a");
+        save_tournament(&dir.join("b.wattmatt"), "{}").expect("write b");
         fs::write(dir.join("notes.txt"), "not a tournament").expect("write txt");
         fs::write(dir.join("c.wattmatt.tmp"), "interrupted").expect("write tmp");
         fs::write(dir.join("a.wattmatt.bak1"), "{}").expect("write bak");
@@ -587,7 +603,7 @@ mod tests {
     fn backups_come_back_newest_first_and_skip_the_ones_that_do_not_exist() {
         let dir = TempDir::new("backups");
         let path = dir.join("t.wattmatt");
-        write_atomic(&path, "{}").expect("write");
+        save_tournament(&path, "{}").expect("write");
         fs::write(backup_path(&path, "bak1"), "one").expect("write bak1");
         // bak2 deliberately absent: rotation has only happened twice.
         fs::write(backup_path(&path, "bak3"), "three").expect("write bak3");
@@ -606,10 +622,9 @@ mod tests {
     fn the_first_rotation_copies_the_previous_tournament_into_bak1() {
         let dir = TempDir::new("rotate-first");
         let path = dir.join("t.wattmatt");
-        write_atomic(&path, "as it stood").expect("write");
+        save_tournament(&path, "as it stood").expect("write");
 
-        rotate_backups(&path);
-        write_atomic(&path, "as it stands now").expect("second write");
+        save_tournament(&path, "as it stands now").expect("second write");
 
         assert_eq!(read_file(&path).expect("read"), "as it stands now");
         assert_eq!(
@@ -627,8 +642,7 @@ mod tests {
         let path = dir.join("t.wattmatt");
 
         for save in ["first", "second", "third", "fourth"] {
-            rotate_backups(&path);
-            write_atomic(&path, save).expect("write");
+            save_tournament(&path, save).expect("write");
         }
 
         assert_eq!(read_file(&path).expect("read"), "fourth");
@@ -655,8 +669,7 @@ mod tests {
         let path = dir.join("t.wattmatt");
 
         for save in 1..=50 {
-            rotate_backups(&path);
-            write_atomic(&path, &format!("save {save}")).expect("write");
+            save_tournament(&path, &format!("save {save}")).expect("write");
         }
 
         assert_eq!(read_file(&path).expect("read"), "save 50");
@@ -688,7 +701,7 @@ mod tests {
     fn rotation_never_leaves_the_tournament_without_a_file() {
         let dir = TempDir::new("rotate-present");
         let path = dir.join("t.wattmatt");
-        write_atomic(&path, "as it stood").expect("write");
+        save_tournament(&path, "as it stood").expect("write");
 
         rotate_backups(&path);
 
@@ -706,27 +719,56 @@ mod tests {
         assert!(!path.exists());
     }
 
-    /// The command is what the frontend calls, and the acceptance criterion is
-    /// about saves rather than about `rotate_backups` being called correctly by
-    /// a test. `write_atomic` on its own deliberately does not rotate.
+    /// The command the frontend actually calls, rather than the function under
+    /// it: there is deliberately no way to save a tournament without rotating,
+    /// so this proves the wiring rather than the behaviour.
     #[test]
-    fn the_write_command_rotates_and_the_bare_atomic_write_does_not() {
+    fn the_write_command_saves_through_the_same_path() {
         let dir = TempDir::new("rotate-command");
         let path = dir.join("t.wattmatt");
         let as_string = path.to_string_lossy().into_owned();
 
         write_tournament(as_string.clone(), "first".to_string()).expect("first save");
         write_tournament(as_string, "second".to_string()).expect("second save");
+
+        assert_eq!(read_file(&path).expect("read"), "second");
         assert_eq!(
             read_file(&backup_path(&path, "bak1")).expect("bak1"),
             "first"
         );
+    }
 
-        write_atomic(&path, "third").expect("bare write");
+    /// Issue #10 edge case: the disk is full, or the file is locked. The save
+    /// fails — and the backups have to be exactly as they were, because the
+    /// depth is the whole reason they exist and this is when it is needed.
+    #[test]
+    fn a_save_that_fails_does_not_spend_a_recovery_point() {
+        let dir = TempDir::new("rotate-failed");
+        let path = dir.join("t.wattmatt");
+        for save in ["first", "second", "third", "fourth"] {
+            write_tournament(path.to_string_lossy().into_owned(), save.to_string()).expect("write");
+        }
+
+        // A directory where the temp file wants to be: `File::create` fails on
+        // it, which is the same shape of failure as a full or read-only disk,
+        // and is arrangeable without one.
+        fs::create_dir_all(temp_path(&path)).expect("block the temp path");
+        let failed = write_tournament(path.to_string_lossy().into_owned(), "fifth".to_string());
+
+        assert!(failed.is_err(), "the save should not have succeeded");
+        assert_eq!(read_file(&path).expect("read"), "fourth");
         assert_eq!(
             read_file(&backup_path(&path, "bak1")).expect("bak1"),
+            "third"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak2")).expect("bak2"),
+            "second"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak3")).expect("bak3"),
             "first",
-            "write_atomic must not rotate"
+            "the oldest recovery point was pushed off the end by a save that never happened"
         );
     }
 
@@ -734,7 +776,7 @@ mod tests {
     fn a_file_with_no_backups_reports_none() {
         let dir = TempDir::new("no-backups");
         let path = dir.join("t.wattmatt");
-        write_atomic(&path, "{}").expect("write");
+        save_tournament(&path, "{}").expect("write");
 
         assert!(list_backups_of(&path).is_empty());
     }

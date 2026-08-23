@@ -264,10 +264,16 @@ close the window straight away would lose up to half a second of a live event an
 the next start with a recovery offer for a tournament nothing happened to.
 
 **A save only marks the file clean if the tournament has not moved on.** The write is
-asynchronous and, at a 500 ms cadence, most writes overlap the host's next click. `commit`
-hands the writer a revision; if the store has passed it by the time the bytes land, the file
+asynchronous and, at a 500 ms cadence, most writes overlap the host's next click. The writer
+captures `documentRevision`; if the store has passed it by the time the bytes land, the file
 stays `modified` and the write that is already scheduled catches up. Reporting otherwise would
 tell the host a result is safe when it is not in the bytes on disk.
+
+`documentRevision` is a second counter beside `revision`, and the difference is the point.
+`revision` moves for everything a commit does, including staging a beamer scene or taking
+manual control — none of which a `.wattmatt` file contains. Keying the file state on it would
+mark a perfectly current file unsaved because the host pressed a beamer button mid-write, and
+charge them a redundant write and a backup rotation for it every time.
 
 - Rust returns typed errors; the frontend maps them to German messages from `de-AT.ts`.
 - Any unexpected exception shows a non-blocking German error toast **and** writes to the

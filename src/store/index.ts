@@ -1,6 +1,7 @@
 export { createBeamerStore, type BeamerStore, type BeamerViewState } from '@/store/beamerStore';
 export {
   AUTOSAVE_DEBOUNCE_MS,
+  AUTOSAVE_RETRY_MS,
   IDLE_AUTOSAVE,
   needsAutosave,
   startAutosave,

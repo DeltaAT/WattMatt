@@ -98,7 +98,7 @@ describe('document actions', () => {
   it('stays modified when the tournament moved on while the bytes were in flight', () => {
     const store = createTournamentStore();
     setOpenedDocument(store, tournament(), PATH);
-    const serialisedRevision = store.getState().revision;
+    const serialisedRevision = store.getState().documentRevision;
 
     renameTournament(store, 'Sommerturnier');
     setDocumentSaved(store, PATH, serialisedRevision);
@@ -107,10 +107,30 @@ describe('document actions', () => {
     expect(hasUnsavedChanges(store.getState())).toBe(true);
   });
 
+  /**
+   * The beamer controls commit too. A host who staged a scene while an autosave
+   * was in flight would otherwise be told the tournament is unsaved when the
+   * file is perfectly current — and would be charged a redundant write and a
+   * backup rotation for it every time (issue #10).
+   */
+  it('stays saved when only the beamer moved while the bytes were in flight', () => {
+    const store = createTournamentStore();
+    setOpenedDocument(store, tournament(), PATH);
+    const serialisedRevision = store.getState().documentRevision;
+
+    showScene(store, BLACKOUT_SCENE);
+    setDocumentSaved(store, PATH, serialisedRevision);
+
+    expect(store.getState().file).toEqual({ status: 'saved', path: PATH });
+    // The commit counter did move — this is exactly the difference the file
+    // state must not be keyed on.
+    expect(store.getState().revision).toBeGreaterThan(serialisedRevision);
+  });
+
   it('follows the new path even when the tournament moved on during the write', () => {
     const store = createTournamentStore();
     setOpenedDocument(store, tournament(), PATH);
-    const serialisedRevision = store.getState().revision;
+    const serialisedRevision = store.getState().documentRevision;
 
     renameTournament(store, 'Sommerturnier');
     setDocumentSaved(store, OTHER_PATH, serialisedRevision);

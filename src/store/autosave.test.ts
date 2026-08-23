@@ -4,6 +4,7 @@ import { tournament } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import {
   AUTOSAVE_DEBOUNCE_MS,
+  AUTOSAVE_RETRY_MS,
   startAutosave,
   type Autosave,
   type AutosaveState,
@@ -216,6 +217,104 @@ describe('forced saves', () => {
     await saver.autosave.flush();
 
     expect(saver.saves).toBe(0);
+  });
+
+  /**
+   * `flush` is what the window's close button waits on, and the queue it goes
+   * through is shared with the host's own file operations — which can be held
+   * by a native "Speichern unter…" dialog nobody has answered yet. A close with
+   * nothing to write must not sit behind that.
+   */
+  it('returns at once with nothing to write, even behind a blocked write', async () => {
+    const store = createTournamentStore();
+    store.commit(() => ({ document: tournament(), file: { status: 'saved', path: PATH } }));
+    let held = false;
+    const autosave = startAutosave(store, {
+      save: async () => {
+        held = true;
+        // Never resolves: the queue is occupied for good.
+        await new Promise<void>(() => {});
+        return { status: 'skipped' };
+      },
+      now: () => 0,
+    });
+
+    let flushed = false;
+    void autosave.flush().then(() => {
+      flushed = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(flushed).toBe(true);
+    expect(held).toBe(false);
+    autosave.stop();
+  });
+});
+
+describe('a broken autosave', () => {
+  /**
+   * The host pushes the USB stick back in between rounds. Without a retry
+   * nothing is written until they next click something, while the warning keeps
+   * telling them the tournament is not being saved — true, and fixable, and
+   * nobody trying.
+   */
+  it('tries again by itself, so the host fixing the cause is enough', async () => {
+    const saver = harness();
+    saver.outcome = { status: 'failed', path: PATH, kind: 'notFound' };
+
+    saver.change();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(saver.saves).toBe(1);
+
+    // The stick goes back in. Nobody clicks anything.
+    saver.outcome = { status: 'saved', path: PATH };
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_RETRY_MS);
+
+    expect(saver.saves).toBe(2);
+    expect(saver.autosave.getState().failure).toBeNull();
+  });
+
+  it('stops retrying once the tournament is on disk', async () => {
+    const saver = harness();
+    saver.outcome = { status: 'failed', path: PATH, kind: 'notFound' };
+    saver.change();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+
+    saver.outcome = { status: 'saved', path: PATH };
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_RETRY_MS);
+    const settled = saver.saves;
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_RETRY_MS * 3);
+
+    expect(saver.saves).toBe(settled);
+  });
+
+  /**
+   * A retry must not push back a debounce the host's own work already started:
+   * that would make them wait longer precisely because they kept working.
+   */
+  it('lets a host decision overtake the retry it was waiting on', async () => {
+    const saver = harness();
+    saver.outcome = { status: 'failed', path: PATH, kind: 'notFound' };
+    saver.change();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+
+    saver.outcome = { status: 'saved', path: PATH };
+    saver.change();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+
+    expect(saver.saves).toBe(2);
+  });
+
+  it('gives up retrying when it is stopped', async () => {
+    const saver = harness();
+    saver.outcome = { status: 'failed', path: PATH, kind: 'notFound' };
+    saver.change();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+
+    saver.autosave.stop();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_RETRY_MS * 2);
+
+    expect(saver.saves).toBe(1);
   });
 });
 

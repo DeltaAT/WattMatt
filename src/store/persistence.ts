@@ -302,7 +302,7 @@ async function write(
 ): Promise<SaveOutcome> {
   // Captured before the write, not after: the host keeps clicking while the
   // bytes are in flight, and it is *this* revision that the file will hold.
-  const revision = store.getState().revision;
+  const revision = store.getState().documentRevision;
   try {
     await deps.files.write(path, serialiseTournament(tournament, deps.appVersion));
   } catch (error) {

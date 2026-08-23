@@ -727,6 +727,87 @@ describe('the autosave, end to end', () => {
       vi.useRealTimers();
     }
   });
+
+  /**
+   * The warning must survive everything else the host does. A stored notice
+   * would be overwritten by the next operation that reports anything — and a
+   * *dismissible* notice in its place is how an event carries on with nothing
+   * being written and no sign of it.
+   */
+  it('keeps warning even after another failure has been reported and dismissed', async () => {
+    vi.useFakeTimers();
+    try {
+      setOpenedDocument(tournamentStore, midTournament(), PATH);
+      const view = renderHook(() => useTournamentDocument());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      files.failWrite(new TournamentFileError('notFound', 'the stick is gone', PATH));
+      await act(async () => {
+        tournamentStore.commit((state) => ({
+          document: state.document === null ? null : { ...state.document, rngCursor: 18 },
+        }));
+        await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+      });
+
+      // The host tries "Turnier speichern" themselves, and that fails too.
+      await act(async () => {
+        view.result.current.save();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        view.result.current.dismissNotice();
+      });
+
+      expect(view.result.current.notice).toEqual({
+        kind: 'autosaveFailed',
+        errorKind: 'notFound',
+      });
+      view.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * Issue #10 acceptance criterion: "autosave never blocks the UI thread or
+   * delays a host click". The autosave shares the operation queue so it cannot
+   * race a manual save onto the same path, but it must never put the toolbar
+   * into its disabled state — a host whose controls grey out twice a second
+   * while they work has an unusable machine.
+   */
+  it('never disables the toolbar, even with a write held open', async () => {
+    vi.useFakeTimers();
+    try {
+      setOpenedDocument(tournamentStore, midTournament(), PATH);
+      const view = renderHook(() => useTournamentDocument());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const release = files.blockWrites();
+
+      const seen: boolean[] = [];
+      await act(async () => {
+        tournamentStore.commit((state) => ({
+          document: state.document === null ? null : { ...state.document, rngCursor: 18 },
+        }));
+        await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+      });
+      seen.push(view.result.current.busy);
+
+      await act(async () => {
+        release();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      seen.push(view.result.current.busy);
+
+      expect(seen).toEqual([false, false]);
+      expect(files.writes).toEqual([PATH]);
+      view.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('crash recovery', () => {
@@ -770,6 +851,64 @@ describe('crash recovery', () => {
     expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: CRASHED });
     expect(view.result.current.recovery).toBeNull();
     expect(mocks.dismissRecovery).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The acceptance criterion in full: "killing the process mid-round and
+   * restarting recovers every decided result". The two halves are played out
+   * against the same fake disk — a session that autosaves a decision and is
+   * then killed, and a fresh window that finds the marker and opens what the
+   * autosave left. Asserting only that the offer opens *a* file would pass even
+   * if the autosave had written nothing.
+   */
+  it('brings back the results that were decided before the kill', async () => {
+    vi.useFakeTimers();
+    try {
+      // The session that dies. It opens a tournament, the host decides
+      // something, and the autosave writes it.
+      files.disk.set(CRASHED, serialiseTournament(midTournament(), '0.1.0'));
+      setOpenedDocument(tournamentStore, midTournament(), CRASHED);
+      const killed = renderHook(() => useTournamentDocument());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        tournamentStore.commit((state) => ({
+          document:
+            state.document === null
+              ? null
+              : { ...state.document, name: 'Vereinsturnier 2026', rngCursor: 42 },
+        }));
+        await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+      });
+      expect(mocks.markSessionDocument).toHaveBeenCalledWith(CRASHED);
+
+      // The kill: no clean exit, so the marker Rust wrote is still there. The
+      // in-memory tournament goes with the process.
+      killed.unmount();
+      closeDocument(tournamentStore);
+      expect(mocks.endSession).not.toHaveBeenCalled();
+
+      // The restart.
+      mocks.recovery = { path: CRASHED, startedAt: 1_700_000_000_000 };
+      const restarted = renderHook(() => useTournamentDocument());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        restarted.result.current.recover();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const recovered = tournamentStore.getState().document;
+      expect(recovered?.name).toBe('Vereinsturnier 2026');
+      expect(recovered?.rngCursor).toBe(42);
+      // The whole tournament, not just the fields the decision touched.
+      expect(recovered?.rounds.flatMap((round) => round.matches)).toHaveLength(3);
+      restarted.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('offers nothing after a clean exit', async () => {

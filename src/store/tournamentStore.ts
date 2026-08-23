@@ -53,6 +53,17 @@ export interface TournamentState {
    * uses it to know whether there is anything to autosave.
    */
   revision: number;
+  /**
+   * Bumped only by a commit that replaced the tournament itself.
+   *
+   * Separate from `revision` because a save has to know whether the *file* is
+   * still current, and `revision` moves for things a file does not contain —
+   * staging a beamer scene, taking manual control. Comparing `revision` would
+   * leave a tournament marked unsaved because the host clicked a beamer button
+   * while the bytes were in flight, and cost a redundant write and a rotation
+   * every time they did (issue #10).
+   */
+  documentRevision: number;
   scene: BeamerScene;
   autoFollow: boolean;
   /**
@@ -73,6 +84,7 @@ export interface TournamentState {
 
 export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   revision: 0,
+  documentRevision: 0,
   scene: IDLE_SCENE,
   autoFollow: true,
   document: null,
@@ -179,6 +191,7 @@ export function createTournamentStore(
       const touchedDocument = 'document' in partial;
       if (touchedDocument) {
         next.tournament = next.document ? toTournamentSnapshot(next.document) : EMPTY_TOURNAMENT;
+        next.documentRevision = current.documentRevision + 1;
       }
 
       // Same reasoning for the dirty flag: an action that changed the
