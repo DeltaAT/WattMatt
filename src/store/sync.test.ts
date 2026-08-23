@@ -4,7 +4,7 @@ import { groupIdSchema, roundIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { midTournament } from '@/domain/testFixtures';
 import { setOpenedDocument } from '@/store/actions/document';
-import { showScene } from '@/store/actions/scene';
+import { blackout, showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { startBeamerSync, startHostSync } from '@/store/sync';
 import { requestSnapshotSchema } from '@/store/syncContract';
@@ -278,6 +278,34 @@ describe('an undo on the projector', () => {
     host.undo();
 
     expect(beamer.getState().snapshot.tournament.groups).toHaveLength(before);
+    expect(beamer.getState().animate).toBe(false);
+  });
+
+  it('takes a blackout back on the cheap channel, settled', async () => {
+    const { host, beamer, transports } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+
+    const seen: string[] = [];
+    await transports.beamer.listen(
+      'state:snapshot',
+      (await import('@/domain/snapshot')).snapshotSchema,
+      () => seen.push('snapshot'),
+    );
+    await transports.beamer.listen(
+      'beamer:scene',
+      (await import('@/store/syncContract')).sceneMessageSchema,
+      () => seen.push('scene'),
+    );
+
+    blackout(host);
+    host.undo();
+
+    // A blackout goes out light and has to come back light. An undo that
+    // rewrote the tournament would put the host's correction of the projector
+    // behind the whole payload — and dirty the file for it.
+    expect(seen).toEqual(['scene', 'scene']);
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'IDLE' });
+    expect(beamer.getState().snapshot.delivery).toBe('catchUp');
     expect(beamer.getState().animate).toBe(false);
   });
 

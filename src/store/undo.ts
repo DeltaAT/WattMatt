@@ -21,7 +21,7 @@ import type { Tournament } from '@/domain/types';
  *
  * Fifty is the issue's number and it is generous on purpose: an event runs a
  * few hundred decisions, and the misclick a host discovers late is the one they
- * most need back. Memory is not the constraint — see `undoMemory.test.ts`.
+ * most need back. Memory is not the constraint — see `undo.test.ts`.
  */
 export const UNDO_DEPTH = 50;
 
@@ -68,6 +68,21 @@ export interface UndoEntry {
   label: string;
   /** The audit name of the action, when it wrote one. */
   action: string | null;
+  /**
+   * Whether the action changed the tournament, or only the picture on the
+   * projector.
+   *
+   * Recorded with the step because it decides what taking the step back costs.
+   * Undoing a blackout has to travel the light path the blackout itself
+   * travelled: no tournament rewrite, no audit entry, no autosave, no snapshot
+   * queued behind sixty-four groups of data (docs/FILE-FORMAT.md rule 6).
+   *
+   * Taken from what the commit did rather than worked out by comparing the two
+   * documents, for the same reason `CommitMeta.touchedTournament` is: an action
+   * that mutated the tournament in place compares equal and would have its data
+   * dropped silently.
+   */
+  touchedDocument: boolean;
   /** The picture from *before* the action ran. */
   snapshot: UndoSnapshot;
 }

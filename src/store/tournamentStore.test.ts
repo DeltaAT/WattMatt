@@ -12,7 +12,7 @@ import {
   type CommitMeta,
   type TournamentStore,
 } from '@/store/tournamentStore';
-import { UNDO_DEPTH, REDO_LOG_ACTION, UNDO_LOG_ACTION } from '@/store/undo';
+import { EMPTY_HISTORY, UNDO_DEPTH, REDO_LOG_ACTION, UNDO_LOG_ACTION } from '@/store/undo';
 
 describe('the host store handle', () => {
   it('offers no way to write state except through a commit', () => {
@@ -387,6 +387,92 @@ describe('undo and redo', () => {
     store.undo();
     expect(store.getState().scene).toEqual({ id: 'IDLE' });
     expect(store.getState().autoFollow).toBe(true);
+  });
+
+  /**
+   * docs/FILE-FORMAT.md rule 6, from the other end. A beamer scene deliberately
+   * never touches the tournament, so taking one back must not either: an undo
+   * that rewrote the document would dirty a clean file, force an urgent write
+   * with its backup rotation, append an audit entry for a scene change and push
+   * the correction onto the heavy sync channel — putting the one action that
+   * must never queue behind sixty-four groups of data behind exactly that.
+   */
+  it('leaves the tournament, the file and the log alone when it takes back a blackout', () => {
+    const store = openStore();
+    const seen: CommitMeta[] = [];
+    store.onCommit((_state, meta) => seen.push(meta));
+
+    blackout(store);
+    const document = documentOf(store);
+    const documentRevision = store.getState().documentRevision;
+
+    expect(store.undo()).toBe(true);
+
+    expect(store.getState().scene).toEqual({ id: 'IDLE' });
+    expect(store.getState().autoFollow).toBe(true);
+    // The same object, not merely an equal one: nothing was rewritten.
+    expect(documentOf(store)).toBe(document);
+    expect(documentOf(store).log.some((entry) => entry.action === UNDO_LOG_ACTION)).toBe(false);
+    expect(store.getState().documentRevision).toBe(documentRevision);
+    expect(store.getState().file).toEqual({ status: 'saved', path: PATH });
+    expect(seen.at(-1)).toEqual({ touchedTournament: false, urgent: false, settled: true });
+  });
+
+  it('puts the blackout back the same cheap way', () => {
+    const store = openStore();
+    blackout(store);
+    store.undo();
+
+    const document = documentOf(store);
+    const seen: CommitMeta[] = [];
+    store.onCommit((_state, meta) => seen.push(meta));
+
+    expect(store.redo()).toBe(true);
+
+    expect(store.getState().scene).toEqual({ id: 'BLACKOUT' });
+    expect(documentOf(store)).toBe(document);
+    expect(store.getState().file).toEqual({ status: 'saved', path: PATH });
+    expect(seen.at(-1)).toEqual({ touchedTournament: false, urgent: false, settled: true });
+  });
+
+  /**
+   * What a step cost is a property of the step, not of the stack it is on: a
+   * host who blacks the projector out, enters a result and takes both back
+   * gets one tournament write and one scene change, in that order.
+   */
+  it('decides per step what taking it back costs', () => {
+    const store = openStore();
+    const seen: CommitMeta[] = [];
+    store.onCommit((_state, meta) => seen.push(meta));
+
+    blackout(store);
+    setWinner(store, matchId(1), groupId(1), 1);
+
+    store.undo();
+    store.undo();
+
+    expect(seen.map((meta) => meta.touchedTournament)).toEqual([false, true, true, false]);
+    expect(seen.map((meta) => meta.urgent)).toEqual([false, true, true, false]);
+    expect(store.getState().scene).toEqual({ id: 'IDLE' });
+    expect(documentOf(store).rounds[1]?.state).toBe('RUNNING');
+  });
+
+  /**
+   * The start screen. There is nothing to go back to and no button to show a
+   * step on — the undo controls live with the tournament — so a labelled
+   * commit applies and the stack stays empty, rather than offering the host an
+   * undo that could not restore anything. Unreachable today: every action that
+   * labels itself needs a tournament. Asserted because the day one does not,
+   * the alternative is a button that throws mid-event.
+   */
+  it('drops a labelled commit made before a tournament is open', () => {
+    const store = createTournamentStore(undefined, { clock: fixedClock() });
+
+    store.commit(() => ({ autoFollow: false }), { undoLabel: 'Auto-follow off' });
+
+    expect(store.getState().autoFollow).toBe(false);
+    expect(store.getState().history).toEqual(EMPTY_HISTORY);
+    expect(store.undo()).toBe(false);
   });
 
   it('drops the redo as soon as the host commits something new', () => {

@@ -150,6 +150,13 @@ version the host has just disowned — and it appends `ACTION_UNDONE` to the log
 pretending it never happened. Redo is discarded as soon as anything new is committed, so the
 history never branches.
 
+**An undo costs what the step cost.** The two sentences above describe taking back a decision.
+A step that only moved the projector is taken back the way it was made: the entry carries
+`touchedDocument`, and when it is false the undo leaves the tournament, the log and the file
+alone and goes out on the scene channel. Undoing a blackout is still a blackout, and it must not
+queue behind sixty-four groups of data any more than the blackout did (docs/FILE-FORMAT.md
+rule 6).
+
 ### Catching up without replaying
 
 A snapshot is flagged `live` or `catchUp`. A beamer that has just been reopened is answered with

@@ -180,6 +180,11 @@ docs/OPEN-QUESTIONS.md #27 rather than decided here.
    itself wrote stay exactly where they are. The log is therefore the one place that still
    knows the host set the wrong winner, which is the point of having it. For the same reason
    `rngCursor` is never rewound either — see docs/OPEN-QUESTIONS.md #32.
+
+   **Taking back a beamer scene writes nothing**, for the same reason the scene action itself
+   writes nothing. Undoing a blackout is still a blackout: it moves the projector, and it must
+   not rewrite the tournament, append an entry, dirty the file or trigger a save on its way. An
+   undo is only audited when the step it takes back changed the tournament.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
 

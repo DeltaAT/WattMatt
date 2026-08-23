@@ -38,7 +38,12 @@ function entryFrom(document: Tournament, label = LABEL): UndoEntry {
   if (snapshot === null) {
     throw new Error('fixture has no document');
   }
-  return { label, action: 'MATCH_WINNER_SET', snapshot };
+  return { label, action: 'MATCH_WINNER_SET', touchedDocument: true, snapshot };
+}
+
+/** A step that only moved the projector: no audit name, no tournament change. */
+function sceneEntryFrom(document: Tournament, label = 'Blackout'): UndoEntry {
+  return { ...entryFrom(document, label), action: null, touchedDocument: false };
 }
 
 describe('capturing a snapshot', () => {
@@ -215,6 +220,25 @@ describe('stepping through the history', () => {
     // buttons has to see the same words on both.
     expect(nextRedo(move.history)?.label).toBe('Winner set');
     expect(nextRedo(move.history)?.snapshot.document.phase).toBe('BRACKET');
+  });
+
+  /**
+   * What the step cost going forward is what it costs coming back, in both
+   * directions. `tournamentStore.test.ts` proves what the store does with the
+   * answer; losing it here would let an undo of a blackout rewrite the
+   * tournament file (docs/FILE-FORMAT.md rule 6).
+   */
+  it('carries what the step touched into the redo step and back again', () => {
+    const history = record(EMPTY_HISTORY, sceneEntryFrom(before));
+    const undone = stepBack(history, currentOf(after))!;
+
+    expect(undone.entry.touchedDocument).toBe(false);
+    expect(nextRedo(undone.history)?.touchedDocument).toBe(false);
+
+    const redone = stepForward(undone.history, undone.entry.snapshot)!;
+
+    expect(redone.entry.touchedDocument).toBe(false);
+    expect(nextUndo(redone.history)?.touchedDocument).toBe(false);
   });
 
   it('walks back and forward over the same ground', () => {

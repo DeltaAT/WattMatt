@@ -310,7 +310,7 @@ export function createTournamentStore(
       next.file = { status: 'modified', path: current.file.path };
     }
 
-    next.history = history ?? nextHistory(current, options, replacedDocument);
+    next.history = history ?? nextHistory(current, options, replacedDocument, touchedDocument);
 
     store.setState(next, true);
 
@@ -327,9 +327,10 @@ export function createTournamentStore(
   /**
    * One step through the stack, committed like anything else.
    *
-   * `urgent`, because an undo is a correction: the host has just told the room
-   * the previous result was wrong, and a crash a second later must not hand
-   * back the version they disowned.
+   * Taking a step back costs exactly what the step itself cost: an action that
+   * changed the tournament is put back urgently and audited, while one that
+   * only moved the projector is put back on the light path — see
+   * `UndoEntry.touchedDocument`.
    */
   const move = (direction: 'back' | 'forward'): boolean => {
     const current = store.getState();
@@ -347,20 +348,32 @@ export function createTournamentStore(
       return false;
     }
 
+    const entry = step.entry;
+    const picture = { scene: entry.snapshot.scene, autoFollow: entry.snapshot.autoFollow };
+
+    // Undoing a blackout is still a blackout. Handing the tournament back to
+    // `apply` here would rewrite it, write an audit entry for a scene change,
+    // dirty a clean file and force an urgent save with its backup rotation —
+    // putting the one action that must never wait behind sixty-four groups of
+    // data behind exactly that (docs/FILE-FORMAT.md rule 6, golden rule 3).
+    if (!entry.touchedDocument) {
+      apply(() => picture, undefined, step.history);
+      return true;
+    }
+
     apply(
-      () => ({
-        document: restore(step.entry.snapshot, document),
-        scene: step.entry.snapshot.scene,
-        autoFollow: step.entry.snapshot.autoFollow,
-      }),
+      () => ({ document: restore(entry.snapshot, document), ...picture }),
       {
+        // `urgent`, because an undo is a correction: the host has just told the
+        // room the previous result was wrong, and a crash a second later must
+        // not hand back the version they disowned.
         urgent: true,
         log: {
           action: direction === 'back' ? UNDO_LOG_ACTION : REDO_LOG_ACTION,
           // Both, because the two answer different questions: the action name
           // is what a later reader greps for, the label is what the host saw
           // on the button they pressed.
-          payload: { action: step.entry.action, label: step.entry.label },
+          payload: { action: entry.action, label: entry.label },
         },
       },
       step.history,
@@ -398,6 +411,7 @@ function nextHistory(
   current: TournamentState,
   options: CommitOptions | undefined,
   replacedDocument: boolean,
+  touchedDocument: boolean,
 ): UndoHistory {
   if (options?.undoLabel === undefined) {
     return replacedDocument ? EMPTY_HISTORY : current.history;
@@ -413,6 +427,9 @@ function nextHistory(
   return record(current.history, {
     label: options.undoLabel,
     action: options.log?.action ?? null,
+    // Carried on the entry rather than worked out when the host presses the
+    // button: by then the commit that knew is long gone (see `UndoEntry`).
+    touchedDocument,
     snapshot,
   });
 }
