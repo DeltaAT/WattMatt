@@ -31,6 +31,13 @@ export type AppStamp = z.infer<typeof appStampSchema>;
  * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v1)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
+ *
+ * Parsing is strict: an unknown field is dropped, not preserved, which
+ * FILE-FORMAT.md rule 7 will eventually forbid. That rule is issue #12's, and
+ * the deferral is deliberate — see the note under rule 7. Making this
+ * permissive now would disarm `schema.test.ts`, which detects a field
+ * forgotten in the schema precisely because an unknown key does *not* survive
+ * the round trip.
  */
 export const tournamentFileSchema = z
   .object({

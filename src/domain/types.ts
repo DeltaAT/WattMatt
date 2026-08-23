@@ -116,7 +116,13 @@ export const tableSchema = z.object({
   id: tableIdSchema,
   label: z.string().min(1),
   status: tableStatusSchema,
-  /** Set exactly while `status === 'OCCUPIED'`; see `@/domain/invariants`. */
+  /**
+   * Set exactly while `status === 'OCCUPIED'`. The schema cannot express that
+   * pairing on its own, and nothing enforces it yet: the table lifecycle is
+   * issue #13's and the draw engine that assigns matches is #16's. Until one
+   * of them owns the transition, this is a documented convention rather than
+   * a checked invariant.
+   */
   currentMatchId: matchIdSchema.nullable(),
 });
 export type Table = z.infer<typeof tableSchema>;

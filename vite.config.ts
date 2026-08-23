@@ -59,6 +59,10 @@ export default defineConfig({
         // Dev-only token review page (issue #3). Never part of a release bundle,
         // so its coverage number would only dilute the ones that matter.
         'src/dev/**',
+        // Test fixtures. Not product code, and counting them inflates the
+        // src/domain denominator with builders that exist to serve the tests
+        // measuring it.
+        'src/**/testFixtures.ts',
       ],
       thresholds: {
         // src/domain is the part a wrong result cannot be argued with, so it

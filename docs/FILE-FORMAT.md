@@ -110,3 +110,13 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
    state — the snapshot fields are authoritative. Undo works on an in-memory snapshot stack.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
+
+   **Not implemented yet — issue #12 owns it.** `tournamentFileSchema` (issue #7) parses
+   *strictly*: an unknown field is dropped, not preserved. This is deliberate rather than
+   overlooked. The v1 schema is the only one that has ever existed, so there is no forward
+   field to preserve yet; and making the schema permissive today would disarm the test that
+   guards the schema itself, which asserts that the example above survives a parse
+   unchanged. Under a permissive schema an unknown key round-trips untouched, so a field
+   added to this document but forgotten in the schema would pass silently — exactly the
+   regression that test exists to catch. Issue #12 introduces preservation together with
+   the version negotiation that makes it meaningful.

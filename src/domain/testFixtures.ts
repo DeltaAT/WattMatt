@@ -49,7 +49,7 @@ export function group(n: number, overrides: Partial<Group> = {}): Group {
 export function table(n: number, overrides: Partial<Table> = {}): Table {
   return {
     id: tableId(n),
-    label: `Tisch ${n}`,
+    label: `Table ${n}`,
     status: 'FREE',
     currentMatchId: null,
     ...overrides,
@@ -73,7 +73,7 @@ export function round(n: number, overrides: Partial<Round> = {}): Round {
     id: roundId(n),
     index: n,
     kind: 'QUALIFYING',
-    label: `Runde ${n}`,
+    label: `Round ${n}`,
     state: 'DRAWN',
     matches: [],
     ...overrides,
@@ -84,7 +84,7 @@ export function tournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     ...createTournament({
       id: 'tnm_1',
-      name: 'Vereinsturnier 2026',
+      name: 'Test Tournament',
       rngSeed: 'seed',
       clock: fixedClock(),
     }),

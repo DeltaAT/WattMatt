@@ -19,7 +19,7 @@ function fixedClock(at: Timestamp = FIXED_NOW): Clock {
 function newTournament(): ReturnType<typeof createTournament> {
   return createTournament({
     id: 'tnm_1',
-    name: 'Vereinsturnier 2026',
+    name: 'Test Tournament',
     rngSeed: '8f3c1a7e',
     clock: fixedClock(),
   });
@@ -72,7 +72,7 @@ describe('createTournament', () => {
   it('overrides only the settings it is given', () => {
     const tournament = createTournament({
       id: 'tnm_1',
-      name: 'Vereinsturnier 2026',
+      name: 'Test Tournament',
       rngSeed: 'seed',
       clock: fixedClock(),
       settings: { participantLabel: 'TEAM' },

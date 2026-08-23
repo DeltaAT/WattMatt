@@ -18,6 +18,35 @@ const wattmatt = {
   },
 };
 
+/**
+ * What `src/domain` may not import (ARCHITECTURE.md §5). Split from the I/O
+ * group below because the two are lifted separately: a domain *test* may read
+ * a file to check the code against it, but no domain file — test or not —
+ * has any business importing React or reaching up into another layer.
+ */
+const DOMAIN_FORBIDDEN_IMPORTS = [
+  {
+    group: ['react', 'react-*', 'react-dom/*', 'zustand', 'zustand/*'],
+    message: 'src/domain is framework-free (ARCHITECTURE.md §5). Keep React in the UI.',
+  },
+  {
+    group: ['@tauri-apps/*'],
+    message: 'src/domain never talks to Tauri (ARCHITECTURE.md §5). Use @/platform.',
+  },
+  {
+    group: ['@/store/*', '@/platform/*', '@/ui/*', '@/windows/*', '@/i18n', '@/i18n/*'],
+    message:
+      'src/domain sits at the bottom of the layering (ARCHITECTURE.md §4) and imports no other layer.',
+  },
+];
+
+const DOMAIN_FORBIDDEN_IO_IMPORTS = [
+  {
+    group: ['node:*', 'fs', 'fs/*', 'path', 'os', 'child_process'],
+    message: 'src/domain performs no I/O (ARCHITECTURE.md §5). File access lives in Rust.',
+  },
+];
+
 export default tseslint.config(
   {
     ignores: ['dist/**', 'coverage/**', 'src-tauri/**', 'node_modules/**'],
@@ -148,44 +177,32 @@ export default tseslint.config(
        */
       'no-restricted-imports': [
         'error',
-        {
-          patterns: [
-            {
-              group: ['react', 'react-*', 'react-dom/*', 'zustand', 'zustand/*'],
-              message: 'src/domain is framework-free (ARCHITECTURE.md §5). Keep React in the UI.',
-            },
-            {
-              group: ['@tauri-apps/*'],
-              message: 'src/domain never talks to Tauri (ARCHITECTURE.md §5). Use @/platform.',
-            },
-            {
-              group: ['node:*', 'fs', 'fs/*', 'path', 'os', 'child_process'],
-              message:
-                'src/domain performs no I/O (ARCHITECTURE.md §5). File access lives in Rust.',
-            },
-            {
-              group: ['@/store/*', '@/platform/*', '@/ui/*', '@/windows/*', '@/i18n', '@/i18n/*'],
-              message:
-                'src/domain sits at the bottom of the layering (ARCHITECTURE.md §4) and imports no other layer.',
-            },
-          ],
-        },
+        { patterns: [...DOMAIN_FORBIDDEN_IMPORTS, ...DOMAIN_FORBIDDEN_IO_IMPORTS] },
       ],
     },
   },
 
   // Tests assert on locale content and fixtures, so the German-string rule
   // would fight them. Everything else still applies.
-  //
-  // The domain's import ban is lifted here for the same reason: a test may
-  // read a file to check the code against it — src/domain/schema.test.ts
-  // validates the example in docs/FILE-FORMAT.md by reading the document —
-  // and that is the opposite of impurity leaking into the domain.
   {
     files: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.js'],
     rules: {
       'wattmatt/no-hardcoded-german': 'off',
-      'no-restricted-imports': 'off',
+    },
+  },
+
+  /**
+   * A domain test may read a file to check the code against it —
+   * src/domain/schema.test.ts validates the example in docs/FILE-FORMAT.md by
+   * reading the document, which is the opposite of impurity leaking into the
+   * domain. Only the I/O group is lifted: React, Tauri and the other layers
+   * stay banned, because a domain test importing a store or a component means
+   * the boundary moved and nobody noticed.
+   */
+  {
+    files: ['src/domain/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: DOMAIN_FORBIDDEN_IMPORTS }],
     },
   },
 

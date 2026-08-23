@@ -50,6 +50,17 @@ describe('tournamentFileSchema', () => {
     expect(() => tournamentFileSchema.parse(withoutBracket)).toThrow();
   });
 
+  /*
+   * Pins the deferral recorded under docs/FILE-FORMAT.md rule 7: v1 parses
+   * strictly and drops what it does not know. Rule 7 will eventually forbid
+   * that, and issue #12 owns the change — at which point this test must be
+   * updated deliberately rather than the behaviour drifting unnoticed.
+   */
+  it('drops an unknown field instead of preserving it, until issue #12', () => {
+    const withFutureField = { ...example, futureField: 'written by a later build' };
+    expect(tournamentFileSchema.parse(withFutureField)).not.toHaveProperty('futureField');
+  });
+
   it('rejects a timestamp without an explicit UTC offset', () => {
     // "2026-08-22T17:04:00" is ambiguous across the venue's timezone; the file
     // format requires the offset so a tournament copied to another laptop

@@ -84,7 +84,7 @@ describe('indexTournament', () => {
 
     const index = indexTournament(state);
     expect(index.groups.get(groupId(1))?.number).toBe(1);
-    expect(index.tables.get(tableId(1))?.label).toBe('Tisch 1');
+    expect(index.tables.get(tableId(1))?.label).toBe('Table 1');
     expect(index.rounds.get(roundId(1))?.index).toBe(1);
     expect(index.matches.get(matchId(1))?.id).toBe(matchId(1));
     expect(index.bracketNodes.get(bracketNodeIdSchema.parse('bn_1'))?.round).toBe('FINAL');
