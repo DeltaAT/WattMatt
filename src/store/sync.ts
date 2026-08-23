@@ -56,15 +56,21 @@ export async function startHostSync(
   // reference equality, and an action that mutated the tournament in place
   // would look unchanged and lose its data silently.
   const unsubscribeStore = store.onCommit((next, meta) => {
+    // An undo travels as a catch-up: the beamer follows it like any other
+    // state change, but renders it settled rather than animating into it.
+    // Replaying the pairing reveal because the host corrected a misclick would
+    // show the audience a draw that is not happening (issue #11).
+    const delivery: Snapshot['delivery'] = meta.settled ? 'catchUp' : 'live';
+
     if (meta.touchedTournament) {
-      send(SNAPSHOT_EVENT, toSnapshot(next, 'live'));
+      send(SNAPSHOT_EVENT, toSnapshot(next, delivery));
       return;
     }
     send(SCENE_EVENT, {
       revision: next.revision,
       scene: next.scene,
       autoFollow: next.autoFollow,
-      delivery: 'live',
+      delivery,
     });
   });
 

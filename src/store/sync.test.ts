@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { groupIdSchema, roundIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
+import { midTournament } from '@/domain/testFixtures';
+import { setOpenedDocument } from '@/store/actions/document';
 import { showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { startBeamerSync, startHostSync } from '@/store/sync';
@@ -233,5 +235,66 @@ describe('a re-delivered snapshot', () => {
     });
 
     expect(beamer.getState().animate).toBe(true);
+  });
+});
+
+/**
+ * Issue #11: "the beamer follows an undo like any other state change, without
+ * replaying reveal animations". Both halves matter — a beamer that ignored the
+ * undo would show the audience a result the host has withdrawn, and one that
+ * animated into it would play the reveal a second time.
+ */
+describe('an undo on the projector', () => {
+  it('moves the picture without animating into it', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+
+    showScene(host, { id: 'DRAW', roundId: round('r1') });
+    expect(beamer.getState().animate).toBe(true);
+
+    host.undo();
+
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'IDLE' });
+    expect(beamer.getState().snapshot.revision).toBe(host.getState().revision);
+    expect(beamer.getState().animate).toBe(false);
+  });
+
+  it('carries the tournament back too, not only the scene', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+    const before = beamer.getState().snapshot.tournament.groups.length;
+
+    host.commit(
+      (state) => ({
+        document: {
+          ...state.document!,
+          groups: state.document!.groups.slice(0, 2),
+        },
+      }),
+      { undoLabel: 'Groups reduced', log: { action: 'GROUPS_CHANGED', payload: {} } },
+    );
+    expect(beamer.getState().snapshot.tournament.groups).toHaveLength(2);
+
+    host.undo();
+
+    expect(beamer.getState().snapshot.tournament.groups).toHaveLength(before);
+    expect(beamer.getState().animate).toBe(false);
+  });
+
+  it('is still the picture a beamer reopened afterwards is handed', async () => {
+    const { host, transports, beamerSync } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+
+    showScene(host, { id: 'DRAW', roundId: round('r1') });
+    host.undo();
+
+    // The projector cable is pulled and plugged back in mid-event.
+    await beamerSync.stop();
+    const reopened = createBeamerStore();
+    await startBeamerSync(reopened, transports.beamer);
+
+    expect(reopened.getState().snapshot.scene).toEqual({ id: 'IDLE' });
+    expect(reopened.getState().snapshot.revision).toBe(host.getState().revision);
+    expect(reopened.getState().animate).toBe(false);
   });
 });

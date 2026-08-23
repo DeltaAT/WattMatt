@@ -42,6 +42,11 @@ export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
  * never shown before. It must appear already settled: replaying the draw
  * animation because the beamer window was reopened would show the audience a
  * draw that is not happening (issue #5 acceptance criteria).
+ *
+ * An undo and a redo are sent the same way for the same reason (issue #11).
+ * The two cases differ in what caused them and not at all in what the beamer
+ * must do about it: put the picture where it belongs, without playing anything
+ * out in front of the room.
  */
 export const snapshotDeliverySchema = z.enum(['live', 'catchUp']);
 export type SnapshotDelivery = z.infer<typeof snapshotDeliverySchema>;

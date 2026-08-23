@@ -52,6 +52,8 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Running | läuft |
 | Finished | beendet |
 | Undo | Rückgängig |
+| Redo | Wiederholen |
+| Action log | Verlauf |
 | Blackout | Bildschirm aus |
 | Performance mode | Performance-Modus |
 | Bracket node | Turnierbaum-Knoten |

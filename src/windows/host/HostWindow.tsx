@@ -7,9 +7,11 @@ import { FileNotice } from '@/windows/host/FileNotice';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TournamentBar } from '@/windows/host/TournamentBar';
+import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useTournamentDocument } from '@/windows/host/useTournamentDocument';
+import { useUndo, useUndoShortcuts } from '@/windows/host/useUndo';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
 
 /**
@@ -27,6 +29,11 @@ export function HostWindow() {
   // (docs/ARCHITECTURE.md §3) and reports whether the beamer is answering.
   const beamerAlive = useBeamerAlive();
   const document = useTournamentDocument();
+  const undo = useUndo();
+
+  // Registered for the whole window, not just while the toolbar has focus:
+  // the host's hands are on the keyboard between decisions (issue #11).
+  useUndoShortcuts(undo);
 
   useSleepInhibitor(status.open);
 
@@ -46,6 +53,13 @@ export function HostWindow() {
             onClose={document.requestClose}
           />
         )}
+
+        {/*
+          Directly under the file bar, and only with a tournament open: the
+          history starts at the tournament and does not reach across one
+          (docs/OPEN-QUESTIONS.md #20).
+        */}
+        {tournament === null ? null : <UndoControls {...undo} />}
 
         {document.notice === null ? null : (
           <FileNotice

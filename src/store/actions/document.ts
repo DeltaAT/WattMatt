@@ -9,6 +9,14 @@ import { UNSAVED_FILE, type TournamentStore } from '@/store/tournamentStore';
  * which calls these once the bytes are safely on disk — an action that did I/O
  * could not be replayed by the undo stack (issue #11), and half of it would be
  * unreachable in a test.
+ *
+ * None of these carries an `undoLabel`, and that is what makes them clear the
+ * undo history rather than land on it (issue #11, docs/OPEN-QUESTIONS.md #20).
+ * Closing a tournament is not a decision inside a tournament, it is the end of
+ * one: the steps behind it describe a tournament that is no longer open, and
+ * undoing into one of them would restore the previous event over the current
+ * one. The unsaved-changes dialog, not undo, is what stands between a misclick
+ * and a lost tournament.
  */
 
 /**
