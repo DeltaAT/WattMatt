@@ -166,7 +166,11 @@ src/
     host/              panels, dialogs, control center
     beamer/scenes/     one component per BeamerScene id
   ui/                  Button, Card, GroupChip, TableChip, motion presets
-  i18n/de-AT.ts
+  i18n/
+    de-AT.ts           every user-visible string, one typed tree
+    t.ts               `t('round.title', { n: 2 })`, typed dotted-path keys
+    plural.ts          German singular/plural via Intl.PluralRules
+    format.ts          date/time via Intl, locale `de-AT`
 src-tauri/src/
   main.rs
   fs.rs                atomic write, backups, recovery
