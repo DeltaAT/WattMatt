@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GroupId, MatchId } from '@/domain/ids';
 import { createRng } from '@/domain/rng';
+import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
 import { fixedClock, groupId, matchId, midTournament, round } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import { closeDocument, setOpenedDocument } from '@/store/actions/document';
@@ -48,7 +49,7 @@ describe('the host store handle', () => {
     store.onCommit((_state, meta) => seen.push(meta.touchedTournament));
 
     store.commit(() => ({ autoFollow: false }));
-    store.commit(() => ({ tournament: { groups: [] } }));
+    store.commit(() => ({ tournament: EMPTY_TOURNAMENT }));
 
     expect(seen).toEqual([false, true]);
   });
@@ -110,7 +111,7 @@ describe('toSnapshot', () => {
       revision: 1,
       scene: { id: 'BRACKET' },
       autoFollow: true,
-      tournament: { groups: [] },
+      tournament: EMPTY_TOURNAMENT,
       delivery: 'live',
     });
     expect(toSnapshot(store.getState(), 'catchUp').delivery).toBe('catchUp');

@@ -22,3 +22,29 @@ export function formatTime(date: Date): string {
 export function formatDateTime(date: Date): string {
   return dateTimeFormatter.format(date);
 }
+
+/**
+ * A running duration for the occupancy board: `12:31`, or `1:04:12` past an
+ * hour (issue #13).
+ *
+ * Digits and colons rather than `Intl.RelativeTimeFormat`: the host reads this
+ * from across the room while doing something else, and "vor 12 Minuten" is a
+ * sentence where a stopwatch is wanted. Nothing here is translated, which is
+ * why it can live outside the locale file.
+ *
+ * Seconds are truncated, not rounded, so the number never reads one second
+ * ahead of the clock it is counting from.
+ */
+export function formatDuration(milliseconds: number): string {
+  const total = Math.max(0, Math.floor(milliseconds / 1000));
+  const seconds = total % 60;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+
+  const tail = `${pad(minutes)}:${pad(seconds)}`;
+  return hours === 0 ? tail : `${hours}:${tail}`;
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}

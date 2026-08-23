@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BLACKOUT_SCENE, IDLE_SCENE } from '@/domain/beamerScene';
+import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
 import { group, tournament } from '@/domain/testFixtures';
 import {
   closeDocument,
@@ -146,7 +147,7 @@ describe('document actions', () => {
     closeDocument(store);
 
     expect(store.getState().document).toBeNull();
-    expect(store.getState().tournament).toEqual({ groups: [] });
+    expect(store.getState().tournament).toEqual(EMPTY_TOURNAMENT);
     expect(hasUnsavedChanges(store.getState())).toBe(false);
   });
 

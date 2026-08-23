@@ -29,11 +29,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v1)
+## Schema (v2)
 
 ```jsonc
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -56,7 +56,12 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "phase": "QUALIFYING",
 
   "tables": [
-    { "id": "tbl_1", "label": "Tisch 1", "status": "OCCUPIED", "currentMatchId": "mt_3" }
+    // status: FREE | OCCUPIED | DISABLED. `currentMatchId` and `occupiedSince`
+    // are set exactly while the table is OCCUPIED — the schema checks the three
+    // together, and a match moved to another table carries its start time with
+    // it, because the room has been watching it for that long either way.
+    { "id": "tbl_1", "label": "Tisch 1", "status": "OCCUPIED", "currentMatchId": "mt_3",
+      "occupiedSince": "2026-08-22T19:12:40+02:00" }
   ],
 
   "groups": [
@@ -116,7 +121,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 All seven rules are live. #9 landed the atomic write and the "open a backup instead" answer;
 #10 landed the rotation, the debounced autosave and the crash recovery; #11 landed the writer
 behind the action log; #12 landed the migration framework, the refusal of a newer file and the
-preservation of unknown fields.
+preservation of unknown fields; #13 landed the first real migration, v1 → v2.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.
@@ -187,6 +192,16 @@ preservation of unknown fields.
    undo is only audited when the step it takes back changed the tournament.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
+
+   **v1 → v2** (issue #13) is the first one. It gives every table an `occupiedSince` stamp,
+   because the live occupancy board answers "how long has this been running?" and a laptop
+   restarted mid-event has to answer it too. A v1 file has no such stamp, so a table that is
+   busy is given `updatedAt` — the only evidence in the file about when anything last
+   happened, and the safe direction to guess in, since it makes the board under-report rather
+   than invent a match that has apparently been running all morning. The step also repairs a
+   state v1 could express and v2 cannot: a table calling itself `OCCUPIED` while naming no
+   match comes back **free**, because a free table the host marks busy again costs one click
+   while a busy table that is really free holds up the queue for the rest of the event.
 
    Three things happen when a file is opened (`openTournamentAt` in
    `src/store/persistence.ts`), and the order is the whole design.

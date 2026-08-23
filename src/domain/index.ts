@@ -44,6 +44,24 @@ export {
 } from '@/domain/schema';
 export { activeGroups, currentRound, freeTables, undecidedMatches } from '@/domain/selectors';
 export {
+  addTables,
+  disableTable,
+  elapsedMs,
+  enableTable,
+  matchesOnTables,
+  moveTable,
+  nextTableNumber,
+  occupancyBoard,
+  occupyTable,
+  releaseTable,
+  removeTable,
+  renameTable,
+  REQUEUE,
+  type AddTablesInput,
+  type MatchDisposition,
+  type TableSlot,
+} from '@/domain/tables';
+export {
   EMPTY_TOURNAMENT,
   INITIAL_SNAPSHOT,
   snapshotSchema,
@@ -51,8 +69,10 @@ export {
   toTournamentSnapshot,
   tournamentSnapshotSchema,
   type GroupSnapshot,
+  type MatchSnapshot,
   type Snapshot,
   type SnapshotDelivery,
+  type TableSnapshot,
   type TournamentSnapshot,
 } from '@/domain/snapshot';
 export {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v1)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v2)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -15,10 +15,13 @@ import { tournamentSchema } from '@/domain/types';
 
 /**
  * Bumped on any breaking change, with a migration alongside it
- * (docs/FILE-FORMAT.md rule 7, `@/domain/migrations/registry`). v1 is the only
- * version that has ever existed, so nothing migrates yet.
+ * (docs/FILE-FORMAT.md rule 7, `@/domain/migrations/registry`).
+ *
+ * v2 added `occupiedSince` to a table and made the three occupancy fields a
+ * checked invariant (issue #13). A v1 table has neither, so a v1 file cannot
+ * satisfy this schema — which is what a bump means.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -28,7 +31,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v1)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v2)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *

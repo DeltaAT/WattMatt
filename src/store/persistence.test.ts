@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { IDLE_SCENE } from '@/domain/beamerScene';
 import type { Migration, SchemaTarget } from '@/domain/migrations';
 import { SCHEMA_VERSION, tournamentFileSchema, type TournamentFileLike } from '@/domain/schema';
+import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
 import { group, midTournament, tournament } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import { TournamentFileError } from '@/platform/tournamentFile';
@@ -69,7 +70,7 @@ describe('serialiseTournament / parseTournamentFile', () => {
   it('writes UTF-8 JSON with a two-space indent (docs/FILE-FORMAT.md)', () => {
     const raw = serialiseTournament(tournament({ name: 'Sommerturnier Grünau' }), '0.1.0');
 
-    expect(raw).toContain('\n  "schemaVersion": 1');
+    expect(raw).toContain(`\n  "schemaVersion": ${SCHEMA_VERSION}`);
     expect(raw).toContain('Grünau');
     expect(raw.endsWith('\n')).toBe(true);
   });
@@ -93,7 +94,10 @@ describe('serialiseTournament / parseTournamentFile', () => {
 
   it('refuses a file from a schema version this build does not know', () => {
     const raw = serialiseTournament(tournament(), '0.1.0');
-    const claimingTheFuture = raw.replace('"schemaVersion": 1', '"schemaVersion": 99');
+    const claimingTheFuture = raw.replace(
+      `"schemaVersion": ${SCHEMA_VERSION}`,
+      '"schemaVersion": 99',
+    );
 
     expect(parseTournamentFile(claimingTheFuture)).toBeNull();
   });
@@ -285,7 +289,7 @@ describe('createTournamentDocument', () => {
 
     await createTournamentDocument(store, deps(files), { name: 'T' });
 
-    expect(store.getState().tournament).toEqual({ groups: [] });
+    expect(store.getState().tournament).toEqual(EMPTY_TOURNAMENT);
     expect(store.getState().scene).toEqual(IDLE_SCENE);
   });
 });
@@ -550,7 +554,7 @@ describe('closeTournamentDocument', () => {
 
     expect(store.getState().document).toBeNull();
     expect(store.getState().file).toEqual({ status: 'unsaved' });
-    expect(store.getState().tournament).toEqual({ groups: [] });
+    expect(store.getState().tournament).toEqual(EMPTY_TOURNAMENT);
     expect(store.getState().scene).toEqual(IDLE_SCENE);
   });
 });
@@ -743,13 +747,16 @@ describe('schema versioning', () => {
 });
 
 /**
- * Issue #12, the half that has no released version to exercise it yet.
+ * Issue #12, written one `SCHEMA_VERSION` bump ahead of whatever this build
+ * ships.
  *
- * v1 is the only `schemaVersion` that has ever existed, so through the real
- * `CURRENT_SCHEMA` no file can be *outdated* and the whole migrating branch —
- * the safety copy, the chain, the refusals — would first run on a host's
- * laptop. `deps.schema` is injected for exactly this: the target below is what
- * the tree looks like one `SCHEMA_VERSION` bump later.
+ * The real chain is exercised by `src/domain/migrations/fixtures.test.ts`,
+ * which opens every archived file through the real registry. What is tested
+ * here is the persistence half: the safety copy, and the refusals that must
+ * leave the bytes on disk untouched. Those need failures no real migration
+ * would ever contain — a chain with a hole in it, a step that throws — and
+ * `deps.schema` is injected for exactly that. The target below is what the
+ * tree looks like after the next bump.
  *
  * Only the reading half is simulated. `serialiseTournament` still writes the
  * version this build ships, which is correct today and correct again after the
@@ -759,26 +766,31 @@ describe('schema versioning', () => {
 describe('opening a file from an older schema', () => {
   const path = `${LIBRARY}\\Sommer.wattmatt`;
 
-  const v2Schema = tournamentFileSchema.extend({ schemaVersion: z.literal(2) });
+  const OLD = SCHEMA_VERSION;
+  const NEXT = SCHEMA_VERSION + 1;
+
+  const nextSchema = tournamentFileSchema.extend({ schemaVersion: z.literal(NEXT) });
 
   /** A version bump with no shape change — the smallest real migration there is. */
-  const v1ToV2: Migration = { from: 1, to: 2, migrate: (file) => file };
+  const currentToNext: Migration = { from: OLD, to: NEXT, migrate: (file) => file };
 
-  function v2Target(migrations: readonly Migration[] = [v1ToV2]): SchemaTarget<TournamentFileLike> {
-    return { version: 2, schema: v2Schema, migrations };
+  function nextTarget(
+    migrations: readonly Migration[] = [currentToNext],
+  ): SchemaTarget<TournamentFileLike> {
+    return { version: NEXT, schema: nextSchema, migrations };
   }
 
-  function setupV1() {
+  function setupOlder() {
     const files = fakeFiles({ [path]: serialiseTournament(midTournament(), '0.1.0') });
     return { store: createTournamentStore(), files, original: files.disk.get(path) };
   }
 
   it('migrates it and says which version it came from', async () => {
-    const { store, files } = setupV1();
+    const { store, files } = setupOlder();
 
-    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+    const outcome = await openTournamentAt(store, deps(files, { schema: nextTarget() }), path);
 
-    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: 1 });
+    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: OLD });
     expect(store.getState().document).toEqual(midTournament());
     expect(store.getState().file).toEqual({ status: 'saved', path });
   });
@@ -789,12 +801,12 @@ describe('opening a file from an older schema', () => {
    * the new format, half a second after their first click.
    */
   it('copies the original aside first, and leaves the file itself alone', async () => {
-    const { store, files, original } = setupV1();
+    const { store, files, original } = setupOlder();
 
-    await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+    await openTournamentAt(store, deps(files, { schema: nextTarget() }), path);
 
-    expect(files.migrationBackups.get(path)).toBe(`${path}.v1.bak`);
-    expect(files.disk.get(`${path}.v1.bak`)).toBe(original);
+    expect(files.migrationBackups.get(path)).toBe(`${path}.v${OLD}.bak`);
+    expect(files.disk.get(`${path}.v${OLD}.bak`)).toBe(original);
     // Opening writes nothing: the tournament on disk is still the v1 file.
     expect(files.disk.get(path)).toBe(original);
     expect(files.writes).toEqual([]);
@@ -805,11 +817,11 @@ describe('opening a file from an older schema', () => {
    * first click is the moment the file as v1 wrote it stops existing.
    */
   it('refuses to open when the safety copy cannot be made', async () => {
-    const { store, files, original } = setupV1();
+    const { store, files, original } = setupOlder();
     files.failMigrationBackup(new TournamentFileError('permissionDenied', 'read-only', path));
     const before = store.getState();
 
-    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+    const outcome = await openTournamentAt(store, deps(files, { schema: nextTarget() }), path);
 
     expect(outcome).toMatchObject({ status: 'failed', reason: 'migrationFailed', path });
     expect(store.getState()).toBe(before);
@@ -823,9 +835,9 @@ describe('opening a file from an older schema', () => {
    * is not evidence.
    */
   it('refuses cleanly when no migration reaches the current version', async () => {
-    const { store, files, original } = setupV1();
+    const { store, files, original } = setupOlder();
 
-    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target([]) }), path);
+    const outcome = await openTournamentAt(store, deps(files, { schema: nextTarget([]) }), path);
 
     expect(outcome).toMatchObject({ status: 'failed', reason: 'migrationFailed', path });
     expect(store.getState().document).toBeNull();
@@ -833,18 +845,18 @@ describe('opening a file from an older schema', () => {
   });
 
   it('refuses cleanly when a migration step throws', async () => {
-    const { store, files, original } = setupV1();
+    const { store, files, original } = setupOlder();
     const throwing: Migration = {
-      from: 1,
-      to: 2,
+      from: OLD,
+      to: NEXT,
       migrate: () => {
-        throw new Error('v2 needs a field this file never had');
+        throw new Error('the next version needs a field this file never had');
       },
     };
 
     const outcome = await openTournamentAt(
       store,
-      deps(files, { schema: v2Target([throwing]) }),
+      deps(files, { schema: nextTarget([throwing]) }),
       path,
     );
 
@@ -852,17 +864,17 @@ describe('opening a file from an older schema', () => {
     expect(files.disk.get(path)).toBe(original);
     // The copy was already made: the backup comes before the migration, so a
     // step that fails still leaves the host with the file they started from.
-    expect(files.disk.get(`${path}.v1.bak`)).toBe(original);
+    expect(files.disk.get(`${path}.v${OLD}.bak`)).toBe(original);
   });
 
   it('leaves the tournament that was already open alone', async () => {
-    const { store, files } = setupV1();
+    const { store, files } = setupOlder();
     const other = `${LIBRARY}\\Andere.wattmatt`;
     files.disk.set(other, serialiseTournament(tournament({ name: 'Andere' }), '0.1.0'));
     await openTournamentAt(store, deps(files), other);
     const before = store.getState().document;
 
-    await openTournamentAt(store, deps(files, { schema: v2Target([]) }), path);
+    await openTournamentAt(store, deps(files, { schema: nextTarget([]) }), path);
 
     expect(store.getState().document).toBe(before);
     expect(store.getState().file).toEqual({ status: 'saved', path: other });

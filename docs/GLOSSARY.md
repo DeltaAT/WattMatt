@@ -49,6 +49,10 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Occupied (table) | belegt |
 | Disabled (table) | gesperrt |
 | Waiting for table | wartet auf Tisch |
+| Table occupancy board | Tischbelegung |
+| To block a table | sperren |
+| To release a table | freigeben |
+| Versus (between two groups) | gegen |
 | Running | läuft |
 | Finished | beendet |
 | Undo | Rückgängig |

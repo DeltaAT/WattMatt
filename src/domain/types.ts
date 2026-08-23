@@ -112,19 +112,45 @@ export const groupSchema = z.object({
 });
 export type Group = z.infer<typeof groupSchema>;
 
-export const tableSchema = z.object({
-  id: tableIdSchema,
-  label: z.string().min(1),
-  status: tableStatusSchema,
+export const tableSchema = z
+  .object({
+    id: tableIdSchema,
+    label: z.string().min(1),
+    status: tableStatusSchema,
+    /** Set exactly while `status === 'OCCUPIED'` — see the check below. */
+    currentMatchId: matchIdSchema.nullable(),
+    /**
+     * When the match now on this table started, or null while nothing is on it.
+     *
+     * Persisted rather than kept in memory, because the occupancy board answers
+     * "how long has this been running?" and a laptop that was restarted
+     * mid-event would otherwise report every match as just begun (issue #13,
+     * CLAUDE.md §7 "loaded mid-tournament").
+     *
+     * It travels with the *match*, not with the table: moving a running match
+     * to another table carries the stamp across, because the room has been
+     * watching that match for twenty minutes whichever table it sits on.
+     */
+    occupiedSince: timestampSchema.nullable(),
+  })
   /**
-   * Set exactly while `status === 'OCCUPIED'`. The schema cannot express that
-   * pairing on its own, and nothing enforces it yet: the table lifecycle is
-   * issue #13's and the draw engine that assigns matches is #16's. Until one
-   * of them owns the transition, this is a documented convention rather than
-   * a checked invariant.
+   * The three fields move together or not at all (issue #13 owns the table
+   * lifecycle, `@/domain/tables`).
+   *
+   * Checked here rather than left as a convention, because every way into the
+   * app goes through this schema: a file hand-repaired in Notepad — which
+   * docs/FILE-FORMAT.md §Encoding invites — that frees a table but leaves the
+   * match on it would otherwise open, and the draw engine would hand the same
+   * table to a second match in front of the audience.
    */
-  currentMatchId: matchIdSchema.nullable(),
-});
+  .refine((table) => (table.status === 'OCCUPIED') === (table.currentMatchId !== null), {
+    path: ['currentMatchId'],
+    error: 'A table carries a match exactly while it is OCCUPIED.',
+  })
+  .refine((table) => (table.currentMatchId !== null) === (table.occupiedSince !== null), {
+    path: ['occupiedSince'],
+    error: 'A table is occupied since exactly when it carries a match.',
+  });
 export type Table = z.infer<typeof tableSchema>;
 
 /**

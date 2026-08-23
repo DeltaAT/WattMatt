@@ -14,16 +14,17 @@ import type { Migration, RawTournamentFile } from '@/domain/migrations/types';
 import { SCHEMA_VERSION, tournamentFileSchema } from '@/domain/schema';
 
 /**
- * Issue #12. The framework lands while there is exactly one schema version, so
- * nothing in it can be exercised through the real registry — which is empty,
- * correctly, and stays empty until the first breaking change.
+ * Issue #12, and still written against an injected target one version ahead of
+ * whatever `SCHEMA_VERSION` happens to be.
  *
- * The chaining is therefore tested against an injected target: a simulated v2
- * schema, and the step that leads to it. That is not a weaker test than the
- * real thing, it is the same test one version early — the step from v1 to v2
- * that lands one day is looked up, run, version-stamped and validated by
- * exactly this code. A runner whose only assertion is "it does nothing to a
- * current file" is a runner nobody has run.
+ * The real registry is exercised by `fixtures.test.ts`, which opens every
+ * archived file through it. What is tested here is the runner's behaviour at
+ * the *edge* of the versions that exist: a chain with a hole in it, a step that
+ * throws, a step whose result is still not a valid file. None of those can be
+ * arranged with real migrations, because a real one that did any of them would
+ * be a bug rather than a fixture — so the step and the schema it leads to are
+ * simulated, and the code under test is the code that will run the day the next
+ * bump lands.
  */
 
 /** A step that adds a field, the way a real migration would. */
@@ -34,25 +35,26 @@ function step(from: number, to: number, add: RawTournamentFile = {}): Migration 
 const V1_FILE: RawTournamentFile = { schemaVersion: 1, name: 'Vereinsturnier' };
 
 /**
- * What the tree will look like after the first breaking change: a schema whose
- * version literal has moved on, and one migration that gets a v1 file there.
+ * What the tree will look like after the next breaking change: a schema whose
+ * version literal has moved on, and one migration that gets a current file
+ * there.
  */
-const v2Schema = tournamentFileSchema.extend({
+const nextSchema = tournamentFileSchema.extend({
   schemaVersion: z.literal(SCHEMA_VERSION + 1),
-  /** The kind of field a v2 would add: derived, not invented. */
+  /** The kind of field a bump would add: derived, not invented. */
   namingDone: z.boolean(),
 });
 
-const v1ToV2: Migration = {
+const currentToNext: Migration = {
   from: SCHEMA_VERSION,
   to: SCHEMA_VERSION + 1,
   migrate: (file) => ({ ...file, namingDone: false }),
 };
 
-const V2_TARGET: SchemaTarget<z.infer<typeof v2Schema>> = {
+const NEXT_TARGET: SchemaTarget<z.infer<typeof nextSchema>> = {
   version: SCHEMA_VERSION + 1,
-  schema: v2Schema,
-  migrations: [v1ToV2],
+  schema: nextSchema,
+  migrations: [currentToNext],
 };
 
 describe('readSchemaVersion', () => {
@@ -243,11 +245,11 @@ describe('migrateTournamentFile', () => {
   });
 });
 
-describe('migrateToTarget, at a simulated v2', () => {
+describe('migrateToTarget, at a simulated next version', () => {
   const example = exampleFile();
 
-  it('migrates a v1 file and validates the result against the v2 schema', () => {
-    const outcome = migrateToTarget(example, V2_TARGET);
+  it('migrates a current file and validates the result against the next schema', () => {
+    const outcome = migrateToTarget(example, NEXT_TARGET);
 
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') {
@@ -262,7 +264,7 @@ describe('migrateToTarget, at a simulated v2', () => {
   });
 
   it('hands back the migrated JSON so unknown fields can be written out again', () => {
-    const outcome = migrateToTarget({ ...example, writtenByV3: 'keep me' }, V2_TARGET);
+    const outcome = migrateToTarget({ ...example, writtenByV3: 'keep me' }, NEXT_TARGET);
 
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') {
@@ -274,14 +276,14 @@ describe('migrateToTarget, at a simulated v2', () => {
   it('reports a chain that could not be run to the end', () => {
     // A `SCHEMA_VERSION` bump whose migration was forgotten looks exactly
     // like this, and it must not reach the host as "your file is corrupt".
-    const outcome = migrateToTarget(example, { ...V2_TARGET, migrations: [] });
+    const outcome = migrateToTarget(example, { ...NEXT_TARGET, migrations: [] });
 
     expect(outcome).toEqual({ status: 'failed', reason: 'chainBroken', version: SCHEMA_VERSION });
   });
 
   it('reports a migration whose result is still not a valid file', () => {
     const outcome = migrateToTarget(example, {
-      ...V2_TARGET,
+      ...NEXT_TARGET,
       migrations: [{ from: SCHEMA_VERSION, to: SCHEMA_VERSION + 1, migrate: () => ({}) }],
     });
 
@@ -331,7 +333,15 @@ function exampleFile(): RawTournamentFile {
     rngCursor: 42,
     settings: { participantLabel: 'GROUP', namingAt: 16, performanceMode: false },
     phase: 'QUALIFYING',
-    tables: [{ id: 'tbl_1', label: 'Tisch 1', status: 'FREE', currentMatchId: null }],
+    tables: [
+      {
+        id: 'tbl_1',
+        label: 'Tisch 1',
+        status: 'FREE',
+        currentMatchId: null,
+        occupiedSince: null,
+      },
+    ],
     groups: [{ id: 'grp_1', number: 1, name: null, status: 'ACTIVE' }],
     rounds: [
       {

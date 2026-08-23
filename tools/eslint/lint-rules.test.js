@@ -15,12 +15,19 @@ const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 /** @type {ESLint} */
 let eslint;
 
-beforeAll(() => {
+/**
+ * Building the instance is cheap; the first `lintText` is not — it loads the
+ * whole flat config, typescript-eslint included. Paid here, once, with a
+ * timeout that fits it, so the cost does not land on whichever test happens to
+ * run first and turn a slow machine into a red suite.
+ */
+beforeAll(async () => {
   eslint = new ESLint({
     cwd: projectRoot,
     overrideConfigFile: fileURLToPath(new URL('../../eslint.config.js', import.meta.url)),
   });
-});
+  await lint('src/warmUp.ts', 'export const warmUp = 1;');
+}, 60_000);
 
 /**
  * @param {string} filePath repo-relative path the snippet pretends to live at

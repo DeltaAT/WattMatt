@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { roundIdSchema } from '@/domain/ids';
-import { INITIAL_SNAPSHOT, type Snapshot } from '@/domain/snapshot';
+import { EMPTY_TOURNAMENT, INITIAL_SNAPSHOT, type Snapshot } from '@/domain/snapshot';
 import { createBeamerStore } from '@/store/beamerStore';
 
 const round = (value: string) => roundIdSchema.parse(value);
@@ -13,7 +13,7 @@ function snapshot(overrides: Partial<Snapshot>): Snapshot {
 describe('the beamer store', () => {
   it('throws in dev when a component tries to write to it', () => {
     const store = createBeamerStore(undefined, { freeze: true });
-    store.applySnapshot(snapshot({ revision: 1, tournament: { groups: [] }, delivery: 'live' }));
+    store.applySnapshot(snapshot({ revision: 1, tournament: EMPTY_TOURNAMENT, delivery: 'live' }));
 
     const state = store.getState();
 
