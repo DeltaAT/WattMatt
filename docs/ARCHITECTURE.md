@@ -137,8 +137,11 @@ scene by hand turns it off on the spot: manual control always wins (golden rule 
 ```text
 src/
   domain/
-    types.ts           branded IDs, entities, phases
-    schema.ts          Zod schemas, file schema version
+    ids.ts             branded IDs — a GroupId is never a TableId
+    types.ts           entities, phases and state unions, each as a Zod schema
+    schema.ts          the .wattmatt file shape, schema version
+    factory.ts         createTournament(), file wrap/unwrap
+    lookup.ts          index entities by ID; nothing reaches an entity by position
     rng.ts             seeded PRNG + shuffle
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, candidate draw
@@ -185,6 +188,16 @@ src-tauri/src/
 `Rng` instance; every function that needs time takes a `Clock`. This makes the entire
 tournament reproducible from `(seed, ordered list of host decisions)` — which is exactly what
 the unit tests replay, and exactly what makes a disputed draw defensible.
+
+This is a lint rule, not a convention. `src/domain/**` may not import React, Zustand, Tauri,
+Node builtins, or any other `src/` layer; `Math.random()`, `Date.now()`, `new Date()` and
+`fetch` are rejected there too. The layering is one-way — everything may import the domain,
+the domain imports nobody — so a violation fails `pnpm lint` and therefore CI.
+
+Schemas and types are one definition, not two: every entity is declared as a Zod schema and
+its TypeScript type is `z.infer`red from it. A schema that drifts from its type is then not
+expressible, and the thing the compiler checks against is the same thing that parses data at
+the boundary.
 
 ## 6. Error handling
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { beamerSceneSchema, IDLE_SCENE } from '@/domain/beamerScene';
-import { groupIdSchema } from '@/domain/ids';
+import { groupSchema, type Group } from '@/domain/types';
 
 /**
  * The full picture the host broadcasts to the beamer (docs/ARCHITECTURE.md §3).
@@ -15,18 +15,19 @@ import { groupIdSchema } from '@/domain/ids';
 /**
  * The tournament half of a snapshot.
  *
- * Issue #7 owns the real domain model. Until it lands this carries the one
- * entity the channel can be built and profiled against — a group is a numbered,
- * optionally named unit and nothing more (docs/GLOSSARY.md). #7 extends this
- * schema; it does not replace the envelope around it.
+ * The beamer is sent the real `Group`, not a parallel view of one: two
+ * definitions of the same entity are exactly the kind of thing that drifts
+ * silently, and the difference would surface as a projector showing a group
+ * the host has already eliminated.
+ *
+ * It still carries only groups. The scenes that need rounds, tables and the
+ * bracket are issues #18, #19, #25 and #27, and each extends this schema with
+ * what it actually draws — the envelope around it is final either way
+ * (docs/OPEN-QUESTIONS.md #19).
  */
-export const groupSnapshotSchema = z.object({
-  id: groupIdSchema,
-  number: z.number().int().positive(),
-  name: z.string().nullable(),
-});
+export const groupSnapshotSchema = groupSchema;
 
-export type GroupSnapshot = z.infer<typeof groupSnapshotSchema>;
+export type GroupSnapshot = Group;
 
 export const tournamentSnapshotSchema = z.object({
   groups: z.array(groupSnapshotSchema),

@@ -28,6 +28,7 @@ function sixtyFourGroups(): TournamentSnapshot {
       id: groupIdSchema.parse(`group-${index + 1}`),
       number: index + 1,
       name: `Mannschaft ${index + 1}`,
+      status: 'ACTIVE' as const,
     })),
   };
 }
