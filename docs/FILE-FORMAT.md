@@ -102,15 +102,19 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
   "log": [
     { "at": "2026-08-22T18:02:11+02:00", "action": "MATCH_WINNER_SET",
-      "payload": { "matchId": "mt_1", "winnerId": "grp_1" } }
+      "payload": { "matchId": "mt_1", "winnerId": "grp_1" } },
+    // An undo appends; it never removes the entry above (rule 6).
+    { "at": "2026-08-22T18:02:19+02:00", "action": "ACTION_UNDONE",
+      "payload": { "action": "MATCH_WINNER_SET", "label": "Sieger festgelegt: Gruppe 1" } }
   ]
 }
 ```
 
 ## Rules
 
-Rules 1 to 5 are live. #9 landed the atomic write and the "open a backup instead" answer;
-#10 landed the rotation, the debounced autosave and the crash recovery. Rule 7 is issue #12's:
+Rules 1 to 6 are live. #9 landed the atomic write and the "open a backup instead" answer;
+#10 landed the rotation, the debounced autosave and the crash recovery; #11 landed the writer
+behind the action log. Rule 7 is issue #12's:
 it is listed as a task on #9, and moving it is recorded on that issue and in
 docs/OPEN-QUESTIONS.md #27 rather than decided here.
 
@@ -159,6 +163,28 @@ docs/OPEN-QUESTIONS.md #27 rather than decided here.
    carries a path and a start time and nothing else — the tournament's own file is the state.
 6. **`log` is append-only** and is what makes a draw auditable. It is not used to rebuild
    state — the snapshot fields are authoritative. Undo works on an in-memory snapshot stack.
+
+   Entries are written by `TournamentStore.commit` (issue #11), from the `log` an action
+   passes with its mutation — centrally, like the broadcast and the autosave, so an action
+   added by a later issue is audited by construction. `updatedAt` moves with the entry and
+   only with it: a recorded decision is what "the tournament changed" means, while opening a
+   file or marking one saved is not.
+
+   Only an action that changes the tournament writes one. A beamer scene deliberately does
+   not: the log lives in the file, so an entry for a blackout would rewrite the tournament,
+   push the commit onto the heavy sync channel and trigger an autosave — for the one action
+   that must never queue behind sixty-four groups of data.
+
+   **An undo appends, it does not erase.** Taking a decision back writes `ACTION_UNDONE`
+   naming what was undone, and a redo writes `ACTION_REDONE`; the entries the undone action
+   itself wrote stay exactly where they are. The log is therefore the one place that still
+   knows the host set the wrong winner, which is the point of having it. For the same reason
+   `rngCursor` is never rewound either — see docs/OPEN-QUESTIONS.md #32.
+
+   **Taking back a beamer scene writes nothing**, for the same reason the scene action itself
+   writes nothing. Undoing a blackout is still a blackout: it moves the projector, and it must
+   not rewrite the tournament, append an entry, dirty the file or trigger a save on its way. An
+   undo is only audited when the step it takes back changed the tournament.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in
    `src/domain/migrations/`. Never silently drop unknown fields — preserve them on save.
 

@@ -18,13 +18,51 @@ export const deAT = {
   },
 
   common: {
-    undo: 'Rückgängig',
     cancel: 'Abbrechen',
     /**
      * Closes a message that reports something already over. Distinct from
      * `cancel`, which calls off an action the host could still go through with.
      */
     dismiss: 'Ausblenden',
+  },
+
+  /**
+   * Taking a decision back (issue #11, CLAUDE.md golden rule 6).
+   *
+   * The buttons name the step they would take rather than saying only
+   * "Rückgängig": the host misclicks during a live event, and the one thing
+   * they need before pressing it again is what is about to disappear.
+   */
+  undo: {
+    undo: 'Rückgängig',
+    redo: 'Wiederholen',
+    /** With a step to take: the button reads the decision it would take back. */
+    undoStep: (params: { label: string }) => `Rückgängig: ${params.label}`,
+    redoStep: (params: { label: string }) => `Wiederholen: ${params.label}`,
+
+    /**
+     * Why the button is doing nothing, on the button itself.
+     *
+     * The history does not reach across a tournament: opening or closing one
+     * starts it over, because the steps behind it describe a tournament that is
+     * no longer on the screen (docs/OPEN-QUESTIONS.md #20).
+     */
+    nothingToUndo:
+      'Es gibt nichts rückgängig zu machen. Der Verlauf beginnt beim geöffneten Turnier.',
+    nothingToRedo: 'Es wurde nichts rückgängig gemacht, das wiederholt werden könnte.',
+
+    /**
+     * What the actions call themselves on the stack. One entry per action that
+     * commits, added by the issue that adds the action.
+     */
+    action: {
+      /** The example from issue #11; issue #17 wires the action itself. */
+      matchWinnerSet: (params: { group: number }) => `Sieger festgelegt: Gruppe ${params.group}`,
+      sceneShown: 'Beamer-Ansicht gewechselt',
+      blackout: 'Bildschirm ausgeschaltet',
+      autoFollowOn: 'Beamer folgt dem Turnier',
+      autoFollowOff: 'Beamer wird von Hand gesteuert',
+    },
   },
 
   /** Everything around the `.wattmatt` file itself (docs/FILE-FORMAT.md). */

@@ -74,7 +74,8 @@ component → action → domain function (pure) → store commit
                                                  └─▶ debounced autosave → Rust → disk
 ```
 
-The autosave leg is `store/autosave.ts`; see §6 "Saving, and being told about it".
+The autosave leg is `store/autosave.ts`; see §6 "Saving, and being told about it". The undo leg
+is `store/undo.ts`; see "Taking a decision back" below.
 
 - The beamer window subscribes to `state:snapshot` and to `beamer:scene`. It keeps a local
   copy purely for rendering and never writes back.
@@ -103,6 +104,58 @@ back to the heavy channel because of that would be slowest exactly when it must 
 Every message carries the store's `revision`. The beamer drops anything older than what it
 already holds, so an out-of-order delivery cannot walk the projector backwards into a round that
 has already finished.
+
+### Taking a decision back
+
+The undo stack (`store/undo.ts`) hangs off `commit` for the same reason the broadcast and the
+autosave do: an action added by a later issue is undoable by construction, and there is no call
+for its author to forget. What an action does have to supply is the German label — nothing
+downstream can work out what the host would call the thing they just did.
+
+```ts
+store.commit(mutate, {
+  undoLabel: de.undo.action.matchWinnerSet({ group: 7 }),
+  log: { action: 'MATCH_WINNER_SET', payload: { matchId, winnerId } },
+  urgent: true,
+});
+```
+
+Four properties are load-bearing.
+
+**It is a snapshot, not an inverse.** An inverse operation has to be written per action and is
+wrong in exactly the cases nobody tested — the table it freed, the round it closed. A snapshot
+cannot be incomplete, so "undo restores derived state too" is a property of the mechanism rather
+than a promise each future action keeps. Fifty of them for a 64-group tournament serialise to a
+few hundred KB, well inside the issue's 100 MB budget.
+
+**Two fields are never rewound**, and they are left out of the snapshot's *type* so they cannot
+be rewound by accident. `log` is append-only (docs/FILE-FORMAT.md rule 6): rolling it back would
+erase the record of the decision being undone. `rngCursor` is a stream position — the room has
+already watched those numbers, and rewinding would make a redraw reproduce the pairing the host
+just rejected while giving two different draws the same `(seed, cursor)`
+(docs/OPEN-QUESTIONS.md #32).
+
+**An unlabelled commit that replaces the tournament clears the stack.** That is not a decision
+inside a tournament, it is the tournament being replaced — a new one, an opened file, a close —
+and the steps behind it describe something that is no longer on the screen. Undo does not reach
+across a document switch (docs/OPEN-QUESTIONS.md #20).
+
+**The beamer follows an undo settled.** The commit is flagged `settled`, and `sync.ts` sends it
+as a `catchUp` delivery: the projector moves to the restored picture without animating into it.
+Replaying the pairing reveal because the host corrected a misclick would show the audience a
+draw that is not happening.
+
+An undo is itself a commit — urgent, so a crash a second after a correction cannot hand back the
+version the host has just disowned — and it appends `ACTION_UNDONE` to the log rather than
+pretending it never happened. Redo is discarded as soon as anything new is committed, so the
+history never branches.
+
+**An undo costs what the step cost.** The two sentences above describe taking back a decision.
+A step that only moved the projector is taken back the way it was made: the entry carries
+`touchedDocument`, and when it is false the undo leaves the tournament, the log and the file
+alone and goes out on the scene channel. Undoing a blackout is still a blackout, and it must not
+queue behind sixty-four groups of data any more than the blackout did (docs/FILE-FORMAT.md
+rule 6).
 
 ### Catching up without replaying
 
@@ -162,7 +215,7 @@ src/
     tournamentStore.ts host-owned truth; `commit` bumps the revision
     beamerStore.ts     the beamer's read-only mirror, frozen in dev
     actions/           one file per use case
-    undo.ts
+    undo.ts           the snapshot stack: what an undo puts back, and what it never does
     sync.ts            snapshot broadcast, wired once per window
     syncContract.ts    the typed event contract between the windows
     heartbeat.ts       beamer liveness
@@ -235,6 +288,11 @@ nothing else about the stream, so changing mulberry32 or the xmur3 seed hash sil
 replays every saved tournament differently — including the one someone is disputing. Golden
 vectors in `rng.test.ts` pin the stream; changing it is a `schemaVersion` bump and a
 migration (docs/FILE-FORMAT.md rule 7), never a refactor.
+
+**Undo never rewinds the cursor.** It is a stream position, not tournament state: the room has
+already watched those numbers, and a cursor that went backwards would let two different draws
+claim the same `(seed, cursor)` — which is the whole of the reproducibility claim. See "Taking a
+decision back" in §3 and docs/OPEN-QUESTIONS.md #32.
 
 Two halves of this are not wired yet, by design: issue #9 calls `generateSeed()` when a
 tournament is created, and issue #16 writes `rng.cursor` back after each draw. See

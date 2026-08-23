@@ -7,15 +7,29 @@ import {
   type Snapshot,
   type TournamentSnapshot,
 } from '@/domain/snapshot';
-import type { Tournament } from '@/domain/types';
+import type { Clock, Tournament } from '@/domain/types';
+import { systemClock } from '@/platform/clock';
+import {
+  capture,
+  record,
+  restore,
+  stepBack,
+  stepForward,
+  EMPTY_HISTORY,
+  REDO_LOG_ACTION,
+  UNDO_LOG_ACTION,
+  type UndoHistory,
+} from '@/store/undo';
 
 /**
  * The single source of truth, in the host window (docs/ARCHITECTURE.md §3).
  *
  * Components never write to it: every mutation goes through an action, and
- * every action goes through `commit`. That is what makes one central broadcast
- * and one central autosave possible instead of a call at each action site —
- * and it is where the undo stack hooks in at issue #11.
+ * every action goes through `commit`. That is what makes one central broadcast,
+ * one central autosave and one central undo stack possible instead of a call at
+ * each action site — an action added by a later issue is undoable, audited,
+ * broadcast and saved by construction, and there is nothing for its author to
+ * forget (issue #11).
  */
 
 /**
@@ -80,6 +94,17 @@ export interface TournamentState {
    * never assigned by an action.
    */
   tournament: TournamentSnapshot;
+  /**
+   * What the host can take back (issue #11). Maintained by `commit`, never by
+   * an action — which is why `CommitPatch` cannot express it.
+   *
+   * It lives in the state so the host window re-renders when the next undo
+   * step changes: the buttons name the step they would take, and a label that
+   * lagged a click behind would tell the host they are about to undo something
+   * they already undid. The beamer never sees it — `toSnapshot` picks its
+   * fields by name.
+   */
+  history: UndoHistory;
 }
 
 export const INITIAL_TOURNAMENT_STATE: TournamentState = {
@@ -90,6 +115,7 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   document: null,
   file: UNSAVED_FILE,
   tournament: EMPTY_TOURNAMENT,
+  history: EMPTY_HISTORY,
 };
 
 /** Whether the tournament in memory has moved on from the one on disk. */
@@ -98,12 +124,33 @@ export function hasUnsavedChanges(state: TournamentState): boolean {
 }
 
 /**
+ * What an action may return.
+ *
+ * The three counters and the undo history are the store's own bookkeeping: an
+ * action that could write `history` could quietly drop the steps behind it, and
+ * one that could write `revision` could commit without the beamer noticing.
+ * `tournament` stays writable because the sync tests drive the beamer channel
+ * directly; every real action goes through `document` and lets `commit` project
+ * it.
+ */
+export type CommitPatch = Partial<
+  Omit<TournamentState, 'revision' | 'documentRevision' | 'history'>
+>;
+
+/** One appended audit record, before the clock has stamped it. */
+export interface LogRecord {
+  /** The action's name in SCREAMING_SNAKE_CASE, e.g. `MATCH_WINNER_SET`. */
+  action: string;
+  payload: Record<string, unknown>;
+}
+
+/**
  * How a commit is to be treated by the layers listening to it.
  *
- * Passed by the action rather than inferred, because "this one must be on disk
- * before the next thing happens" is a statement about the tournament — closing
- * a round, changing phase — and nothing downstream can work that out from the
- * state alone (docs/FILE-FORMAT.md rule 4).
+ * Passed by the action rather than inferred, because none of it can be worked
+ * out from the state alone: what the host would call this in German, whether it
+ * belongs in the audit trail, and whether it must be on disk before the next
+ * thing happens (docs/FILE-FORMAT.md rule 4).
  */
 export interface CommitOptions {
   /**
@@ -114,6 +161,29 @@ export interface CommitOptions {
    * write rather than ten.
    */
   urgent?: boolean;
+  /**
+   * What the host just did, in German, taken from `de-AT.ts`.
+   *
+   * Its presence is what puts the commit on the undo stack, and the string is
+   * what the undo button reads. It names the decision and its subject — the
+   * winner that was set, and for which group — because a button that only says
+   * "undo" leaves the host guessing what they are about to take back.
+   *
+   * Leaving it off marks a commit as bookkeeping rather than a decision — a
+   * save landing, a document being opened. See `nextHistory` for what that
+   * costs a commit that also replaces the tournament.
+   */
+  undoLabel?: string;
+  /**
+   * The audit record appended to `document.log` (docs/FILE-FORMAT.md rule 6).
+   *
+   * Only for commits that change the tournament: the log lives in the file, so
+   * an entry written for a beamer scene would rewrite the tournament, bump
+   * `documentRevision`, push the commit onto the heavy sync channel and trigger
+   * an autosave — for a blackout, which is the one thing that must never queue
+   * behind sixty-four groups of data (docs/ARCHITECTURE.md §3).
+   */
+  log?: LogRecord;
 }
 
 /** What a commit touched, reported to whoever is listening. */
@@ -129,6 +199,16 @@ export interface CommitMeta {
   touchedTournament: boolean;
   /** The action asked for an immediate save (see [`CommitOptions`]). */
   urgent: boolean;
+  /**
+   * The picture is being put back, not played out.
+   *
+   * True for an undo and a redo. The beamer follows them like any other state
+   * change, but it must not animate into them: replaying the pairing reveal
+   * because the host corrected a misclick would show the audience a draw that
+   * is not happening (issue #11 tasks, and the same reasoning as a reopened
+   * beamer catching up).
+   */
+  settled: boolean;
 }
 
 export type CommitListener = (state: TournamentState, meta: CommitMeta) => void;
@@ -148,17 +228,158 @@ export interface TournamentStore {
   subscribe(listener: (state: TournamentState) => void): () => void;
   /** For the sync and persistence layers, which need to know what changed. */
   onCommit(listener: CommitListener): () => void;
-  commit(
-    mutate: (state: TournamentState) => Partial<TournamentState>,
-    options?: CommitOptions,
-  ): void;
+  commit(mutate: (state: TournamentState) => CommitPatch, options?: CommitOptions): void;
+  /**
+   * Takes back the last recorded action. Returns false when there is nothing
+   * to take back, so the caller can say so rather than pretend it happened.
+   */
+  undo(): boolean;
+  /** Puts back the last undone action. */
+  redo(): boolean;
+}
+
+export interface TournamentStoreOptions {
+  /**
+   * Stamps the audit log and `updatedAt`. Injected so a test can assert the
+   * exact entry a decision wrote instead of matching a moving timestamp.
+   */
+  clock?: Clock;
 }
 
 export function createTournamentStore(
   initial: TournamentState = INITIAL_TOURNAMENT_STATE,
+  { clock = systemClock }: TournamentStoreOptions = {},
 ): TournamentStore {
   const store = createStore<TournamentState>(() => ({ ...initial }));
   const listeners = new Set<CommitListener>();
+
+  /**
+   * Applies one action and bumps the revision.
+   *
+   * The bump is the commit: everything downstream — broadcast, autosave, undo
+   * — keys off it rather than off the individual fields, so a new action never
+   * has to remember to notify anybody.
+   *
+   * A mutator that changes nothing still commits. "The host clicked and
+   * nothing observable happened" is a bug report during an event; a redundant
+   * snapshot is a few hundred KB.
+   *
+   * `history` is passed only by `undo` and `redo`, which move *within* the
+   * stack instead of pushing onto it.
+   */
+  const apply = (
+    mutate: (state: TournamentState) => CommitPatch,
+    options: CommitOptions | undefined,
+    history?: UndoHistory,
+  ): void => {
+    const current = store.getState();
+    const patch = mutate(current);
+    const next: TournamentState = { ...current, ...patch, revision: current.revision + 1 };
+
+    const replacedDocument = 'document' in patch;
+    let touchedDocument = replacedDocument;
+
+    // The audit trail, written centrally for the same reason as everything else
+    // on this path (docs/FILE-FORMAT.md rule 6). `updatedAt` moves with it and
+    // only with it: a recorded action is exactly what "the tournament changed"
+    // means, while opening a file or marking it saved is not.
+    if (options?.log !== undefined && next.document !== null) {
+      const at = clock.now();
+      next.document = {
+        ...next.document,
+        updatedAt: at,
+        log: [...next.document.log, { at, ...options.log }],
+      };
+      touchedDocument = true;
+    }
+
+    // The beamer's copy is derived here, once, rather than by each action.
+    // An action that changed the tournament and forgot to re-project it would
+    // leave the projector a decision behind while the host screen looks
+    // correct — the failure golden rule 4 exists to prevent.
+    if (touchedDocument) {
+      next.tournament = next.document ? toTournamentSnapshot(next.document) : EMPTY_TOURNAMENT;
+      next.documentRevision = current.documentRevision + 1;
+    }
+
+    // Same reasoning for the dirty flag: an action that changed the
+    // tournament without saying so would let the host close the window on
+    // work that was never written. Only an action that decided the file
+    // state itself — opening, saving, closing — is left alone.
+    if (touchedDocument && !('file' in patch) && current.file.status !== 'unsaved') {
+      next.file = { status: 'modified', path: current.file.path };
+    }
+
+    next.history = history ?? nextHistory(current, options, replacedDocument, touchedDocument);
+
+    store.setState(next, true);
+
+    const meta: CommitMeta = {
+      touchedTournament: touchedDocument || 'tournament' in patch,
+      urgent: options?.urgent === true,
+      settled: history !== undefined,
+    };
+    for (const listener of [...listeners]) {
+      listener(next, meta);
+    }
+  };
+
+  /**
+   * One step through the stack, committed like anything else.
+   *
+   * Taking a step back costs exactly what the step itself cost: an action that
+   * changed the tournament is put back urgently and audited, while one that
+   * only moved the projector is put back on the light path — see
+   * `UndoEntry.touchedDocument`.
+   */
+  const move = (direction: 'back' | 'forward'): boolean => {
+    const current = store.getState();
+    const document = current.document;
+    const snapshot = capture(current);
+    if (document === null || snapshot === null) {
+      return false;
+    }
+
+    const step =
+      direction === 'back'
+        ? stepBack(current.history, snapshot)
+        : stepForward(current.history, snapshot);
+    if (step === null) {
+      return false;
+    }
+
+    const entry = step.entry;
+    const picture = { scene: entry.snapshot.scene, autoFollow: entry.snapshot.autoFollow };
+
+    // Undoing a blackout is still a blackout. Handing the tournament back to
+    // `apply` here would rewrite it, write an audit entry for a scene change,
+    // dirty a clean file and force an urgent save with its backup rotation —
+    // putting the one action that must never wait behind sixty-four groups of
+    // data behind exactly that (docs/FILE-FORMAT.md rule 6, golden rule 3).
+    if (!entry.touchedDocument) {
+      apply(() => picture, undefined, step.history);
+      return true;
+    }
+
+    apply(
+      () => ({ document: restore(entry.snapshot, document), ...picture }),
+      {
+        // `urgent`, because an undo is a correction: the host has just told the
+        // room the previous result was wrong, and a crash a second later must
+        // not hand back the version they disowned.
+        urgent: true,
+        log: {
+          action: direction === 'back' ? UNDO_LOG_ACTION : REDO_LOG_ACTION,
+          // Both, because the two answer different questions: the action name
+          // is what a later reader greps for, the label is what the host saw
+          // on the button they pressed.
+          payload: { action: entry.action, label: entry.label },
+        },
+      },
+      step.history,
+    );
+    return true;
+  };
 
   return {
     getState: () => store.getState(),
@@ -167,52 +388,50 @@ export function createTournamentStore(
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-
-    /**
-     * Applies one action and bumps the revision.
-     *
-     * The bump is the commit: everything downstream — broadcast, autosave, undo
-     * — keys off it rather than off the individual fields, so a new action never
-     * has to remember to notify anybody.
-     *
-     * A mutator that changes nothing still commits. "The host clicked and
-     * nothing observable happened" is a bug report during an event; a redundant
-     * snapshot is a few hundred KB.
-     */
-    commit: (mutate, options) => {
-      const current = store.getState();
-      const partial = mutate(current);
-      const next: TournamentState = { ...current, ...partial, revision: current.revision + 1 };
-
-      // The beamer's copy is derived here, once, rather than by each action.
-      // An action that changed the tournament and forgot to re-project it would
-      // leave the projector a decision behind while the host screen looks
-      // correct — the failure golden rule 4 exists to prevent.
-      const touchedDocument = 'document' in partial;
-      if (touchedDocument) {
-        next.tournament = next.document ? toTournamentSnapshot(next.document) : EMPTY_TOURNAMENT;
-        next.documentRevision = current.documentRevision + 1;
-      }
-
-      // Same reasoning for the dirty flag: an action that changed the
-      // tournament without saying so would let the host close the window on
-      // work that was never written. Only an action that decided the file
-      // state itself — opening, saving, closing — is left alone.
-      if (touchedDocument && !('file' in partial) && current.file.status !== 'unsaved') {
-        next.file = { status: 'modified', path: current.file.path };
-      }
-
-      store.setState(next, true);
-
-      const meta: CommitMeta = {
-        touchedTournament: touchedDocument || 'tournament' in partial,
-        urgent: options?.urgent === true,
-      };
-      for (const listener of [...listeners]) {
-        listener(next, meta);
-      }
-    },
+    commit: (mutate, options) => apply(mutate, options),
+    undo: () => move('back'),
+    redo: () => move('forward'),
   };
+}
+
+/**
+ * What the stack looks like after this commit.
+ *
+ * Two rules, and the second one is the load-bearing one.
+ *
+ * An action that named itself is a host decision and is recorded. An action
+ * that rewrote the tournament *without* naming itself is not a decision at all
+ * — it is the document being replaced, by a new tournament, an opened file or a
+ * close. The steps behind it describe a tournament that is no longer open, and
+ * undoing into one of them would restore the previous event over the current
+ * one. Clearing is therefore structural rather than something the three
+ * document actions have to remember (docs/OPEN-QUESTIONS.md #20).
+ */
+function nextHistory(
+  current: TournamentState,
+  options: CommitOptions | undefined,
+  replacedDocument: boolean,
+  touchedDocument: boolean,
+): UndoHistory {
+  if (options?.undoLabel === undefined) {
+    return replacedDocument ? EMPTY_HISTORY : current.history;
+  }
+
+  // Before the first tournament is open there is nothing to go back to, and no
+  // button to show a step on: the controls live with the tournament.
+  const snapshot = capture(current);
+  if (snapshot === null) {
+    return current.history;
+  }
+
+  return record(current.history, {
+    label: options.undoLabel,
+    action: options.log?.action ?? null,
+    // Carried on the entry rather than worked out when the host presses the
+    // button: by then the commit that knew is long gone (see `UndoEntry`).
+    touchedDocument,
+    snapshot,
+  });
 }
 
 /** The snapshot that describes the store right now. */

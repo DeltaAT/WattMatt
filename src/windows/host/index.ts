@@ -4,8 +4,10 @@ export { HostWindow } from '@/windows/host/HostWindow';
 export { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 export { StartScreen } from '@/windows/host/StartScreen';
 export { TournamentBar } from '@/windows/host/TournamentBar';
+export { UndoControls } from '@/windows/host/UndoControls';
 export { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 export { useBeamerAlive } from '@/windows/host/useHostSync';
+export { useUndo, useUndoShortcuts, type UndoHandle } from '@/windows/host/useUndo';
 export {
   useTournamentDocument,
   type FileNotice as FileNoticeState,
