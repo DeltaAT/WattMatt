@@ -33,11 +33,11 @@ export type AppStamp = z.infer<typeof appStampSchema>;
  * with one level less of nesting.
  *
  * Parsing is strict: an unknown field is dropped, not preserved, which
- * FILE-FORMAT.md rule 7 will eventually forbid. That rule is issue #12's, and
- * the deferral is deliberate — see the note under rule 7. Making this
- * permissive now would disarm `schema.test.ts`, which detects a field
- * forgotten in the schema precisely because an unknown key does *not* survive
- * the round trip.
+ * FILE-FORMAT.md rule 7 will eventually forbid. Rule 7 is issue #12's, and the
+ * deferral is agreed on issue #9 rather than assumed — docs/OPEN-QUESTIONS.md
+ * #27. Making this permissive now would disarm `schema.test.ts`, which detects
+ * a field forgotten in the schema precisely because an unknown key does *not*
+ * survive the round trip.
  */
 export const tournamentFileSchema = z
   .object({

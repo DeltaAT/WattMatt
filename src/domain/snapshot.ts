@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { beamerSceneSchema, IDLE_SCENE } from '@/domain/beamerScene';
-import { groupSchema, type Group } from '@/domain/types';
+import { groupSchema, type Group, type Tournament } from '@/domain/types';
 
 /**
  * The full picture the host broadcasts to the beamer (docs/ARCHITECTURE.md §3).
@@ -62,6 +62,20 @@ export const snapshotSchema = z.object({
 export type Snapshot = z.infer<typeof snapshotSchema>;
 
 export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [] };
+
+/**
+ * The beamer's view of the tournament the host owns.
+ *
+ * One function, called centrally by the store's `commit` (issue #9), rather
+ * than a projection each action assembles for itself. An action that forgot to
+ * update the beamer's copy would leave the projector one decision behind while
+ * the host screen looks correct — the exact failure golden rule 4 exists to
+ * prevent. Every issue that adds a field to `TournamentSnapshot` adds it here
+ * too, and nowhere else.
+ */
+export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
+  return { groups: tournament.groups };
+}
 
 /** What a beamer renders before the host has answered its first request. */
 export const INITIAL_SNAPSHOT: Snapshot = {

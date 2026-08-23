@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { groupIdSchema } from '@/domain/ids';
-import { INITIAL_SNAPSHOT, snapshotSchema, supersedes, type Snapshot } from '@/domain/snapshot';
+import {
+  INITIAL_SNAPSHOT,
+  snapshotSchema,
+  supersedes,
+  toTournamentSnapshot,
+  type Snapshot,
+} from '@/domain/snapshot';
+import { group, table, tournament } from '@/domain/testFixtures';
 
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return { ...INITIAL_SNAPSHOT, ...overrides };
@@ -56,5 +63,32 @@ describe('supersedes', () => {
 
   it('accepts an equal revision, because that is what a catch-up answer is', () => {
     expect(supersedes(snapshot({ revision: 3 }), snapshot({ revision: 3 }))).toBe(true);
+  });
+});
+
+describe('toTournamentSnapshot', () => {
+  it('hands the beamer the real groups, not a parallel copy of them', () => {
+    const groups = [group(1), group(2, { name: 'Die Schnellen' })];
+
+    expect(toTournamentSnapshot(tournament({ groups }))).toEqual({ groups });
+  });
+
+  /**
+   * The projection is what the beamer renders, and it carries only what a scene
+   * draws today (docs/OPEN-QUESTIONS.md #19). Sending the whole tournament would
+   * put the draw order of a round on the projector's side of the wall before any
+   * scene has decided how to show it.
+   */
+  it('sends nothing the snapshot schema has not declared', () => {
+    const projected = toTournamentSnapshot(
+      tournament({ groups: [group(1)], tables: [table(1)], rngSeed: 'secret' }),
+    );
+
+    expect(Object.keys(projected)).toEqual(['groups']);
+    expect(snapshotSchema.safeParse(snapshot({ tournament: projected })).success).toBe(true);
+  });
+
+  it('projects an empty tournament as an empty picture', () => {
+    expect(toTournamentSnapshot(tournament())).toEqual({ groups: [] });
   });
 });

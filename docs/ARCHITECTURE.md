@@ -60,6 +60,13 @@ holds it rather than whichever pool thread happened to serve the command.
 
 **Single source of truth: the Zustand store in the host window.**
 
+The store holds the tournament twice, and the difference matters. `document` is the whole
+`Tournament` — what the host owns, what actions mutate and what is written to disk. `tournament`
+is the projection of it that the beamer is sent, and it is recomputed by `commit` rather than
+assigned by any action: an action that changed the tournament and forgot to re-project it would
+leave the projector one decision behind while the host screen looks correct. The same commit
+marks the file modified, so "there is something unsaved" cannot be forgotten either.
+
 ```text
 component → action → domain function (pure) → store commit
                                                  ├─▶ undo stack push
@@ -141,6 +148,7 @@ src/
     types.ts           entities, phases and state unions, each as a Zod schema
     schema.ts          the .wattmatt file shape, schema version
     factory.ts         createTournament(), file wrap/unwrap
+    fileName.ts        tournament name -> a file name Windows accepts
     lookup.ts          index entities by ID; nothing reaches an entity by position
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
@@ -157,13 +165,17 @@ src/
     syncContract.ts    the typed event contract between the windows
     heartbeat.ts       beamer liveness
     session.ts         the one store each window owns
-    persistence.ts     autosave orchestration
+    persistence.ts     new / open / save / save-as, and autosave orchestration
+    persistenceRuntime.ts  the real file and dialog dependencies, wired once
   platform/
     tauri.ts           the IPC boundary: invoke + listen, every payload Zod-parsed
     windowSync.ts      the Tauri transport behind sync.ts
     beamerWindow.ts    monitor list, beamer placement, sleep inhibition
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
+    tournamentFile.ts  read/write/list files, and the native open/save dialogs
+    clock.ts           the wall clock the domain is not allowed to read
     seed.ts            crypto.getRandomValues — the one non-deterministic step
+    id.ts              the tournament id, from the same entropy source
   windows/
     route.ts           `?window=` → host | beamer
     useBeamerStatus.ts live placement, shared by both windows
@@ -177,7 +189,7 @@ src/
     format.ts          date/time via Intl, locale `de-AT`
 src-tauri/src/
   main.rs
-  fs.rs                atomic write, backups, recovery
+  fs.rs                atomic write, the tournament library, backup discovery
   windows.rs           monitor enumeration, window placement
   power.rs             holds off sleep and the screensaver during an event
   logging.rs           rolling log file

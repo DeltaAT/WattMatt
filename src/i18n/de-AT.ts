@@ -19,6 +19,58 @@ export const deAT = {
 
   common: {
     undo: 'Rückgängig',
+    cancel: 'Abbrechen',
+    /**
+     * Closes a message that reports something already over. Distinct from
+     * `cancel`, which calls off an action the host could still go through with.
+     */
+    dismiss: 'Ausblenden',
+  },
+
+  /** Everything around the `.wattmatt` file itself (docs/FILE-FORMAT.md). */
+  file: {
+    /** The file-type row of the native open and save dialogs. */
+    filterLabel: 'WattMatt-Turnier',
+    openDialogTitle: 'Turnier öffnen',
+    saveDialogTitle: 'Turnier speichern unter',
+    /**
+     * The stem used when a tournament name yields no usable file name — a name
+     * made only of characters Windows refuses, or a reserved device name.
+     */
+    fallbackName: 'Turnier',
+
+    save: 'Turnier speichern',
+    saveAs: 'Speichern unter…',
+    close: 'Turnier schließen',
+
+    /** The discreet state line beside the buttons; issue #10 adds the time. */
+    stateSaved: 'Gespeichert',
+    stateModified: 'Nicht gespeichert',
+    stateUnwritten: 'Noch nicht auf der Festplatte',
+
+    /** Offered next to a file that could not be read (docs/FILE-FORMAT.md rule 1). */
+    openBackup: 'Letzte Sicherung öffnen',
+    noBackup: 'Es ist keine Sicherung vorhanden.',
+
+    unsaved: {
+      title: 'Ungespeicherte Änderungen',
+      body: 'Das Turnier wurde seit der letzten Speicherung geändert. Speichern Sie, bevor Sie es schließen.',
+      saveAndClose: 'Speichern und schließen',
+      discard: 'Änderungen verwerfen',
+    },
+  },
+
+  startScreen: {
+    title: 'Turnier starten',
+    subtitle: 'Legen Sie ein neues Turnier an oder öffnen Sie ein gespeichertes.',
+    nameLabel: 'Name des Turniers',
+    namePlaceholder: 'Vereinsturnier 2026',
+    create: 'Neues Turnier',
+    open: 'Turnier öffnen',
+    recentTitle: 'Zuletzt verwendet',
+    recentEmpty: 'Es ist noch kein Turnier gespeichert.',
+    /** The library the recent list is read from, shown so it can be found. */
+    libraryHint: (params: { path: string }) => `Ordner: ${params.path}`,
   },
 
   /**
@@ -33,6 +85,12 @@ export const deAT = {
       'Die Turnierdatei passt nicht zum erwarteten Format. Öffnen Sie die letzte Sicherung.',
     saveFailed:
       'Das Turnier konnte nicht gespeichert werden. Prüfen Sie den Speicherort und versuchen Sie es erneut.',
+    fileNotWritten:
+      'Das neue Turnier liegt noch nicht auf der Festplatte. Wählen Sie über „Speichern unter…“ einen Speicherort.',
+    fileMissing:
+      'Die Turnierdatei ist an diesem Ort nicht mehr vorhanden. Prüfen Sie, ob der Datenträger noch angesteckt ist.',
+    fileLocked:
+      'Auf die Turnierdatei darf nicht zugegriffen werden. Schließen Sie andere Programme, die sie geöffnet haben.',
   },
 
   tournament: {

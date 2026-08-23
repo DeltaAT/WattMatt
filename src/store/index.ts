@@ -6,6 +6,25 @@ export {
   startHeartbeat,
   watchHeartbeat,
 } from '@/store/heartbeat';
+export {
+  closeTournamentDocument,
+  createTournamentDocument,
+  listRecentTournaments,
+  openTournamentAt,
+  openTournamentWithDialog,
+  parseTournamentFile,
+  saveTournament,
+  saveTournamentAs,
+  serialiseTournament,
+  type CreateOutcome,
+  type OpenFailure,
+  type OpenOutcome,
+  type PersistenceDeps,
+  type PersistenceDialogs,
+  type PersistenceFiles,
+  type SaveOutcome,
+} from '@/store/persistence';
+export { APP_VERSION, createPersistenceDeps } from '@/store/persistenceRuntime';
 export { beamerViewStore, tournamentStore } from '@/store/session';
 export { startBeamerSync, startHostSync, type BeamerSync, type HostSync } from '@/store/sync';
 export {
@@ -18,10 +37,14 @@ export {
 } from '@/store/syncContract';
 export {
   createTournamentStore,
+  filePath,
+  hasUnsavedChanges,
   INITIAL_TOURNAMENT_STATE,
   toSnapshot,
+  UNSAVED_FILE,
   type CommitListener,
   type CommitMeta,
+  type FileState,
   type TournamentState,
   type TournamentStore,
 } from '@/store/tournamentStore';

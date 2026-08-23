@@ -7,6 +7,12 @@ export {
   type BeamerSceneId,
 } from '@/domain/beamerScene';
 export {
+  TOURNAMENT_FILE_EXTENSION,
+  toTournamentFileName,
+  tournamentNameFromFileName,
+  uniqueFileName,
+} from '@/domain/fileName';
+export {
   createTournament,
   DEFAULT_SETTINGS,
   fromTournamentFile,
@@ -42,6 +48,7 @@ export {
   INITIAL_SNAPSHOT,
   snapshotSchema,
   supersedes,
+  toTournamentSnapshot,
   tournamentSnapshotSchema,
   type GroupSnapshot,
   type Snapshot,

@@ -15,6 +15,12 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# The native open/save dialogs of issue #9. A dialog has to be the real Windows
+# one — a host looking for a tournament on a USB stick needs the sidebar, the
+# recent places and the file name completion they already know. It is bundled,
+# talks to no network, and the capability that grants it is host-only.
+tauri-plugin-dialog = "2"
+
 # Only for SetThreadExecutionState — see src/power.rs. WattMatt ships to
 # Windows 11 exclusively, but keeping the dependency target-gated means the
 # crate still compiles elsewhere for a quick `cargo check`.
