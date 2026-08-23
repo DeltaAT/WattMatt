@@ -206,12 +206,25 @@ export default tseslint.config(
     },
   },
 
-  // Build and tooling config run in Node.
+  /**
+   * Build and tooling config run in Node, and legitimately use default exports
+   * (an ESLint config *is* a default export). Only that restriction is lifted:
+   * issue #8's acceptance criterion is that `Math.random()` appears nowhere in
+   * the codebase, and switching `no-restricted-syntax` off wholesale here would
+   * have quietly carved out an exception to a golden rule.
+   */
   {
     files: ['*.config.{js,ts}', 'tools/**/*.js'],
     languageOptions: { globals: globals.node },
     rules: {
-      'no-restricted-syntax': 'off',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.object.name="Math"][callee.property.name="random"]',
+          message:
+            'Math.random() is banned everywhere (CLAUDE.md golden rule 7). Use @/domain/rng.',
+        },
+      ],
     },
   },
 

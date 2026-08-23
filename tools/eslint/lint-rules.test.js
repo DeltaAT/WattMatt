@@ -127,6 +127,25 @@ describe('domain purity', () => {
     expect(rules).toContain('no-restricted-syntax');
   });
 
+  /*
+   * Issue #8's acceptance criterion is that Math.random() appears nowhere in
+   * *the codebase*, not merely nowhere in src/. The tooling override used to
+   * switch no-restricted-syntax off wholesale to allow default exports, which
+   * carved a silent hole in a golden rule.
+   */
+  it('rejects Math.random() in tooling and config too', async () => {
+    const rules = await lint(
+      'tools/eslint/generate.js',
+      'export function seed() {\n  return Math.random();\n}\n',
+    );
+    expect(rules).toContain('no-restricted-syntax');
+  });
+
+  it('still allows a default export from a config file', async () => {
+    const rules = await lint('vite.config.js', 'export default { build: {} };\n');
+    expect(rules).not.toContain('no-restricted-syntax');
+  });
+
   it('allows an injected clock and rng', async () => {
     const rules = await lint(
       'src/domain/draw.ts',
