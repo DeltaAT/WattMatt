@@ -1,5 +1,6 @@
 import { de } from '@/i18n';
 import type { FileErrorKind } from '@/platform/tournamentFile';
+import type { OpenFailure } from '@/store/persistence';
 import type { FileNotice as Notice } from '@/windows/host/useTournamentDocument';
 
 /**
@@ -11,6 +12,13 @@ import type { FileNotice as Notice } from '@/windows/host/useTournamentDocument'
  * file that would not open (docs/FILE-FORMAT.md rule 1), "Speichern unter…" for
  * anything that could not be written. It is an inline alert rather than a
  * modal, because the host may well want to try something else first.
+ *
+ * One notice here is not a failure at all: a file that was migrated on the way
+ * in (issue #12) says so in the same slot, in the accent colour rather than the
+ * losing one. It shares the component because it is the same shape of thing —
+ * one sentence about the file, dismissible, in the way until it is read — and
+ * because two components competing for the same strip is how the host ends up
+ * seeing neither.
  */
 export function FileNotice({
   notice,
@@ -25,11 +33,15 @@ export function FileNotice({
   onSaveAs: () => void;
   onDismiss: () => void;
 }) {
-  const newestBackup = notice.kind === 'openFailed' ? (notice.backups[0] ?? null) : null;
+  // A file from a *newer* build is the one open failure with no backup answer:
+  // the rotated backups sit beside it and were written by the same build, so
+  // offering one would send the host round the same refusal again.
+  const offersBackup = notice.kind === 'openFailed' && notice.reason !== 'futureVersion';
+  const newestBackup = offersBackup ? (notice.backups[0] ?? null) : null;
   // Every write failure has the same way out: put the tournament somewhere that
   // works. That is the issue's "disk full / file locked → offer Speichern
   // unter…", and it is the only action the host can take that fixes anything.
-  const canRelocate = notice.kind !== 'openFailed';
+  const canRelocate = notice.kind !== 'openFailed' && notice.kind !== 'migrated';
   /*
     A stopped autosave is a condition, not an event: it is still true while the
     host reads it, and it clears itself the moment a write succeeds. Offering to
@@ -37,15 +49,26 @@ export function FileNotice({
   */
   const canDismiss = notice.kind !== 'autosaveFailed';
 
+  /*
+    A migration is not a failure: the tournament is open and nothing is wrong.
+    It is reported in the same slot because it is the same kind of thing — one
+    sentence about the file, in the host's way until they have read it — but it
+    must not be red, or the host reads "broken" and stops mid-setup to
+    investigate a file that is fine.
+  */
+  const informational = notice.kind === 'migrated';
+
   return (
     <div
-      role="alert"
+      role={informational ? 'status' : 'alert'}
       data-notice={notice.kind}
-      className="flex items-start gap-3 border-b border-wm-lose bg-wm-lose-bg px-4 py-3"
+      className={`flex items-start gap-3 border-b px-4 py-3 ${
+        informational ? 'border-wm-accent bg-wm-accent-soft' : 'border-wm-lose bg-wm-lose-bg'
+      }`}
     >
       <p className="flex-1 text-host-sm text-wm-text">{messageFor(notice)}</p>
 
-      {notice.kind === 'openFailed' ? (
+      {offersBackup ? (
         newestBackup === null ? (
           <span className="text-host-xs text-wm-text-muted">{de.file.noBackup}</span>
         ) : (
@@ -89,7 +112,10 @@ export function FileNotice({
  */
 function messageFor(notice: Notice): string {
   if (notice.kind === 'openFailed') {
-    return notice.reason === 'invalid' ? de.error.fileInvalid : de.error.fileUnreadable;
+    return openMessage(notice.reason);
+  }
+  if (notice.kind === 'migrated') {
+    return de.file.migrated({ from: notice.from });
   }
   if (notice.kind === 'notWritten') {
     return de.error.fileNotWritten;
@@ -100,6 +126,19 @@ function messageFor(notice: Notice): string {
   return notice.kind === 'autosaveFailed'
     ? writeMessage(notice.errorKind, de.error.autosaveFailed)
     : writeMessage(notice.errorKind, de.error.saveFailed);
+}
+
+function openMessage(reason: OpenFailure): string {
+  switch (reason) {
+    case 'invalid':
+      return de.error.fileInvalid;
+    case 'futureVersion':
+      return de.error.fileFromNewerVersion;
+    case 'migrationFailed':
+      return de.error.fileMigrationFailed;
+    default:
+      return de.error.fileUnreadable;
+  }
 }
 
 function writeMessage(kind: FileErrorKind, fallback: string): string {

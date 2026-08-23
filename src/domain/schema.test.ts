@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { SCHEMA_VERSION, tournamentFileSchema } from '@/domain/schema';
+import {
+  carriedFields,
+  KNOWN_FILE_FIELDS,
+  NO_CARRIED_FIELDS,
+  SCHEMA_VERSION,
+  tournamentFileSchema,
+  withCarriedFields,
+} from '@/domain/schema';
 
 /**
  * Issue #7 acceptance criterion: the example in docs/FILE-FORMAT.md
@@ -25,13 +32,33 @@ describe('tournamentFileSchema', () => {
   });
 
   /*
-   * Deep equality is the whole assertion: Zod strips keys it does not know
-   * about, so a parsed result that still equals the input proves nothing was
-   * dropped. A field added to the document but forgotten in the schema fails
-   * here rather than being quietly discarded on the host's next save.
+   * Deep equality is the whole assertion for everything *below* the top level:
+   * nested objects still parse strictly, so a field added to `settings` or to a
+   * `match` in the document but forgotten in the schema fails here rather than
+   * being quietly discarded on the host's next save.
+   *
+   * It no longer says anything about top-level fields — those are preserved on
+   * purpose now (issue #12, docs/FILE-FORMAT.md rule 7), so an unknown one
+   * would survive this comparison. `covers every top-level field of the
+   * documented example` below is the guard that replaces it, and it does not
+   * depend on strictness at all.
    */
   it('round-trips it unchanged', () => {
     expect(tournamentFileSchema.parse(example)).toEqual(example);
+  });
+
+  /**
+   * The replacement for the strictness the top level no longer has
+   * (docs/OPEN-QUESTIONS.md #27).
+   *
+   * Both directions matter. A field in the document that the schema has never
+   * heard of would be carried as an unknown one and never reach the store —
+   * the host would edit a tournament with a section missing. A field in the
+   * schema that the document does not mention is a file format nobody can
+   * repair in Notepad, which is the promise FILE-FORMAT.md §Encoding makes.
+   */
+  it('covers every top-level field of the documented example', () => {
+    expect([...KNOWN_FILE_FIELDS].sort()).toEqual(Object.keys(example).sort());
   });
 
   it('survives a JSON serialisation round-trip', () => {
@@ -50,23 +77,98 @@ describe('tournamentFileSchema', () => {
     expect(() => tournamentFileSchema.parse(withoutBracket)).toThrow();
   });
 
-  /*
-   * Pins the deferral recorded under docs/FILE-FORMAT.md rule 7: v1 parses
-   * strictly and drops what it does not know. Rule 7 will eventually forbid
-   * that, and issue #12 owns the change — at which point this test must be
-   * updated deliberately rather than the behaviour drifting unnoticed.
-   */
-  it('drops an unknown field instead of preserving it, until issue #12', () => {
-    const withFutureField = { ...example, futureField: 'written by a later build' };
-    expect(tournamentFileSchema.parse(withFutureField)).not.toHaveProperty('futureField');
-  });
-
   it('rejects a timestamp without an explicit UTC offset', () => {
     // "2026-08-22T17:04:00" is ambiguous across the venue's timezone; the file
     // format requires the offset so a tournament copied to another laptop
     // still reports the times it was actually played at.
     const ambiguous = { ...example, createdAt: '2026-08-22T17:04:00' };
     expect(() => tournamentFileSchema.parse(ambiguous)).toThrow();
+  });
+});
+
+/**
+ * Forward compatibility (docs/FILE-FORMAT.md rule 7, issue #12).
+ *
+ * The case these serve is a real one the moment a second version exists: a host
+ * opens a v2 file on the laptop that still has v1 installed, plays a round and
+ * saves. Everything v2 wrote and v1 cannot read has to come back out of that
+ * save, or the file has been quietly downgraded by a build that was only ever
+ * asked to record a winner.
+ */
+describe('carried fields', () => {
+  const example = exampleFromDoc();
+
+  it('picks up top-level fields this build does not know', () => {
+    const fromLater = { ...example, namingDone: true, sponsors: ['Raiffeisen'] };
+
+    expect(carriedFields(fromLater)).toEqual({ namingDone: true, sponsors: ['Raiffeisen'] });
+  });
+
+  it('carries nothing from a file this build fully understands', () => {
+    expect(carriedFields(example)).toBe(NO_CARRIED_FIELDS);
+  });
+
+  it.each([
+    ['null', null],
+    ['an array', []],
+    ['a string', 'not a tournament'],
+  ])('carries nothing from %s', (_label, json) => {
+    expect(carriedFields(json)).toBe(NO_CARRIED_FIELDS);
+  });
+
+  /*
+   * `__proto__` arrives as an own property from `JSON.parse`, and writing it
+   * back with `=` would set a prototype rather than a field. A hand-edited file
+   * does not get to reach into the app that opens it.
+   */
+  it('refuses to carry __proto__', () => {
+    // Built through JSON.parse rather than as a literal: `{ __proto__: … }` in
+    // source sets a prototype instead of a key, and the test would prove
+    // nothing about the file that actually arrives from disk.
+    const hostile: unknown = JSON.parse('{"schemaVersion": 1, "__proto__": {"polluted": true}}');
+
+    expect(carriedFields(hostile)).toBe(NO_CARRIED_FIELDS);
+
+    const written = withCarriedFields(
+      tournamentFileSchema.parse(example),
+      hostile as Record<string, unknown>,
+    );
+    expect(written).not.toHaveProperty('polluted');
+    expect({}).not.toHaveProperty('polluted');
+  });
+
+  it('writes the carried fields back out beside the known ones', () => {
+    const file = tournamentFileSchema.parse(example);
+
+    const written = withCarriedFields(file, { namingDone: true });
+
+    expect(written).toEqual({ ...example, namingDone: true });
+  });
+
+  /*
+   * A carried key that collides with one this build owns is a stale copy of a
+   * field the tournament is now authoritative for. Letting it win would put the
+   * old value back on every save — the tournament would keep reverting to a
+   * name the host changed an hour ago.
+   */
+  it('never lets a carried field overwrite one this build owns', () => {
+    const file = tournamentFileSchema.parse(example);
+
+    const written = withCarriedFields(file, { name: 'Aus einer alten Kopie', phase: 'CEREMONY' });
+
+    expect(written['name']).toBe(file.name);
+    expect(written['phase']).toBe(file.phase);
+  });
+
+  it('survives a read, a write and a read again', () => {
+    const fromLater = { ...example, namingDone: true };
+
+    const carried = carriedFields(fromLater);
+    const written = withCarriedFields(tournamentFileSchema.parse(fromLater), carried);
+    const reread: unknown = JSON.parse(JSON.stringify(written));
+
+    expect(carriedFields(reread)).toEqual({ namingDone: true });
+    expect(tournamentFileSchema.parse(reread)).toEqual(tournamentFileSchema.parse(example));
   });
 });
 

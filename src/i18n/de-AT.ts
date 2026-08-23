@@ -97,6 +97,24 @@ export const deAT = {
     noBackup: 'Es ist keine Sicherung vorhanden.',
 
     /**
+     * Reported after a file from an older WattMatt was brought up to date
+     * (docs/FILE-FORMAT.md rule 7, issue #12).
+     *
+     * A notice and not an error: nothing went wrong, and the tournament is
+     * open. It is said out loud all the same, because the file the host has on
+     * the stick is about to be written in a format their other laptop may not
+     * read — and because the copy of the original is only useful to someone who
+     * knows it is there (CLAUDE.md golden rule 3).
+     *
+     * One sentence and no heading, unlike `recovery` below: every notice in the
+     * `FileNotice` strip is a single line, and a heading only this one carried
+     * would make it look like the more important of the two things the host can
+     * be told there.
+     */
+    migrated: (params: { from: number }) =>
+      `Die Datei wurde mit einer älteren Version von WattMatt (Format ${params.from}) angelegt und beim Öffnen auf das aktuelle Format gebracht. Die ursprüngliche Datei liegt unverändert daneben.`,
+
+    /**
      * Offered when the last session did not exit cleanly (docs/FILE-FORMAT.md
      * rule 5). An offer, not an error: nothing is broken, there is simply a
      * tournament waiting where the host left it.
@@ -139,6 +157,15 @@ export const deAT = {
       'Die Turnierdatei konnte nicht gelesen werden. Öffnen Sie die letzte Sicherung.',
     fileInvalid:
       'Die Turnierdatei passt nicht zum erwarteten Format. Öffnen Sie die letzte Sicherung.',
+    /**
+     * A file from a newer WattMatt (docs/FILE-FORMAT.md rule 7). The way out is
+     * the newer version, not a backup: the rotated backups beside the file were
+     * written by the same build and are just as unreadable here.
+     */
+    fileFromNewerVersion:
+      'Diese Datei stammt aus einer neueren Version von WattMatt. Öffnen Sie das Turnier auf einem Gerät mit der neueren Version.',
+    fileMigrationFailed:
+      'Die Turnierdatei konnte nicht auf das aktuelle Format gebracht werden. Öffnen Sie die letzte Sicherung.',
     saveFailed:
       'Das Turnier konnte nicht gespeichert werden. Prüfen Sie den Speicherort und versuchen Sie es erneut.',
     fileNotWritten:

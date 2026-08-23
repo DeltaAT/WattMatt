@@ -201,7 +201,8 @@ src/
   domain/
     ids.ts             branded IDs — a GroupId is never a TableId
     types.ts           entities, phases and state unions, each as a Zod schema
-    schema.ts          the .wattmatt file shape, schema version
+    schema.ts          the .wattmatt file shape, schema version, carried unknown fields
+    migrations/        one step per schemaVersion, and the runner that chains them
     factory.ts         createTournament(), file wrap/unwrap
     fileName.ts        tournament name -> a file name Windows accepts
     lookup.ts          index entities by ID; nothing reaches an entity by position

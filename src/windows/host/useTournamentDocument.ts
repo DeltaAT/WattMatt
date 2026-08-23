@@ -20,6 +20,7 @@ import {
   saveTournament,
   saveTournamentAs,
   type OpenFailure,
+  type OpenOutcome,
 } from '@/store/persistence';
 import { APP_VERSION, createPersistenceDeps } from '@/store/persistenceRuntime';
 import { tournamentStore } from '@/store/session';
@@ -40,6 +41,13 @@ export type FileNotice =
   | { kind: 'openFailed'; reason: OpenFailure; path: string; backups: BackupEntry[] }
   | { kind: 'saveFailed'; errorKind: FileErrorKind }
   | { kind: 'notWritten'; errorKind: FileErrorKind }
+  /**
+   * A file from an older schema was brought up to date on the way in
+   * (docs/FILE-FORMAT.md rule 7). Not a failure — the tournament is open — but
+   * the host is told, because the file on their stick is about to be written in
+   * a format an older laptop cannot read.
+   */
+  | { kind: 'migrated'; from: number }
   /**
    * The autosave stopped working — a stick pulled out, a file locked. Unlike
    * the others this one cannot be dismissed: it describes a condition that is
@@ -238,8 +246,7 @@ export function useTournamentDocument(): TournamentDocument {
   const openAt = useCallback(
     (path: string) => {
       run(async () => {
-        const outcome = await openTournamentAt(tournamentStore, deps, path);
-        setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+        setTransientNotice(noticeForOpen(await openTournamentAt(tournamentStore, deps, path)));
       });
     },
     [deps, run],
@@ -247,8 +254,7 @@ export function useTournamentDocument(): TournamentDocument {
 
   const openWithDialog = useCallback(() => {
     run(async () => {
-      const outcome = await openTournamentWithDialog(tournamentStore, deps);
-      setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+      setTransientNotice(noticeForOpen(await openTournamentWithDialog(tournamentStore, deps)));
     });
   }, [deps, run]);
 
@@ -463,6 +469,23 @@ async function destroyHostWindow(): Promise<void> {
   }
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   await getCurrentWindow().destroy();
+}
+
+/**
+ * What an open has to say for itself.
+ *
+ * `null` for the ordinary case, which is what clears whatever the last
+ * operation left on screen. A migration is the one *successful* open that still
+ * puts something there.
+ */
+function noticeForOpen(outcome: OpenOutcome): FileNotice | null {
+  if (outcome.status === 'failed') {
+    return { kind: 'openFailed', ...outcome };
+  }
+  if (outcome.status === 'opened' && outcome.migratedFrom !== null) {
+    return { kind: 'migrated', from: outcome.migratedFrom };
+  }
+  return null;
 }
 
 function reportFailure(error: unknown): void {

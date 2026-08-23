@@ -140,4 +140,63 @@ describe('FileNotice', () => {
     );
     expect(render({ kind: 'autosaveFailed', errorKind: 'io' })).not.toContain(de.error.saveFailed);
   });
+
+  /**
+   * Issue #12 acceptance criterion: a file claiming a schema version this build
+   * does not know is refused cleanly. The way out is the newer WattMatt, and
+   * deliberately *not* a backup — the rotated backups beside it were written by
+   * the same build and refuse in exactly the same way.
+   */
+  it('sends the host to the newer version for a file from the future', () => {
+    const markup = render({ kind: 'openFailed', reason: 'futureVersion', path: PATH, backups: [] });
+
+    expect(markup).toContain(de.error.fileFromNewerVersion);
+    expect(markup).toContain('neueren Version von WattMatt');
+    expect(markup).not.toContain(de.file.openBackup);
+    expect(markup).not.toContain(de.file.noBackup);
+  });
+
+  it('offers no backup for a file from the future even when one exists', () => {
+    const markup = render({
+      kind: 'openFailed',
+      reason: 'futureVersion',
+      path: PATH,
+      backups: [BACKUP],
+    });
+
+    expect(markup).not.toContain(de.file.openBackup);
+  });
+
+  it('separates a file that could not be migrated from one that is corrupt', () => {
+    const markup = render({
+      kind: 'openFailed',
+      reason: 'migrationFailed',
+      path: PATH,
+      backups: [BACKUP],
+    });
+
+    expect(markup).toContain(de.error.fileMigrationFailed);
+    expect(markup).not.toContain(de.error.fileInvalid);
+    // This one *is* answerable with a backup: the file beside it was written by
+    // a build that could read it.
+    expect(markup).toContain(de.file.openBackup);
+  });
+
+  /**
+   * A migration is not a failure — the tournament is open. It is still said out
+   * loud, because the file is about to be written in a format the host's other
+   * laptop may not read, and because the copy of the original is only useful to
+   * someone who knows it is there.
+   */
+  it('reports a migrated file as news rather than as a failure', () => {
+    const markup = render({ kind: 'migrated', from: 1 });
+
+    expect(markup).toContain(de.file.migrated({ from: 1 }));
+    expect(markup).toContain('role="status"');
+    expect(markup).not.toContain('role="alert"');
+    expect(markup).toContain(de.common.dismiss);
+    // Nothing failed, so there is nothing to relocate and no backup to reach for.
+    expect(markup).not.toContain(de.file.saveAs);
+    expect(markup).not.toContain(de.file.openBackup);
+  });
 });

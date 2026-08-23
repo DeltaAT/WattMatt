@@ -5,7 +5,19 @@ import {
   type CreateTournamentInput,
 } from '@/domain/factory';
 import { TOURNAMENT_FILE_EXTENSION, toTournamentFileName, uniqueFileName } from '@/domain/fileName';
-import { tournamentFileSchema } from '@/domain/schema';
+import {
+  migrateToTarget,
+  migrateTournamentFile,
+  readSchemaVersion,
+  type SchemaTarget,
+} from '@/domain/migrations';
+import {
+  carriedFields,
+  NO_CARRIED_FIELDS,
+  withCarriedFields,
+  type CarriedFields,
+  type TournamentFileLike,
+} from '@/domain/schema';
 import type { Clock, Settings, Tournament } from '@/domain/types';
 import {
   toTournamentFileError,
@@ -42,6 +54,11 @@ export interface PersistenceFiles {
   write(path: string, contents: string): Promise<void>;
   list(): Promise<TournamentEntry[]>;
   listBackups(path: string): Promise<BackupEntry[]>;
+  /**
+   * Copies a file aside before it is migrated (docs/FILE-FORMAT.md rule 7).
+   * Rejects if the copy could not be made, which stops the open.
+   */
+  backUpForMigration(path: string, version: number): Promise<string>;
   /** The default library, or `null` where there is no backend to ask. */
   directory(): Promise<string | null>;
 }
@@ -61,17 +78,44 @@ export interface PersistenceDeps {
   appVersion: string;
   /** German fallback stem, used when a name yields no usable file name. */
   fallbackFileBase: string;
+  /**
+   * The file format this build reads: the version stamp, the schema, and the
+   * migrations that lead up to it (`CURRENT_SCHEMA` in `@/domain/migrations`).
+   *
+   * Injected for the same reason the file system is. There is exactly one
+   * schema version today, so with `CURRENT_SCHEMA` imported here no file could
+   * ever be *outdated* — and the branch that copies the original aside before
+   * migrating it, the one docs/FILE-FORMAT.md rule 7 exists for, would first
+   * run on a host's laptop rather than in a test.
+   */
+  schema: SchemaTarget<TournamentFileLike>;
 }
 
-/** Why a file could not be opened — the two cases the host is offered a backup for. */
+/** Why a file could not be opened (docs/FILE-FORMAT.md rules 1 and 7). */
 export type OpenFailure =
   /** The bytes never arrived: missing, locked, on a stick that was pulled out. */
   | 'unreadable'
-  /** The bytes arrived and are not a tournament (docs/FILE-FORMAT.md rule 1). */
-  | 'invalid';
+  /** The bytes arrived and are not a tournament. */
+  | 'invalid'
+  /**
+   * Written by a newer WattMatt. Refused rather than opened partially: a build
+   * that does not know what a field means cannot know whether dropping it loses
+   * a round, and saving over the file is how the host would find out.
+   */
+  | 'futureVersion'
+  /**
+   * From an older schema, and this build could not bring it up to date — a
+   * missing step, a step that refused, or a safety copy that could not be made.
+   */
+  | 'migrationFailed';
 
 export type OpenOutcome =
-  | { status: 'opened'; path: string }
+  | {
+      status: 'opened';
+      path: string;
+      /** The schema version it was migrated from, or `null` if it was current. */
+      migratedFrom: number | null;
+    }
   | { status: 'cancelled' }
   | { status: 'failed'; reason: OpenFailure; path: string; backups: BackupEntry[] };
 
@@ -90,9 +134,21 @@ export type CreateOutcome =
    */
   | { status: 'unwritten'; kind: FileErrorKind };
 
-/** UTF-8 JSON, two-space indent, trailing newline (docs/FILE-FORMAT.md §Encoding). */
-export function serialiseTournament(tournament: Tournament, appVersion: string): string {
-  return `${JSON.stringify(toTournamentFile(tournament, appVersion), null, 2)}\n`;
+/**
+ * UTF-8 JSON, two-space indent, trailing newline (docs/FILE-FORMAT.md §Encoding).
+ *
+ * `carried` is what the file this tournament came from held and this build does
+ * not understand. It goes back out untouched (rule 7): an older WattMatt opening
+ * a newer build's file, recording a winner and saving must not strip the half it
+ * could not read.
+ */
+export function serialiseTournament(
+  tournament: Tournament,
+  appVersion: string,
+  carried: CarriedFields = NO_CARRIED_FIELDS,
+): string {
+  const file = withCarriedFields(toTournamentFile(tournament, appVersion), carried);
+  return `${JSON.stringify(file, null, 2)}\n`;
 }
 
 /**
@@ -142,7 +198,20 @@ export async function createTournamentDocument(
     : { status: 'unwritten', kind: written.status === 'failed' ? written.kind : 'io' };
 }
 
-/** Reads, validates and opens the tournament at `path`. */
+/**
+ * Reads, validates, migrates if it has to, and opens the tournament at `path`
+ * (docs/FILE-FORMAT.md rules 1 and 7).
+ *
+ * The order is the part worth reading. The version is settled *before* the file
+ * is parsed, because a file from an older schema cannot satisfy this build's
+ * schema and would otherwise be reported as corrupt. The safety copy is made
+ * *before* the migration, and the migration itself is pure and in memory — so
+ * the bytes at `path` are still exactly what the host had until they save.
+ *
+ * Nothing here writes to `path`. That is what makes the acceptance criterion
+ * "migration failure never overwrites the original file" structural rather than
+ * a promise: there is no write on this code path at all.
+ */
 export async function openTournamentAt(
   store: TournamentStore,
   deps: PersistenceDeps,
@@ -155,16 +224,39 @@ export async function openTournamentAt(
     return failedOpen(deps, 'unreadable', path);
   }
 
-  const parsed = parseTournamentFile(raw);
-  if (parsed === null) {
+  const json = parseJson(raw);
+  const version = readSchemaVersion(json, deps.schema.version);
+  if (version.status === 'unversioned') {
     return failedOpen(deps, 'invalid', path);
+  }
+  if (version.status === 'tooNew') {
+    // No backup offer: the rotated backups sit beside this file and were
+    // written by the same build, so every one of them is just as unreadable.
+    return { status: 'failed', reason: 'futureVersion', path, backups: [] };
+  }
+
+  if (version.status === 'outdated') {
+    try {
+      await deps.files.backUpForMigration(path, version.version);
+    } catch {
+      // Deliberately fatal. The migrated tournament is autosaved within half a
+      // second of the host's first click, and without this copy the file as the
+      // previous version wrote it is then gone. Refusing to open costs an
+      // evening's inconvenience; going ahead costs the only copy.
+      return failedOpen(deps, 'migrationFailed', path);
+    }
+  }
+
+  const parsed = migrateToTarget(json, deps.schema);
+  if (parsed.status !== 'ok') {
+    return failedOpen(deps, parsed.reason === 'unreadable' ? 'invalid' : 'migrationFailed', path);
   }
 
   // Only now is anything replaced. A file that fails validation is never
   // partially loaded (docs/FILE-FORMAT.md rule 1) — the tournament that was
   // open before is still open, which during an event is the whole point.
-  setOpenedDocument(store, parsed, path);
-  return { status: 'opened', path };
+  setOpenedDocument(store, fromTournamentFile(parsed.file), path, carriedFields(parsed.raw));
+  return { status: 'opened', path, migratedFrom: parsed.migratedFrom };
 }
 
 /** "Turnier öffnen": the native dialog, then the same path as above. */
@@ -302,9 +394,9 @@ async function write(
 ): Promise<SaveOutcome> {
   // Captured before the write, not after: the host keeps clicking while the
   // bytes are in flight, and it is *this* revision that the file will hold.
-  const revision = store.getState().documentRevision;
+  const { documentRevision: revision, carried } = store.getState();
   try {
-    await deps.files.write(path, serialiseTournament(tournament, deps.appVersion));
+    await deps.files.write(path, serialiseTournament(tournament, deps.appVersion, carried));
   } catch (error) {
     return { status: 'failed', path, kind: kindOf(error) };
   }
@@ -313,22 +405,32 @@ async function write(
 }
 
 /**
- * The tournament in a file's bytes, or `null` if it is not one.
+ * The tournament in a file's bytes, or `null` if it is not one at this build's
+ * schema version.
+ *
+ * The straight-through path, for a file that needs no migration: everything the
+ * *migrating* path adds is I/O, and `openTournamentAt` owns it. Kept exported
+ * because "these bytes are a tournament" is a question worth being able to ask
+ * on its own — a recovered backup, a fixture, a file pasted into a test.
  *
  * `JSON.parse` and the schema are one step on purpose: a `JSON.parse` result is
  * never trusted (CLAUDE.md §4), and syntactically valid JSON that is not a
  * tournament is the same problem for the host as a truncated file.
  */
 export function parseTournamentFile(raw: string): Tournament | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  const parsed = migrateTournamentFile(parseJson(raw));
+  return parsed.status === 'ok' && parsed.migratedFrom === null
+    ? fromTournamentFile(parsed.file)
+    : null;
+}
 
-  const parsed = tournamentFileSchema.safeParse(json);
-  return parsed.success ? fromTournamentFile(parsed.data) : null;
+/** `undefined` for bytes that are not JSON — which no file's JSON ever is. */
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 async function failedOpen(

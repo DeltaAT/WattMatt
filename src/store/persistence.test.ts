@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { IDLE_SCENE } from '@/domain/beamerScene';
-import { SCHEMA_VERSION } from '@/domain/schema';
+import type { Migration, SchemaTarget } from '@/domain/migrations';
+import { SCHEMA_VERSION, tournamentFileSchema, type TournamentFileLike } from '@/domain/schema';
 import { group, midTournament, tournament } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import { TournamentFileError } from '@/platform/tournamentFile';
@@ -305,7 +307,7 @@ describe('openTournamentAt', () => {
 
     const outcome = await openTournamentAt(store, deps(files), path);
 
-    expect(outcome).toEqual({ status: 'opened', path });
+    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: null });
     expect(store.getState().document?.name).toBe('Sommerturnier');
     expect(store.getState().file).toEqual({ status: 'saved', path });
   });
@@ -392,7 +394,7 @@ describe('openTournamentWithDialog', () => {
       deps(files, { dialogs: { pickOpen: async () => path, pickSave: async () => null } }),
     );
 
-    expect(outcome).toEqual({ status: 'opened', path });
+    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: null });
   });
 
   it('opens the dialog in the default library', async () => {
@@ -576,7 +578,7 @@ describe('a tournament that changes laptops', () => {
       path,
     );
 
-    expect(outcome).toEqual({ status: 'opened', path });
+    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: null });
     expect(laptopB.getState().document).toEqual(before);
     expect(laptopB.getState().file).toEqual({ status: 'saved', path });
   });
@@ -600,5 +602,269 @@ describe('a tournament that changes laptops', () => {
       1, 2, 3, 4,
     ]);
     expect(reopened.getState().scene).toEqual(IDLE_SCENE);
+  });
+});
+
+/**
+ * Issue #12: schema versioning, the refusal of a newer file, and the fields an
+ * older build has to hand back untouched (docs/FILE-FORMAT.md rule 7).
+ */
+describe('schema versioning', () => {
+  const path = `${LIBRARY}\\Sommer.wattmatt`;
+
+  function v1(extra: Record<string, unknown> = {}): string {
+    const file = {
+      ...(JSON.parse(serialiseTournament(midTournament(), '0.1.0')) as Record<string, unknown>),
+      ...extra,
+    };
+    return `${JSON.stringify(file, null, 2)}\n`;
+  }
+
+  /**
+   * Issue #12 acceptance criterion: a hand-edited file claiming
+   * `schemaVersion: 99` is refused cleanly — a German message, not a throw and
+   * not a half-loaded tournament.
+   */
+  it('refuses a file written by a newer version of WattMatt', async () => {
+    const { store, files } = setup({ [path]: v1({ schemaVersion: 99 }) });
+    const before = store.getState();
+
+    const outcome = await openTournamentAt(store, deps(files), path);
+
+    expect(outcome).toEqual({ status: 'failed', reason: 'futureVersion', path, backups: [] });
+    expect(store.getState()).toBe(before);
+    // Nothing was written, so the file is still openable by the build that
+    // wrote it — which is the only build that can do anything with it.
+    expect(files.disk.get(path)).toBe(v1({ schemaVersion: 99 }));
+  });
+
+  /*
+   * The rotated backups sit beside the file and were written by the same, newer
+   * build. Offering one would walk the host straight into the same refusal.
+   */
+  it('offers no backup for a file from a newer version', async () => {
+    const { store, files } = setup({ [path]: v1({ schemaVersion: 99 }) });
+    files.setBackups([{ path: `${path}.bak1`, suffix: 'bak1', modifiedAt: 1, bytes: 10 }]);
+
+    const outcome = await openTournamentAt(store, deps(files), path);
+
+    expect(outcome).toMatchObject({ reason: 'futureVersion', backups: [] });
+  });
+
+  it('opens a file that carries fields this build has never heard of', async () => {
+    const { store, files } = setup({ [path]: v1({ namingDone: true }) });
+
+    const outcome = await openTournamentAt(store, deps(files), path);
+
+    expect(outcome).toMatchObject({ status: 'opened', migratedFrom: null });
+    expect(store.getState().document?.name).toBe('Sommerturnier');
+    // The tournament itself stays clean: nothing in `src/domain` has to cope
+    // with a field it cannot type.
+    expect(store.getState().document).not.toHaveProperty('namingDone');
+    expect(store.getState().carried).toEqual({ namingDone: true });
+  });
+
+  /**
+   * The point of the whole exercise: an older WattMatt opening a newer build's
+   * file, recording a result and saving must not strip the half it could not
+   * read (docs/FILE-FORMAT.md rule 7).
+   */
+  it('writes the unknown fields back out on the next save', async () => {
+    const { store, files } = setup({ [path]: v1({ namingDone: true, sponsors: ['Raiffeisen'] }) });
+    await openTournamentAt(store, deps(files), path);
+
+    store.commit((state) => ({
+      document: state.document === null ? null : { ...state.document, name: 'Sommerturnier neu' },
+    }));
+    expect(await saveTournament(store, deps(files))).toEqual({ status: 'saved', path });
+
+    const written = JSON.parse(files.disk.get(path) ?? '') as Record<string, unknown>;
+    expect(written['namingDone']).toBe(true);
+    expect(written['sponsors']).toEqual(['Raiffeisen']);
+    expect(written['name']).toBe('Sommerturnier neu');
+  });
+
+  it('does not carry the unknown fields of one file into the next tournament', async () => {
+    const plain = `${LIBRARY}\\Plain.wattmatt`;
+    const { store, files } = setup({ [path]: v1({ namingDone: true }), [plain]: v1() });
+    await openTournamentAt(store, deps(files), path);
+
+    await openTournamentAt(store, deps(files), plain);
+    await saveTournament(store, deps(files));
+
+    expect(store.getState().carried).toEqual({});
+    expect(JSON.parse(files.disk.get(plain) ?? '')).not.toHaveProperty('namingDone');
+  });
+
+  it('does not carry unknown fields into a newly created tournament', async () => {
+    const { store, files } = setup({ [path]: v1({ namingDone: true }) });
+    await openTournamentAt(store, deps(files), path);
+
+    const created = await createTournamentDocument(store, deps(files), { name: 'Neu' });
+
+    expect(created).toMatchObject({ status: 'created' });
+    expect(store.getState().carried).toEqual({});
+    const written = JSON.parse(
+      files.disk.get(created.status === 'created' ? created.path : '') ?? 'null',
+    ) as Record<string, unknown>;
+    expect(written).not.toHaveProperty('namingDone');
+  });
+
+  /**
+   * `carried` is deliberately outside `UndoDocument` (issue #11): it belongs to
+   * the file, not to a decision inside the tournament, and nothing the host can
+   * do changes it. That reasoning is only worth anything if taking a decision
+   * back does not quietly drop the fields on the way — an undo mid-event
+   * followed by the autosave 500 ms later is exactly when it would happen, and
+   * the file would come back stripped with nobody having done anything wrong.
+   */
+  it('keeps the unknown fields through an undo and a redo', async () => {
+    const { store, files } = setup({ [path]: v1({ namingDone: true }) });
+    await openTournamentAt(store, deps(files), path);
+    store.commit(
+      (state) => ({
+        document: state.document === null ? null : { ...state.document, rngCursor: 99 },
+      }),
+      { undoLabel: 'Sieger festgelegt', log: { action: 'MATCH_WINNER_SET', payload: {} } },
+    );
+
+    expect(store.undo()).toBe(true);
+    expect(store.getState().carried).toEqual({ namingDone: true });
+    await saveTournament(store, deps(files));
+    expect(JSON.parse(files.disk.get(path) ?? 'null')).toMatchObject({ namingDone: true });
+
+    expect(store.redo()).toBe(true);
+    await saveTournament(store, deps(files));
+    expect(JSON.parse(files.disk.get(path) ?? 'null')).toMatchObject({
+      namingDone: true,
+      rngCursor: 99,
+    });
+  });
+});
+
+/**
+ * Issue #12, the half that has no released version to exercise it yet.
+ *
+ * v1 is the only `schemaVersion` that has ever existed, so through the real
+ * `CURRENT_SCHEMA` no file can be *outdated* and the whole migrating branch —
+ * the safety copy, the chain, the refusals — would first run on a host's
+ * laptop. `deps.schema` is injected for exactly this: the target below is what
+ * the tree looks like one `SCHEMA_VERSION` bump later.
+ *
+ * Only the reading half is simulated. `serialiseTournament` still writes the
+ * version this build ships, which is correct today and correct again after the
+ * bump, and is why none of these tests asserts on written bytes beyond "the
+ * original is untouched".
+ */
+describe('opening a file from an older schema', () => {
+  const path = `${LIBRARY}\\Sommer.wattmatt`;
+
+  const v2Schema = tournamentFileSchema.extend({ schemaVersion: z.literal(2) });
+
+  /** A version bump with no shape change — the smallest real migration there is. */
+  const v1ToV2: Migration = { from: 1, to: 2, migrate: (file) => file };
+
+  function v2Target(migrations: readonly Migration[] = [v1ToV2]): SchemaTarget<TournamentFileLike> {
+    return { version: 2, schema: v2Schema, migrations };
+  }
+
+  function setupV1() {
+    const files = fakeFiles({ [path]: serialiseTournament(midTournament(), '0.1.0') });
+    return { store: createTournamentStore(), files, original: files.disk.get(path) };
+  }
+
+  it('migrates it and says which version it came from', async () => {
+    const { store, files } = setupV1();
+
+    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+
+    expect(outcome).toEqual({ status: 'opened', path, migratedFrom: 1 });
+    expect(store.getState().document).toEqual(midTournament());
+    expect(store.getState().file).toEqual({ status: 'saved', path });
+  });
+
+  /**
+   * Issue #12 task: back up the original file before migrating. The copy is
+   * what the host still has after the first autosave has rewritten the file in
+   * the new format, half a second after their first click.
+   */
+  it('copies the original aside first, and leaves the file itself alone', async () => {
+    const { store, files, original } = setupV1();
+
+    await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+
+    expect(files.migrationBackups.get(path)).toBe(`${path}.v1.bak`);
+    expect(files.disk.get(`${path}.v1.bak`)).toBe(original);
+    // Opening writes nothing: the tournament on disk is still the v1 file.
+    expect(files.disk.get(path)).toBe(original);
+    expect(files.writes).toEqual([]);
+  });
+
+  /**
+   * Fatal on purpose. Without the copy, the autosave that follows the host's
+   * first click is the moment the file as v1 wrote it stops existing.
+   */
+  it('refuses to open when the safety copy cannot be made', async () => {
+    const { store, files, original } = setupV1();
+    files.failMigrationBackup(new TournamentFileError('permissionDenied', 'read-only', path));
+    const before = store.getState();
+
+    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target() }), path);
+
+    expect(outcome).toMatchObject({ status: 'failed', reason: 'migrationFailed', path });
+    expect(store.getState()).toBe(before);
+    expect(files.disk.get(path)).toBe(original);
+  });
+
+  /*
+   * Issue #12 acceptance criterion: migration failure never overwrites the
+   * original file. Both failures below are checked against the bytes on disk,
+   * not against the absence of a write call, because "we did not mean to write"
+   * is not evidence.
+   */
+  it('refuses cleanly when no migration reaches the current version', async () => {
+    const { store, files, original } = setupV1();
+
+    const outcome = await openTournamentAt(store, deps(files, { schema: v2Target([]) }), path);
+
+    expect(outcome).toMatchObject({ status: 'failed', reason: 'migrationFailed', path });
+    expect(store.getState().document).toBeNull();
+    expect(files.disk.get(path)).toBe(original);
+  });
+
+  it('refuses cleanly when a migration step throws', async () => {
+    const { store, files, original } = setupV1();
+    const throwing: Migration = {
+      from: 1,
+      to: 2,
+      migrate: () => {
+        throw new Error('v2 needs a field this file never had');
+      },
+    };
+
+    const outcome = await openTournamentAt(
+      store,
+      deps(files, { schema: v2Target([throwing]) }),
+      path,
+    );
+
+    expect(outcome).toMatchObject({ status: 'failed', reason: 'migrationFailed', path });
+    expect(files.disk.get(path)).toBe(original);
+    // The copy was already made: the backup comes before the migration, so a
+    // step that fails still leaves the host with the file they started from.
+    expect(files.disk.get(`${path}.v1.bak`)).toBe(original);
+  });
+
+  it('leaves the tournament that was already open alone', async () => {
+    const { store, files } = setupV1();
+    const other = `${LIBRARY}\\Andere.wattmatt`;
+    files.disk.set(other, serialiseTournament(tournament({ name: 'Andere' }), '0.1.0'));
+    await openTournamentAt(store, deps(files), other);
+    const before = store.getState().document;
+
+    await openTournamentAt(store, deps(files, { schema: v2Target([]) }), path);
+
+    expect(store.getState().document).toBe(before);
+    expect(store.getState().file).toEqual({ status: 'saved', path: other });
   });
 });

@@ -162,6 +162,20 @@ fn backup_path(path: &Path, suffix: &str) -> PathBuf {
     path.with_file_name(name)
 }
 
+/// `name.wattmatt` becomes `name.wattmatt.v1.bak`, the copy kept before a
+/// migration (docs/FILE-FORMAT.md rule 7).
+///
+/// Deliberately outside the `bak1`…`bak3` chain. That chain rotates on every
+/// save and during a busy round it covers minutes, so a migrated tournament
+/// would have pushed its own pre-migration state off the end long before anyone
+/// wanted it back. This copy is made once, named after the version it holds,
+/// and nothing ever rotates it away.
+fn migration_backup_path(path: &Path, version: u32) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".v{version}.bak"));
+    path.with_file_name(name)
+}
+
 /// Milliseconds since the epoch, or `None` where the platform has no answer.
 /// A missing timestamp hides a date from the list; it never hides a tournament.
 fn modified_at(metadata: &fs::Metadata) -> Option<u64> {
@@ -287,6 +301,41 @@ pub fn rotate_backups(path: &Path) {
     let _ = fs::copy(path, backup_path(path, BACKUP_SUFFIXES[0]));
 }
 
+/// Copies a tournament aside before it is migrated to a newer schema
+/// (docs/FILE-FORMAT.md rule 7, issue #12).
+///
+/// A copy, never a move: the tournament has to stay at the path the host knows,
+/// and the migration itself happens in memory in the frontend — the file on
+/// disk is still the original when this returns, and stays that way until the
+/// first save.
+///
+/// An existing copy is left exactly as it is and its path returned. The first
+/// one is the true original; a second open of the same file would otherwise
+/// overwrite it with whatever the previous session left behind, which is the
+/// one thing the copy exists to prevent.
+///
+/// Unlike [`rotate_backups`] this is *not* best effort. Rotation failing costs
+/// a recovery point the host still has three of; failing here means a file is
+/// about to be reinterpreted with no copy of what it said before, and the
+/// frontend refuses to open it rather than take that quietly.
+pub fn back_up_before_migration(path: &Path, version: u32) -> Result<String> {
+    if !path.is_file() {
+        return Err(FileError::new(
+            FileErrorKind::NotFound,
+            "nothing to back up at this path",
+            Some(path),
+        ));
+    }
+
+    let target = migration_backup_path(path, version);
+    if target.exists() {
+        return Ok(target.to_string_lossy().into_owned());
+    }
+
+    fs::copy(path, &target).map_err(|error| FileError::from_io(&error, &target))?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
 // ---------------------------------------------------------------------------
 // Listing
 // ---------------------------------------------------------------------------
@@ -401,6 +450,11 @@ pub fn list_tournaments() -> Result<Vec<TournamentEntry>> {
 #[tauri::command]
 pub fn list_backups(path: String) -> Result<Vec<BackupEntry>> {
     Ok(list_backups_of(Path::new(&path)))
+}
+
+#[tauri::command]
+pub fn backup_before_migration(path: String, version: u32) -> Result<String> {
+    back_up_before_migration(Path::new(&path), version)
 }
 
 #[cfg(test)]
@@ -779,6 +833,76 @@ mod tests {
         save_tournament(&path, "{}").expect("write");
 
         assert!(list_backups_of(&path).is_empty());
+    }
+
+    #[test]
+    fn a_pre_migration_backup_copies_the_original_and_leaves_it_in_place() {
+        let dir = TempDir::new("migration-backup");
+        let path = dir.join("Vereinsturnier.wattmatt");
+        save_tournament(&path, "{\"schemaVersion\": 1}").expect("write");
+
+        let backup = back_up_before_migration(&path, 1).expect("back up");
+
+        assert_eq!(backup, migration_backup_path(&path, 1).to_string_lossy());
+        assert_eq!(
+            read_file(Path::new(&backup)).expect("read backup"),
+            "{\"schemaVersion\": 1}"
+        );
+        // A copy, not a move: the tournament is still where the host left it.
+        assert_eq!(
+            read_file(&path).expect("read original"),
+            "{\"schemaVersion\": 1}"
+        );
+    }
+
+    #[test]
+    fn a_pre_migration_backup_never_overwrites_an_existing_one() {
+        let dir = TempDir::new("migration-backup-twice");
+        let path = dir.join("t.wattmatt");
+        save_tournament(&path, "the original v1 file").expect("write");
+        back_up_before_migration(&path, 1).expect("first backup");
+
+        // The host opened it, it was migrated, it was saved, and they opened it
+        // again. The copy has to still be the file as v1 wrote it.
+        save_tournament(&path, "migrated and saved since").expect("second write");
+        let backup = back_up_before_migration(&path, 1).expect("second backup");
+
+        assert_eq!(
+            read_file(Path::new(&backup)).expect("read backup"),
+            "the original v1 file"
+        );
+    }
+
+    #[test]
+    fn a_pre_migration_backup_of_a_file_that_is_not_there_fails() {
+        let dir = TempDir::new("migration-backup-missing");
+
+        let failed = back_up_before_migration(&dir.join("gone.wattmatt"), 1);
+
+        assert_eq!(
+            failed.expect_err("should fail").kind,
+            FileErrorKind::NotFound
+        );
+    }
+
+    #[test]
+    fn a_pre_migration_backup_is_not_a_tournament_and_not_a_rotated_one() {
+        let dir = TempDir::new("migration-backup-listing");
+        let path = dir.join("t.wattmatt");
+        save_tournament(&path, "{}").expect("write");
+        back_up_before_migration(&path, 1).expect("back up");
+
+        // It must not show up in the library, or the host is offered a file
+        // this build cannot open; and it must not be rotated away by saves.
+        let listed = list_directory(&dir.0).expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].file_name, "t.wattmatt");
+        assert!(list_backups_of(&path).is_empty());
+
+        for _ in 0..5 {
+            save_tournament(&path, "another round").expect("write");
+        }
+        assert!(migration_backup_path(&path, 1).is_file());
     }
 
     #[test]
