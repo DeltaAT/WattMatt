@@ -9,6 +9,7 @@ laptop, continue. No hidden state outside the file except UI preferences.
 | --- | --- |
 | Default library | `%APPDATA%/WattMatt/tournaments/` |
 | Backups | next to the file: `name.wattmatt.bak1` … `.bak3` |
+| Session marker | `%APPDATA%/WattMatt/session.json` (never tournament data) |
 | Logs | `%APPDATA%/WattMatt/logs/` |
 | UI preferences | `%APPDATA%/WattMatt/settings.json` (never tournament data) |
 
@@ -108,22 +109,54 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
 ## Rules
 
-Rules 1 and 2 are live as of issue #9: `src-tauri/src/fs.rs` does the temp-file-fsync-rename
-dance and `src/store/persistence.ts` refuses a file that does not parse, offering the newest
-backup instead. Rules 3, 4 and 5 belong to issue #10 — #9 only *finds* backups, it never writes
-one. Rule 7 is issue #12's: it is listed as a task on #9, and moving it is recorded on that issue
-and in docs/OPEN-QUESTIONS.md #27 rather than decided here.
+Rules 1 to 5 are live. #9 landed the atomic write and the "open a backup instead" answer;
+#10 landed the rotation, the debounced autosave and the crash recovery. Rule 7 is issue #12's:
+it is listed as a task on #9, and moving it is recorded on that issue and in
+docs/OPEN-QUESTIONS.md #27 rather than decided here.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.
 2. **Atomic writes.** Write to `name.wattmatt.tmp`, `fsync`, then rename over the target.
    A power cut must never produce a truncated tournament.
 3. **Rotate backups.** Before each save, shift `.bak2 → .bak3`, `.bak1 → .bak2`,
-   current → `.bak1`.
+   current → `.bak1` (`rotate_backups` in `src-tauri/src/fs.rs`, called by the
+   `write_tournament` command so an autosave and an explicit *Speichern* behave identically).
+
+   Three details are load-bearing. The chain is walked **oldest first**, or `bak1` lands on a
+   `bak2` that has not moved yet and three recovery points collapse into one. The last step is
+   a **copy, not a rename**: a rename would leave the tournament with no file at its own path
+   for the length of the write that follows.
+
+   And the rotation happens **between the temp write and the rename**, not before both. A save
+   that fails, fails while writing the temp file — so putting the rotation after it means a
+   failed save spends nothing. Rotating first would push `bak3` off the end on every failed
+   attempt: three tries onto a full disk and the chain is three copies of the file already on
+   disk, exactly when the depth is needed.
+
 4. **Autosave** is debounced at 500 ms after the last committed action, and forced
-   immediately on round close, phase change and app exit.
-5. **Recovery.** On startup, if the last session did not exit cleanly, offer to reopen the
-   last tournament at its last autosaved state.
+   immediately on round close, phase change, window close and app exit
+   (`src/store/autosave.ts`). It hangs off `TournamentStore.commit`, so an action added by a
+   later issue is autosaved by construction. An "urgent" commit
+   (`commit(mutate, { urgent: true })`) is what skips the debounce — the call sites for round
+   close and phase change arrive with those issues.
+
+   Autosave never opens a dialog. A tournament whose first write failed has no path, and the
+   host is offered *Speichern unter…* through the `notWritten` notice instead: a native save
+   dialog appearing half a second after the host stopped typing would take the machine away
+   from them mid-event (CLAUDE.md golden rule 3).
+
+   A write that fails leaves the tournament `modified` and raises a warning the host cannot
+   dismiss, which clears itself when a write succeeds. It also **tries again by itself** after
+   `AUTOSAVE_RETRY_MS`, so a host who pushes the USB stick back in between rounds does not
+   have to click anything for the tournament to be written. A tournament that changed *while*
+   the bytes were in flight also stays `modified`: the file holds the `documentRevision` that
+   was serialised, not the one the host has now.
+
+5. **Recovery.** `%APPDATA%/WattMatt/session.json` is written when the app starts and deleted
+   when it exits cleanly (`src-tauri/src/session.rs`), and it records which tournament the
+   session was autosaving. A marker still present at the next start is therefore the evidence
+   that the last run was killed, and the host is offered that tournament by name. The marker
+   carries a path and a start time and nothing else — the tournament's own file is the state.
 6. **`log` is append-only** and is what makes a draw auditable. It is not used to rebuild
    state — the snapshot fields are authoritative. Undo works on an in-memory snapshot stack.
 7. **Migrations.** Bump `schemaVersion` on any breaking change and add a migration in

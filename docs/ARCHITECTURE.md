@@ -74,6 +74,8 @@ component → action → domain function (pure) → store commit
                                                  └─▶ debounced autosave → Rust → disk
 ```
 
+The autosave leg is `store/autosave.ts`; see §6 "Saving, and being told about it".
+
 - The beamer window subscribes to `state:snapshot` and to `beamer:scene`. It keeps a local
   copy purely for rendering and never writes back.
 - On beamer startup it requests `state:request-snapshot`, so a restarted beamer immediately
@@ -165,8 +167,9 @@ src/
     syncContract.ts    the typed event contract between the windows
     heartbeat.ts       beamer liveness
     session.ts         the one store each window owns
-    persistence.ts     new / open / save / save-as, and autosave orchestration
+    persistence.ts     new / open / save / save-as, and the one autosave write
     persistenceRuntime.ts  the real file and dialog dependencies, wired once
+    autosave.ts        the 500 ms debounce, forced saves, and what the host is shown
   platform/
     tauri.ts           the IPC boundary: invoke + listen, every payload Zod-parsed
     windowSync.ts      the Tauri transport behind sync.ts
@@ -174,6 +177,7 @@ src/
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
     tournamentFile.ts  read/write/list files, and the native open/save dialogs
     clock.ts           the wall clock the domain is not allowed to read
+    session.ts         the crash marker: what the last run left behind
     seed.ts            crypto.getRandomValues — the one non-deterministic step
     id.ts              the tournament id, from the same entropy source
   windows/
@@ -189,7 +193,8 @@ src/
     format.ts          date/time via Intl, locale `de-AT`
 src-tauri/src/
   main.rs
-  fs.rs                atomic write, the tournament library, backup discovery
+  fs.rs                atomic write, backup rotation, the tournament library
+  session.rs           the session marker that turns a crash into a recovery offer
   windows.rs           monitor enumeration, window placement
   power.rs             holds off sleep and the screensaver during an event
   logging.rs           rolling log file
@@ -242,6 +247,33 @@ expressible, and the thing the compiler checks against is the same thing that pa
 the boundary.
 
 ## 6. Error handling
+
+### Saving, and being told about it
+
+Every commit that leaves the tournament ahead of its file schedules a write 500 ms later
+(`store/autosave.ts`). It hangs off `commit` for the same reason the beamer broadcast does:
+an action added by a later issue is autosaved by construction, and there is no call for its
+author to forget. An action that must not wait passes `{ urgent: true }` and the debounce is
+skipped — round close and phase change, per docs/FILE-FORMAT.md rule 4.
+
+Two consequences are easy to miss and both are deliberate.
+
+**The window's close button is always intercepted**, even with nothing unsaved. The close has
+to flush the pending write and clear the session marker before the process goes; letting Tauri
+close the window straight away would lose up to half a second of a live event and would greet
+the next start with a recovery offer for a tournament nothing happened to.
+
+**A save only marks the file clean if the tournament has not moved on.** The write is
+asynchronous and, at a 500 ms cadence, most writes overlap the host's next click. The writer
+captures `documentRevision`; if the store has passed it by the time the bytes land, the file
+stays `modified` and the write that is already scheduled catches up. Reporting otherwise would
+tell the host a result is safe when it is not in the bytes on disk.
+
+`documentRevision` is a second counter beside `revision`, and the difference is the point.
+`revision` moves for everything a commit does, including staging a beamer scene or taking
+manual control — none of which a `.wattmatt` file contains. Keying the file state on it would
+mark a perfectly current file unsaved because the host pressed a beamer button mid-write, and
+charge them a redundant write and a backup rotation for it every time.
 
 - Rust returns typed errors; the frontend maps them to German messages from `de-AT.ts`.
 - Any unexpected exception shows a non-blocking German error toast **and** writes to the

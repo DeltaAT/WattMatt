@@ -43,14 +43,32 @@ export const deAT = {
     saveAs: 'Speichern unter…',
     close: 'Turnier schließen',
 
-    /** The discreet state line beside the buttons; issue #10 adds the time. */
+    /**
+     * The discreet state line beside the buttons (issue #10). A word and a time,
+     * never a modal: the host has to be able to answer "is this on disk?" from
+     * across the room while doing something else.
+     */
     stateSaved: 'Gespeichert',
+    stateSavedAt: (params: { time: string }) => `Gespeichert ${params.time}`,
+    stateSaving: 'Wird gespeichert…',
     stateModified: 'Nicht gespeichert',
     stateUnwritten: 'Noch nicht auf der Festplatte',
 
     /** Offered next to a file that could not be read (docs/FILE-FORMAT.md rule 1). */
     openBackup: 'Letzte Sicherung öffnen',
     noBackup: 'Es ist keine Sicherung vorhanden.',
+
+    /**
+     * Offered when the last session did not exit cleanly (docs/FILE-FORMAT.md
+     * rule 5). An offer, not an error: nothing is broken, there is simply a
+     * tournament waiting where the host left it.
+     */
+    recovery: {
+      title: 'Turnier wiederherstellen',
+      body: (params: { name: string; at: string }) =>
+        `WattMatt wurde am ${params.at} nicht ordentlich beendet. Das Turnier „${params.name}“ kann im zuletzt gespeicherten Stand geöffnet werden.`,
+      open: 'Turnier öffnen',
+    },
 
     unsaved: {
       title: 'Ungespeicherte Änderungen',
@@ -91,6 +109,8 @@ export const deAT = {
       'Die Turnierdatei ist an diesem Ort nicht mehr vorhanden. Prüfen Sie, ob der Datenträger noch angesteckt ist.',
     fileLocked:
       'Auf die Turnierdatei darf nicht zugegriffen werden. Schließen Sie andere Programme, die sie geöffnet haben.',
+    autosaveFailed:
+      'Das Turnier wird gerade nicht automatisch gespeichert. Wählen Sie über „Speichern unter…“ einen anderen Speicherort.',
   },
 
   tournament: {

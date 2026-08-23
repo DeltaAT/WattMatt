@@ -4,6 +4,7 @@ import { de } from '@/i18n';
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
+import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TournamentBar } from '@/windows/host/TournamentBar';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
@@ -38,6 +39,7 @@ export function HostWindow() {
           <TournamentBar
             name={tournament.name}
             file={document.state.file}
+            autosave={document.autosave}
             busy={document.busy}
             onSave={document.save}
             onSaveAs={document.saveAs}
@@ -50,7 +52,22 @@ export function HostWindow() {
             notice={document.notice}
             busy={document.busy}
             onOpenBackup={document.openAt}
+            onSaveAs={document.saveAs}
             onDismiss={document.dismissNotice}
+          />
+        )}
+
+        {/*
+          Below the failures, above everything else: a crash recovery is an
+          offer the host acts on once, and it must not sit on top of a message
+          telling them the disk is not writable right now.
+        */}
+        {document.recovery === null ? null : (
+          <RecoveryNotice
+            offer={document.recovery}
+            busy={document.busy}
+            onRecover={document.recover}
+            onDecline={document.declineRecovery}
           />
         )}
 

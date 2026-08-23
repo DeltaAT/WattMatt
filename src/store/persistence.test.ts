@@ -7,6 +7,7 @@ import type { Tournament } from '@/domain/types';
 import { TournamentFileError } from '@/platform/tournamentFile';
 import { setOpenedDocument } from '@/store/actions/document';
 import {
+  autosaveTournament,
   createTournamentDocument,
   openTournamentAt,
   openTournamentWithDialog,
@@ -18,6 +19,8 @@ import {
 } from '@/store/persistence';
 import { fakeDeps as deps, fakeFiles, LIBRARY } from '@/store/testFixtures';
 import { createTournamentStore, type TournamentStore } from '@/store/tournamentStore';
+
+const PATH = `${LIBRARY}\\Sommer.wattmatt`;
 
 function setup(initial: Record<string, string> = {}) {
   return { store: createTournamentStore(), files: fakeFiles(initial) };
@@ -98,6 +101,114 @@ describe('serialiseTournament / parseTournamentFile', () => {
     const damaged = raw.replace('"status": "ACTIVE"', '"status": "GEWONNEN"');
 
     expect(parseTournamentFile(damaged)).toBeNull();
+  });
+});
+
+describe('autosaveTournament', () => {
+  it('writes the open tournament back to its own file, with no host involved', async () => {
+    const { store, files } = setup({ [PATH]: '{}' });
+    setOpenedDocument(store, midTournament(), PATH);
+    store.commit((state) => ({
+      document: state.document === null ? null : { ...state.document, rngCursor: 18 },
+    }));
+
+    const outcome = await autosaveTournament(store, deps(files));
+
+    expect(outcome).toEqual({ status: 'saved', path: PATH });
+    expect(JSON.parse(files.disk.get(PATH) ?? '{}')).toMatchObject({ rngCursor: 18 });
+    expect(store.getState().file).toEqual({ status: 'saved', path: PATH });
+  });
+
+  it('does nothing when the file on disk is already the tournament in memory', async () => {
+    const { store, files } = setup({ [PATH]: '{}' });
+    setOpenedDocument(store, midTournament(), PATH);
+
+    const outcome = await autosaveTournament(store, deps(files));
+
+    expect(outcome).toEqual({ status: 'skipped' });
+    expect(files.writes).toEqual([]);
+  });
+
+  it('does nothing at all with no tournament open', async () => {
+    const { store, files } = setup();
+
+    await expect(autosaveTournament(store, deps(files))).resolves.toEqual({ status: 'skipped' });
+  });
+
+  /**
+   * The first write of a new tournament can fail, leaving it with no path. An
+   * autosave that fell through to "Speichern unter…" would open a native dialog
+   * half a second after the host stopped typing — the machine taken away from
+   * them mid-sentence (CLAUDE.md golden rule 3).
+   */
+  it('never opens a dialog for a tournament that has no file', async () => {
+    const { store, files } = setup();
+    let dialogs = 0;
+    const withDialog = deps(files, {
+      dialogs: {
+        pickOpen: async () => null,
+        pickSave: async () => {
+          dialogs += 1;
+          return `${LIBRARY}\\Neu.wattmatt`;
+        },
+      },
+    });
+    files.failWrite(new TournamentFileError('permissionDenied', 'read only', null));
+    await createTournamentDocument(store, withDialog, { name: 'Vereinsturnier' });
+    files.failWrite(null);
+
+    const outcome = await autosaveTournament(store, withDialog);
+
+    expect(outcome).toEqual({ status: 'skipped' });
+    expect(dialogs).toBe(0);
+    expect(files.writes).toEqual([]);
+  });
+
+  /**
+   * The issue's edge case: the tournament is on a USB stick that gets pulled
+   * out mid-event. The typed variant is what the host's German message is
+   * chosen from (docs/ARCHITECTURE.md §6), so it has to survive.
+   */
+  it('reports a failed write with the reason, and leaves the tournament dirty', async () => {
+    const { store, files } = setup({ [PATH]: '{}' });
+    setOpenedDocument(store, midTournament(), PATH);
+    store.commit((state) => ({
+      document: state.document === null ? null : { ...state.document, rngCursor: 18 },
+    }));
+    files.failWrite(new TournamentFileError('notFound', 'the stick is gone', PATH));
+
+    const outcome = await autosaveTournament(store, deps(files));
+
+    expect(outcome).toEqual({ status: 'failed', path: PATH, kind: 'notFound' });
+    expect(store.getState().file).toEqual({ status: 'modified', path: PATH });
+  });
+});
+
+describe('a save that the host overtook', () => {
+  /**
+   * The write is asynchronous, and at the 500 ms autosave cadence most writes
+   * overlap the host's next decision. Reporting the file as clean afterwards
+   * would tell them a result is safe when it is not in the bytes on disk.
+   */
+  it('leaves the tournament modified when it changed while the bytes were in flight', async () => {
+    const { store, files } = setup({ [PATH]: '{}' });
+    setOpenedDocument(store, midTournament(), PATH);
+    store.commit((state) => ({
+      document: state.document === null ? null : { ...state.document, rngCursor: 18 },
+    }));
+
+    const release = files.blockWrites();
+    const saving = autosaveTournament(store, deps(files));
+    // The host decides something else while the write is open.
+    store.commit((state) => ({
+      document: state.document === null ? null : { ...state.document, rngCursor: 19 },
+    }));
+    release();
+    await saving;
+
+    expect(store.getState().file).toEqual({ status: 'modified', path: PATH });
+    // What landed is what was serialised, not what the host has now.
+    expect(JSON.parse(files.disk.get(PATH) ?? '{}')).toMatchObject({ rngCursor: 18 });
   });
 });
 

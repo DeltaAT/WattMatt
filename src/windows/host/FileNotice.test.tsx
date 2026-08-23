@@ -17,7 +17,13 @@ const BACKUP: BackupEntry = {
 
 function render(notice: Notice): string {
   return renderToStaticMarkup(
-    <FileNotice notice={notice} busy={false} onOpenBackup={() => {}} onDismiss={() => {}} />,
+    <FileNotice
+      notice={notice}
+      busy={false}
+      onOpenBackup={() => {}}
+      onSaveAs={() => {}}
+      onDismiss={() => {}}
+    />,
   );
 }
 
@@ -89,5 +95,49 @@ describe('FileNotice', () => {
 
   it('is an alert, so it is announced rather than merely drawn', () => {
     expect(render({ kind: 'saveFailed', errorKind: 'io' })).toContain('role="alert"');
+  });
+
+  /**
+   * Issue #10's edge case: "disk full / file locked → warn loudly and offer
+   * Speichern unter…". A message with no way out is a message the host can only
+   * read.
+   */
+  it('offers "Speichern unter…" for everything that could not be written', () => {
+    expect(render({ kind: 'saveFailed', errorKind: 'io' })).toContain(de.file.saveAs);
+    expect(render({ kind: 'notWritten', errorKind: 'permissionDenied' })).toContain(de.file.saveAs);
+    expect(render({ kind: 'autosaveFailed', errorKind: 'io' })).toContain(de.file.saveAs);
+  });
+
+  it('does not offer to relocate a file that could not be read', () => {
+    const markup = render({ kind: 'openFailed', reason: 'invalid', path: PATH, backups: [] });
+
+    expect(markup).not.toContain(de.file.saveAs);
+  });
+
+  /**
+   * The one notice with no dismiss button. It reports a condition that is still
+   * true while the host reads it, and hiding it would mean running the rest of
+   * the event with nothing being written (issue #10, "never a silent no-op").
+   */
+  it('cannot be dismissed while the autosave is broken', () => {
+    const markup = render({ kind: 'autosaveFailed', errorKind: 'io' });
+
+    expect(markup).toContain(de.error.autosaveFailed);
+    expect(markup).not.toContain(de.common.dismiss);
+  });
+
+  /**
+   * A pulled USB stick is a pulled USB stick whether the host clicked save or
+   * not — the named causes stay, and only the fallback advice changes, because
+   * "versuchen Sie es erneut" is advice about a button nobody pressed.
+   */
+  it('names the cause of a failed autosave when there is a named one', () => {
+    expect(render({ kind: 'autosaveFailed', errorKind: 'notFound' })).toContain(
+      de.error.fileMissing,
+    );
+    expect(render({ kind: 'autosaveFailed', errorKind: 'permissionDenied' })).toContain(
+      de.error.fileLocked,
+    );
+    expect(render({ kind: 'autosaveFailed', errorKind: 'io' })).not.toContain(de.error.saveFailed);
   });
 });

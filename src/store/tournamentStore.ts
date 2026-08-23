@@ -53,6 +53,17 @@ export interface TournamentState {
    * uses it to know whether there is anything to autosave.
    */
   revision: number;
+  /**
+   * Bumped only by a commit that replaced the tournament itself.
+   *
+   * Separate from `revision` because a save has to know whether the *file* is
+   * still current, and `revision` moves for things a file does not contain —
+   * staging a beamer scene, taking manual control. Comparing `revision` would
+   * leave a tournament marked unsaved because the host clicked a beamer button
+   * while the bytes were in flight, and cost a redundant write and a rotation
+   * every time they did (issue #10).
+   */
+  documentRevision: number;
   scene: BeamerScene;
   autoFollow: boolean;
   /**
@@ -73,6 +84,7 @@ export interface TournamentState {
 
 export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   revision: 0,
+  documentRevision: 0,
   scene: IDLE_SCENE,
   autoFollow: true,
   document: null,
@@ -83,6 +95,25 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
 /** Whether the tournament in memory has moved on from the one on disk. */
 export function hasUnsavedChanges(state: TournamentState): boolean {
   return state.document !== null && state.file.status !== 'saved';
+}
+
+/**
+ * How a commit is to be treated by the layers listening to it.
+ *
+ * Passed by the action rather than inferred, because "this one must be on disk
+ * before the next thing happens" is a statement about the tournament — closing
+ * a round, changing phase — and nothing downstream can work that out from the
+ * state alone (docs/FILE-FORMAT.md rule 4).
+ */
+export interface CommitOptions {
+  /**
+   * Skip the autosave debounce and write now.
+   *
+   * For the moments the host would not survive losing: a round closing, a phase
+   * changing. Everything else waits the 500 ms, so a burst of clicks is one
+   * write rather than ten.
+   */
+  urgent?: boolean;
 }
 
 /** What a commit touched, reported to whoever is listening. */
@@ -96,6 +127,8 @@ export interface CommitMeta {
    * down the light channel and losing the data silently.
    */
   touchedTournament: boolean;
+  /** The action asked for an immediate save (see [`CommitOptions`]). */
+  urgent: boolean;
 }
 
 export type CommitListener = (state: TournamentState, meta: CommitMeta) => void;
@@ -115,7 +148,10 @@ export interface TournamentStore {
   subscribe(listener: (state: TournamentState) => void): () => void;
   /** For the sync and persistence layers, which need to know what changed. */
   onCommit(listener: CommitListener): () => void;
-  commit(mutate: (state: TournamentState) => Partial<TournamentState>): void;
+  commit(
+    mutate: (state: TournamentState) => Partial<TournamentState>,
+    options?: CommitOptions,
+  ): void;
 }
 
 export function createTournamentStore(
@@ -143,7 +179,7 @@ export function createTournamentStore(
      * nothing observable happened" is a bug report during an event; a redundant
      * snapshot is a few hundred KB.
      */
-    commit: (mutate) => {
+    commit: (mutate, options) => {
       const current = store.getState();
       const partial = mutate(current);
       const next: TournamentState = { ...current, ...partial, revision: current.revision + 1 };
@@ -155,6 +191,7 @@ export function createTournamentStore(
       const touchedDocument = 'document' in partial;
       if (touchedDocument) {
         next.tournament = next.document ? toTournamentSnapshot(next.document) : EMPTY_TOURNAMENT;
+        next.documentRevision = current.documentRevision + 1;
       }
 
       // Same reasoning for the dirty flag: an action that changed the
@@ -167,7 +204,10 @@ export function createTournamentStore(
 
       store.setState(next, true);
 
-      const meta: CommitMeta = { touchedTournament: touchedDocument || 'tournament' in partial };
+      const meta: CommitMeta = {
+        touchedTournament: touchedDocument || 'tournament' in partial,
+        urgent: options?.urgent === true,
+      };
       for (const listener of [...listeners]) {
         listener(next, meta);
       }

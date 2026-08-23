@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import {
+  dismissRecovery,
+  endSession,
+  markSessionDocument,
+  pendingRecovery,
+  type RecoveryOffer,
+} from '@/platform/session';
 import { isTauriRuntime } from '@/platform/tauri';
 import type { BackupEntry, FileErrorKind, TournamentEntry } from '@/platform/tournamentFile';
+import { IDLE_AUTOSAVE, startAutosave, type Autosave, type AutosaveState } from '@/store/autosave';
 import {
+  autosaveTournament,
   closeTournamentDocument,
   createTournamentDocument,
   listRecentTournaments,
@@ -14,22 +23,30 @@ import {
 } from '@/store/persistence';
 import { APP_VERSION, createPersistenceDeps } from '@/store/persistenceRuntime';
 import { tournamentStore } from '@/store/session';
-import { hasUnsavedChanges, type TournamentState } from '@/store/tournamentStore';
+import { filePath, hasUnsavedChanges, type TournamentState } from '@/store/tournamentStore';
 
 /**
  * The host's file operations, bound to the one store this window owns.
  *
- * All the decisions live in `@/store/persistence`, which is injectable and
- * tested. What is left here is genuinely React: which dialog is open, what the
- * start screen is listing, and the window's own close request — none of which
- * survives a reload and none of which belongs in the tournament.
+ * All the decisions live in `@/store/persistence` and `@/store/autosave`, both
+ * of which are injectable and tested. What is left here is genuinely React:
+ * which dialog is open, what the start screen is listing, and the window's own
+ * close request — none of which survives a reload and none of which belongs in
+ * the tournament.
  */
 
 /** Something the host has to be told about, and act on. */
 export type FileNotice =
   | { kind: 'openFailed'; reason: OpenFailure; path: string; backups: BackupEntry[] }
   | { kind: 'saveFailed'; errorKind: FileErrorKind }
-  | { kind: 'notWritten'; errorKind: FileErrorKind };
+  | { kind: 'notWritten'; errorKind: FileErrorKind }
+  /**
+   * The autosave stopped working — a stick pulled out, a file locked. Unlike
+   * the others this one cannot be dismissed: it describes a condition that is
+   * still true, and a host who clicked it away would be running an event with
+   * nothing being written (issue #10, "never a silent no-op").
+   */
+  | { kind: 'autosaveFailed'; errorKind: FileErrorKind };
 
 /**
  * What the host was doing when the unsaved-changes question interrupted them.
@@ -44,10 +61,14 @@ export interface TournamentDocument {
   isDirty: boolean;
   /** Whether a file operation is in flight; the toolbar disables itself. */
   busy: boolean;
+  /** What the background autosave is doing, for the discreet state line. */
+  autosave: AutosaveState;
   recents: TournamentEntry[];
   /** The default library, shown so the host can find it in Explorer. */
   library: string | null;
   notice: FileNotice | null;
+  /** A tournament the last, killed session left behind (docs/FILE-FORMAT.md rule 5). */
+  recovery: RecoveryOffer | null;
   pendingIntent: PendingIntent | null;
   create: (name: string) => void;
   openWithDialog: () => void;
@@ -57,6 +78,8 @@ export interface TournamentDocument {
   requestClose: () => void;
   answerUnsaved: (answer: UnsavedAnswer) => void;
   dismissNotice: () => void;
+  recover: () => void;
+  declineRecovery: () => void;
 }
 
 export function useTournamentDocument(): TournamentDocument {
@@ -66,8 +89,14 @@ export function useTournamentDocument(): TournamentDocument {
   const [busy, setBusy] = useState(false);
   const [recents, setRecents] = useState<TournamentEntry[]>([]);
   const [library, setLibrary] = useState<string | null>(null);
-  const [notice, setNotice] = useState<FileNotice | null>(null);
+  /**
+   * The notices that report one thing that already happened. The autosave's
+   * warning is deliberately *not* in here — see `notice` below.
+   */
+  const [transientNotice, setTransientNotice] = useState<FileNotice | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
+  const [recovery, setRecovery] = useState<RecoveryOffer | null>(null);
+  const [autosaveState, setAutosaveState] = useState<AutosaveState>(IDLE_AUTOSAVE);
 
   const isDirty = hasUnsavedChanges(state);
 
@@ -85,37 +114,119 @@ export function useTournamentDocument(): TournamentDocument {
    *
    * Genuinely serialised, not merely flagged: `busy` disables the toolbar, but
    * it does not disable the window's close button or the unsaved-changes
-   * dialog, so a save can still be issued while one is in flight. Two of them
+   * dialog, so a save can still be issued while one is in flight — and from
+   * issue #10 on, the autosave issues writes nobody clicked at all. Two of them
    * racing onto the same path both go through the atomic write, and the one
    * that finishes second wins — which during an event is the older tournament
    * overwriting the newer one.
+   */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+
+  const enqueue = useCallback(<T>(operation: () => Promise<T>): Promise<T> => {
+    // Both handlers, so one failed operation does not strand the queue behind
+    // it: the next thing the host clicks still has to happen.
+    const next = queue.current.then(operation, operation);
+    queue.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
+  /**
+   * The same queue, plus the busy flag.
    *
    * `busy` therefore counts what is outstanding rather than tracking the last
    * caller: it has to stay on until the queue is empty, or the toolbar comes
-   * back while an operation is still waiting its turn.
+   * back while an operation is still waiting its turn. The autosave uses
+   * `enqueue` directly and is deliberately *not* counted — a toolbar that
+   * greyed itself out twice a second while the host worked would be unusable.
    */
-  const queue = useRef<Promise<void>>(Promise.resolve());
   const outstanding = useRef(0);
 
-  const run = useCallback((operation: () => Promise<void>) => {
-    outstanding.current += 1;
-    setBusy(true);
-    queue.current = queue.current
-      .then(operation)
-      .catch(reportFailure)
-      .finally(() => {
-        outstanding.current -= 1;
-        if (outstanding.current === 0) {
-          setBusy(false);
-        }
-      });
+  const run = useCallback(
+    (operation: () => Promise<void>) => {
+      outstanding.current += 1;
+      setBusy(true);
+      void enqueue(operation)
+        .catch(reportFailure)
+        .finally(() => {
+          outstanding.current -= 1;
+          if (outstanding.current === 0) {
+            setBusy(false);
+          }
+        });
+    },
+    [enqueue],
+  );
+
+  /**
+   * The debounced autosave, for this window's lifetime.
+   *
+   * Held in a ref as well as in state because the exit path has to flush it,
+   * and the exit path runs from a Tauri event handler that never re-renders.
+   */
+  const autosave = useRef<Autosave | null>(null);
+
+  useEffect(() => {
+    const instance = startAutosave(tournamentStore, {
+      save: () => enqueue(() => autosaveTournament(tournamentStore, deps)),
+      now: () => Date.now(),
+    });
+    autosave.current = instance;
+    setAutosaveState(instance.getState());
+    const unsubscribe = instance.subscribe(setAutosaveState);
+
+    return () => {
+      unsubscribe();
+      instance.stop();
+      autosave.current = null;
+    };
+  }, [deps, enqueue]);
+
+  /**
+   * What the host is shown, with the autosave's warning on top.
+   *
+   * Derived rather than stored, and that is the whole point. A stored notice
+   * is overwritten by the next file operation that reports anything — so a
+   * failed manual save would replace the autosave warning with a *dismissible*
+   * one, the host would dismiss it, and the event would carry on with nothing
+   * being written and no sign of it. Deriving it makes "cannot be dismissed
+   * while the autosave is broken" a property of the code rather than a promise
+   * (issue #10, "never a silent no-op").
+   *
+   * The failure is a condition, not an event: it appears when writing stops
+   * working and goes when a write succeeds, without anyone acting on it.
+   */
+  const notice: FileNotice | null =
+    autosaveState.failure === null
+      ? transientNotice
+      : { kind: 'autosaveFailed', errorKind: autosaveState.failure };
+
+  // A one-off notice from before the autosave broke has been overtaken by it,
+  // and must not resurface as news once the warning clears.
+  useEffect(() => {
+    if (autosaveState.failure !== null) {
+      setTransientNotice(null);
+    }
+  }, [autosaveState.failure]);
+
+  // Which tournament a crash would have to hand back (src-tauri/src/session.rs).
+  // Keyed on the path rather than on every commit: the marker records *where*
+  // the tournament is, and what is at that path is the autosave's business.
+  const documentPath = filePath(state.file);
+  useEffect(() => {
+    void markSessionDocument(documentPath);
+  }, [documentPath]);
+
+  // What the *last* run left behind. Asked once, before the host has done
+  // anything they could lose by being interrupted.
+  useEffect(() => {
+    pendingRecovery().then(setRecovery, reportFailure);
   }, []);
 
   const create = useCallback(
     (name: string) => {
       run(async () => {
         const outcome = await createTournamentDocument(tournamentStore, deps, { name });
-        setNotice(
+        setTransientNotice(
           outcome.status === 'unwritten' ? { kind: 'notWritten', errorKind: outcome.kind } : null,
         );
         refreshLibrary();
@@ -128,7 +239,7 @@ export function useTournamentDocument(): TournamentDocument {
     (path: string) => {
       run(async () => {
         const outcome = await openTournamentAt(tournamentStore, deps, path);
-        setNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+        setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
       });
     },
     [deps, run],
@@ -137,14 +248,14 @@ export function useTournamentDocument(): TournamentDocument {
   const openWithDialog = useCallback(() => {
     run(async () => {
       const outcome = await openTournamentWithDialog(tournamentStore, deps);
-      setNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
+      setTransientNotice(outcome.status === 'failed' ? { kind: 'openFailed', ...outcome } : null);
     });
   }, [deps, run]);
 
   const save = useCallback(() => {
     run(async () => {
       const outcome = await saveTournament(tournamentStore, deps);
-      setNotice(
+      setTransientNotice(
         outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
       );
       refreshLibrary();
@@ -154,22 +265,43 @@ export function useTournamentDocument(): TournamentDocument {
   const saveAs = useCallback(() => {
     run(async () => {
       const outcome = await saveTournamentAs(tournamentStore, deps);
-      setNotice(
+      setTransientNotice(
         outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
       );
       refreshLibrary();
     });
   }, [deps, refreshLibrary, run]);
 
-  const requestClose = useCallback(() => {
-    if (hasUnsavedChanges(tournamentStore.getState())) {
-      setPendingIntent('close');
-      return;
-    }
+  const finishDocument = useCallback(() => {
     closeTournamentDocument(tournamentStore);
-    setNotice(null);
+    setTransientNotice(null);
     refreshLibrary();
   }, [refreshLibrary]);
+
+  /**
+   * Closing the tournament.
+   *
+   * The flush comes first and is deliberately *outside* the queue: a debounce
+   * that was still counting is work the host has already done, and asking them
+   * "unsaved changes?" about it — or worse, discarding it — would be the app
+   * losing a round it had simply not got round to writing.
+   */
+  const requestClose = useCallback(() => {
+    void flushThen(autosave, () => {
+      if (hasUnsavedChanges(tournamentStore.getState())) {
+        setPendingIntent('close');
+        return;
+      }
+      finishDocument();
+    });
+  }, [finishDocument]);
+
+  const quit = useCallback(async () => {
+    // The marker is cleared before the window goes, so the next start knows
+    // this exit was chosen rather than survived.
+    await endSession();
+    await destroyHostWindow();
+  }, []);
 
   const answerUnsaved = useCallback(
     (answer: UnsavedAnswer) => {
@@ -185,7 +317,7 @@ export function useTournamentDocument(): TournamentDocument {
           // A save the host cancelled, or one that failed, must not be followed
           // by the close they only agreed to on the strength of it.
           if (outcome.status !== 'saved') {
-            setNotice(
+            setTransientNotice(
               outcome.status === 'failed' ? { kind: 'saveFailed', errorKind: outcome.kind } : null,
             );
             return;
@@ -193,26 +325,58 @@ export function useTournamentDocument(): TournamentDocument {
         }
 
         if (intent === 'quit') {
-          await destroyHostWindow();
+          await quit();
           return;
         }
-        closeTournamentDocument(tournamentStore);
-        setNotice(null);
-        refreshLibrary();
+        finishDocument();
       });
     },
-    [deps, pendingIntent, refreshLibrary, run],
+    [deps, finishDocument, pendingIntent, quit, run],
   );
 
-  useCloseRequest(isDirty, () => setPendingIntent('quit'));
+  /**
+   * The window's own close button (issue #10: "forced immediate save on … app
+   * exit").
+   *
+   * Always intercepted, even when nothing is dirty: the session marker has to
+   * be cleared before the process goes, or the next start greets the host with
+   * a recovery offer for a tournament nothing happened to.
+   */
+  const requestQuit = useCallback(() => {
+    void flushThen(autosave, () => {
+      if (hasUnsavedChanges(tournamentStore.getState())) {
+        setPendingIntent('quit');
+        return;
+      }
+      void quit();
+    });
+  }, [quit]);
+
+  useCloseRequest(requestQuit);
+
+  const recover = useCallback(() => {
+    const offer = recovery;
+    setRecovery(null);
+    void dismissRecovery();
+    if (offer !== null) {
+      openAt(offer.path);
+    }
+  }, [openAt, recovery]);
+
+  const declineRecovery = useCallback(() => {
+    setRecovery(null);
+    void dismissRecovery();
+  }, []);
 
   return {
     state,
     isDirty,
     busy,
+    autosave: autosaveState,
     recents,
     library,
     notice,
+    recovery,
     pendingIntent,
     create,
     openWithDialog,
@@ -221,24 +385,41 @@ export function useTournamentDocument(): TournamentDocument {
     saveAs,
     requestClose,
     answerUnsaved,
-    dismissNotice: () => setNotice(null),
+    // Only ever reaches a one-off notice: the autosave warning is derived and
+    // its component offers no dismiss button at all.
+    dismissNotice: () => setTransientNotice(null),
+    recover,
+    declineRecovery,
   };
 }
 
 /**
- * Turns the window's close button into a question when there is something to
- * lose.
+ * Writes whatever the debounce was holding, then continues.
  *
- * The dirty flag is read through a ref rather than captured: re-registering the
- * handler on every commit would leave a window in the gap between the two
- * listeners, and a close that lands in that gap takes the tournament with it.
+ * Deliberately not queued through `run`: `flush` waits on the same queue, so a
+ * flush issued from inside a queued operation would wait for itself.
  */
-function useCloseRequest(isDirty: boolean, onBlocked: () => void): void {
-  const dirtyRef = useRef(isDirty);
-  dirtyRef.current = isDirty;
+async function flushThen(autosave: { current: Autosave | null }, next: () => void): Promise<void> {
+  try {
+    await autosave.current?.flush();
+  } catch (error) {
+    // A flush that failed has already set the autosave's failure state, which
+    // is what the host sees. It must not stop them from closing.
+    reportFailure(error);
+  }
+  next();
+}
 
-  const blockedRef = useRef(onBlocked);
-  blockedRef.current = onBlocked;
+/**
+ * Turns the window's close button into something this app decides about.
+ *
+ * The handler is read through a ref rather than captured: re-registering it on
+ * every commit would leave a window in the gap between the two listeners, and a
+ * close that lands in that gap takes the tournament with it.
+ */
+function useCloseRequest(onClose: () => void): void {
+  const handler = useRef(onClose);
+  handler.current = onClose;
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -251,11 +432,10 @@ function useCloseRequest(isDirty: boolean, onBlocked: () => void): void {
     void (async () => {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const stop = await getCurrentWindow().onCloseRequested((event) => {
-        if (!dirtyRef.current) {
-          return;
-        }
+        // Always: the close is completed by `destroy` once the pending autosave
+        // has landed and the session marker is gone.
         event.preventDefault();
-        blockedRef.current();
+        handler.current();
       });
       if (cancelled) {
         stop();

@@ -50,6 +50,25 @@ describe('the host store handle', () => {
     expect(seen).toEqual([true]);
   });
 
+  /**
+   * docs/FILE-FORMAT.md rule 4: round close and phase change are written at
+   * once rather than after the debounce. Whether a commit is one of those is
+   * something only the action knows, so it is passed rather than inferred —
+   * and it has to reach the autosave through the same funnel everything else
+   * uses (issue #10).
+   */
+  it('passes an urgent commit on as urgent, and an ordinary one as not', () => {
+    const store = createTournamentStore();
+    const seen: boolean[] = [];
+    store.onCommit((_state, meta) => seen.push(meta.urgent));
+
+    store.commit(() => ({ autoFollow: false }));
+    store.commit(() => ({ autoFollow: true }), { urgent: true });
+    store.commit(() => ({ autoFollow: false }), {});
+
+    expect(seen).toEqual([false, true, false]);
+  });
+
   it('stops notifying a listener that unsubscribed', () => {
     const store = createTournamentStore();
     let count = 0;
