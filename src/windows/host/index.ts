@@ -1,6 +1,7 @@
 export { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 export { FileNotice } from '@/windows/host/FileNotice';
 export { HostWindow } from '@/windows/host/HostWindow';
+export { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 export { StartScreen } from '@/windows/host/StartScreen';
 export { TournamentBar } from '@/windows/host/TournamentBar';
 export { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';

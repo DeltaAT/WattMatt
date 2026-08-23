@@ -16,6 +16,8 @@ import {
 } from '@/store/tournamentStore';
 
 const PATH = 'C:\\Turniere\\Sommer.wattmatt';
+/** Where "Speichern unter…" put it instead. */
+const OTHER_PATH = 'E:\\Stick\\Sommer.wattmatt';
 
 /** Stands in for the mutating actions later issues add (#13, #14, #16, …). */
 function renameTournament(store: TournamentStore, name: string): void {
@@ -81,10 +83,39 @@ describe('document actions', () => {
     const store = createTournamentStore();
     setNewDocument(store, tournament());
 
-    setDocumentSaved(store, PATH);
+    setDocumentSaved(store, PATH, store.getState().revision);
 
     expect(store.getState().file).toEqual({ status: 'saved', path: PATH });
     expect(hasUnsavedChanges(store.getState())).toBe(false);
+  });
+
+  /**
+   * The write is asynchronous and the host keeps clicking during it — at the
+   * 500 ms autosave cadence, most writes overlap the next decision (issue #10).
+   * Reporting the file as clean would tell the host a result is safe when it is
+   * not in the bytes on disk, and the crash a second later would prove it.
+   */
+  it('stays modified when the tournament moved on while the bytes were in flight', () => {
+    const store = createTournamentStore();
+    setOpenedDocument(store, tournament(), PATH);
+    const serialisedRevision = store.getState().revision;
+
+    renameTournament(store, 'Sommerturnier');
+    setDocumentSaved(store, PATH, serialisedRevision);
+
+    expect(store.getState().file).toEqual({ status: 'modified', path: PATH });
+    expect(hasUnsavedChanges(store.getState())).toBe(true);
+  });
+
+  it('follows the new path even when the tournament moved on during the write', () => {
+    const store = createTournamentStore();
+    setOpenedDocument(store, tournament(), PATH);
+    const serialisedRevision = store.getState().revision;
+
+    renameTournament(store, 'Sommerturnier');
+    setDocumentSaved(store, OTHER_PATH, serialisedRevision);
+
+    expect(store.getState().file).toEqual({ status: 'modified', path: OTHER_PATH });
   });
 
   it('closing leaves nothing of the previous tournament behind', () => {

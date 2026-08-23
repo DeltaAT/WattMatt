@@ -41,9 +41,27 @@ export function setOpenedDocument(
  * Takes the path because "Speichern unter…" changes it: from here on, every
  * later save and every autosave (issue #10) targets the new file, and the old
  * one is left exactly as it was.
+ *
+ * It also takes the revision the bytes were serialised from, and this is the
+ * part that matters once autosave is running. A write is asynchronous, and the
+ * host clicks during it — at a 500 ms cadence, most autosaves overlap with the
+ * next decision. Marking the file clean regardless would report a result as
+ * saved that is not in the bytes on disk, and a crash a second later would
+ * lose it with the host having been told it was safe. A tournament that moved
+ * on during the write therefore stays `modified`, and the autosave that is
+ * already scheduled writes it.
  */
-export function setDocumentSaved(store: TournamentStore, path: string): void {
-  store.commit(() => ({ file: { status: 'saved', path } }));
+export function setDocumentSaved(
+  store: TournamentStore,
+  path: string,
+  savedRevision: number,
+): void {
+  // `state.revision` is the revision *before* this commit bumps it, so it is
+  // the same number the writer captured.
+  store.commit((state) => ({
+    file:
+      state.revision === savedRevision ? { status: 'saved', path } : { status: 'modified', path },
+  }));
 }
 
 /**

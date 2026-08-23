@@ -85,6 +85,25 @@ export function hasUnsavedChanges(state: TournamentState): boolean {
   return state.document !== null && state.file.status !== 'saved';
 }
 
+/**
+ * How a commit is to be treated by the layers listening to it.
+ *
+ * Passed by the action rather than inferred, because "this one must be on disk
+ * before the next thing happens" is a statement about the tournament — closing
+ * a round, changing phase — and nothing downstream can work that out from the
+ * state alone (docs/FILE-FORMAT.md rule 4).
+ */
+export interface CommitOptions {
+  /**
+   * Skip the autosave debounce and write now.
+   *
+   * For the moments the host would not survive losing: a round closing, a phase
+   * changing. Everything else waits the 500 ms, so a burst of clicks is one
+   * write rather than ten.
+   */
+  urgent?: boolean;
+}
+
 /** What a commit touched, reported to whoever is listening. */
 export interface CommitMeta {
   /**
@@ -96,6 +115,8 @@ export interface CommitMeta {
    * down the light channel and losing the data silently.
    */
   touchedTournament: boolean;
+  /** The action asked for an immediate save (see [`CommitOptions`]). */
+  urgent: boolean;
 }
 
 export type CommitListener = (state: TournamentState, meta: CommitMeta) => void;
@@ -115,7 +136,10 @@ export interface TournamentStore {
   subscribe(listener: (state: TournamentState) => void): () => void;
   /** For the sync and persistence layers, which need to know what changed. */
   onCommit(listener: CommitListener): () => void;
-  commit(mutate: (state: TournamentState) => Partial<TournamentState>): void;
+  commit(
+    mutate: (state: TournamentState) => Partial<TournamentState>,
+    options?: CommitOptions,
+  ): void;
 }
 
 export function createTournamentStore(
@@ -143,7 +167,7 @@ export function createTournamentStore(
      * nothing observable happened" is a bug report during an event; a redundant
      * snapshot is a few hundred KB.
      */
-    commit: (mutate) => {
+    commit: (mutate, options) => {
       const current = store.getState();
       const partial = mutate(current);
       const next: TournamentState = { ...current, ...partial, revision: current.revision + 1 };
@@ -167,7 +191,10 @@ export function createTournamentStore(
 
       store.setState(next, true);
 
-      const meta: CommitMeta = { touchedTournament: touchedDocument || 'tournament' in partial };
+      const meta: CommitMeta = {
+        touchedTournament: touchedDocument || 'tournament' in partial,
+        urgent: options?.urgent === true,
+      };
       for (const listener of [...listeners]) {
         listener(next, meta);
       }

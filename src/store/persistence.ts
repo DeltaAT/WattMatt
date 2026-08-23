@@ -226,6 +226,54 @@ export async function saveTournamentAs(
 }
 
 /**
+ * What one autosave attempt did (issue #10).
+ *
+ * `skipped` is its own outcome rather than a silent `saved`: the autosave runs
+ * on a timer and most of its firings have nothing to write, and a status line
+ * that reported "Gespeichert" for a write that never happened would be exactly
+ * the silent no-op the issue rules out.
+ */
+export type AutosaveOutcome =
+  | { status: 'saved'; path: string }
+  | { status: 'skipped' }
+  | { status: 'failed'; path: string; kind: FileErrorKind };
+
+/**
+ * Writes the open tournament back to its own file, with no host involved.
+ *
+ * Deliberately *not* `saveTournament`: that one falls through to a native
+ * "Speichern unter…" dialog when there is no path, and a dialog opening by
+ * itself half a second after the host stopped typing would take the machine
+ * away from them mid-event (CLAUDE.md golden rule 3). A tournament with no file
+ * is therefore skipped here; the host is already being warned about it by the
+ * `notWritten` notice, which offers the dialog as *their* decision.
+ */
+export async function autosaveTournament(
+  store: TournamentStore,
+  deps: PersistenceDeps,
+): Promise<AutosaveOutcome> {
+  const state = store.getState();
+  const tournament = state.document;
+  // `modified` is the only state with both something to write and somewhere to
+  // write it: `saved` is already on disk, `unsaved` has no path.
+  if (tournament === null || state.file.status !== 'modified') {
+    return { status: 'skipped' };
+  }
+
+  const path = state.file.path;
+  const outcome = await write(store, deps, tournament, path);
+  return outcome.status === 'saved' ? { status: 'saved', path } : failedAutosave(outcome, path);
+}
+
+function failedAutosave(outcome: SaveOutcome, path: string): AutosaveOutcome {
+  return {
+    status: 'failed',
+    path,
+    kind: outcome.status === 'failed' ? outcome.kind : 'io',
+  };
+}
+
+/**
  * Closes the tournament.
  *
  * The unsaved-changes question is asked by the host window before this is
@@ -252,12 +300,15 @@ async function write(
   tournament: Tournament,
   path: string,
 ): Promise<SaveOutcome> {
+  // Captured before the write, not after: the host keeps clicking while the
+  // bytes are in flight, and it is *this* revision that the file will hold.
+  const revision = store.getState().revision;
   try {
     await deps.files.write(path, serialiseTournament(tournament, deps.appVersion));
   } catch (error) {
     return { status: 'failed', path, kind: kindOf(error) };
   }
-  setDocumentSaved(store, path);
+  setDocumentSaved(store, path, revision);
   return { status: 'saved', path };
 }
 

@@ -26,9 +26,9 @@ pub const TOURNAMENT_EXTENSION: &str = "wattmatt";
 /// (docs/FILE-FORMAT.md rule 2) and never collides with a real tournament.
 const TEMP_SUFFIX: &str = "tmp";
 
-/// Newest first. Issue #10 writes them; this module only finds them, because a
-/// file that fails validation has to be answered with "open the newest backup"
-/// on the spot (docs/FILE-FORMAT.md rule 1).
+/// Newest first: `bak1` is the previous save, `bak3` the oldest kept one
+/// (docs/FILE-FORMAT.md rule 3). Three is the whole chain — a fourth would only
+/// be reached by a host who noticed the problem three saves ago.
 const BACKUP_SUFFIXES: [&str; 3] = ["bak1", "bak2", "bak3"];
 
 /// `%APPDATA%\WattMatt`, per docs/FILE-FORMAT.md §"Location".
@@ -119,7 +119,10 @@ pub struct BackupEntry {
 // Paths
 // ---------------------------------------------------------------------------
 
-fn data_root() -> Result<PathBuf> {
+/// `%APPDATA%\WattMatt`. Public because the session marker of issue #10 lives
+/// beside the library rather than inside it — it is not a tournament, and a
+/// `session.json` in `tournaments/` would show up in the host's own folder.
+pub fn data_root() -> Result<PathBuf> {
     if let Some(app_data) = std::env::var_os("APPDATA") {
         return Ok(PathBuf::from(app_data).join(DATA_DIR_NAME));
     }
@@ -219,6 +222,45 @@ pub fn write_atomic(path: &Path, contents: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Backups
+// ---------------------------------------------------------------------------
+
+/// Shifts the backup chain along and makes the current file `bak1`
+/// (docs/FILE-FORMAT.md rule 3), before the save that is about to replace it.
+///
+/// Two decisions worth spelling out.
+///
+/// The chain is walked **oldest first** — `bak2` → `bak3`, then `bak1` →
+/// `bak2`, then the tournament → `bak1`. Walking it the other way would move
+/// `bak1` onto a `bak2` that has not been shifted yet, and the chain would
+/// collapse to one entry that a host only discovers when they need the third.
+///
+/// The last step is a **copy, not a rename**. A rename would leave the
+/// tournament with no file at its own path for the length of the write that
+/// follows, and a power cut in that window costs the host the one path they
+/// know — the opposite of what a backup is for.
+///
+/// Every step is best effort. A backup that could not be rotated is a worse
+/// backup; a save that was refused because of it is a lost round.
+pub fn rotate_backups(path: &Path) {
+    // Nothing to rotate before the first save. `is_file` rather than `exists`:
+    // a directory sitting on the path is not something to copy anywhere.
+    if !path.is_file() {
+        return;
+    }
+
+    for pair in BACKUP_SUFFIXES.windows(2).rev() {
+        let (newer, older) = (pair[0], pair[1]);
+        let from = backup_path(path, newer);
+        if from.is_file() {
+            let _ = fs::rename(&from, backup_path(path, older));
+        }
+    }
+
+    let _ = fs::copy(path, backup_path(path, BACKUP_SUFFIXES[0]));
 }
 
 // ---------------------------------------------------------------------------
@@ -322,9 +364,17 @@ pub fn read_tournament(path: String) -> Result<String> {
     read_file(Path::new(&path))
 }
 
+/// Rotates the backups, then writes (docs/FILE-FORMAT.md rules 2 and 3).
+///
+/// Rotation lives in the command rather than in [`write_atomic`] because it is
+/// a property of *saving a tournament*, not of writing a file: the autosave of
+/// issue #10 and an explicit "Speichern" are the same call and must both leave
+/// a recoverable previous version behind.
 #[tauri::command]
 pub fn write_tournament(path: String, contents: String) -> Result<()> {
-    write_atomic(Path::new(&path), &contents)
+    let path = Path::new(&path);
+    rotate_backups(path);
+    write_atomic(path, &contents)
 }
 
 #[tauri::command]
@@ -548,6 +598,136 @@ mod tests {
             .collect();
 
         assert_eq!(suffixes, vec!["bak1".to_string(), "bak3".to_string()]);
+    }
+
+    /// One save, one backup. The tournament that was on disk is what `bak1`
+    /// holds — not the one that has just replaced it.
+    #[test]
+    fn the_first_rotation_copies_the_previous_tournament_into_bak1() {
+        let dir = TempDir::new("rotate-first");
+        let path = dir.join("t.wattmatt");
+        write_atomic(&path, "as it stood").expect("write");
+
+        rotate_backups(&path);
+        write_atomic(&path, "as it stands now").expect("second write");
+
+        assert_eq!(read_file(&path).expect("read"), "as it stands now");
+        assert_eq!(
+            read_file(&backup_path(&path, "bak1")).expect("read bak1"),
+            "as it stood"
+        );
+    }
+
+    /// The chain is walked oldest first. Walking it the other way would move
+    /// `bak1` onto an unshifted `bak2` and collapse three recovery points into
+    /// one — which a host only finds out when they need the third.
+    #[test]
+    fn rotation_shifts_the_whole_chain_along() {
+        let dir = TempDir::new("rotate-chain");
+        let path = dir.join("t.wattmatt");
+
+        for save in ["first", "second", "third", "fourth"] {
+            rotate_backups(&path);
+            write_atomic(&path, save).expect("write");
+        }
+
+        assert_eq!(read_file(&path).expect("read"), "fourth");
+        assert_eq!(
+            read_file(&backup_path(&path, "bak1")).expect("bak1"),
+            "third"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak2")).expect("bak2"),
+            "second"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak3")).expect("bak3"),
+            "first"
+        );
+    }
+
+    /// Issue #10 acceptance criterion: backups rotate correctly over 50
+    /// consecutive saves. The chain stays exactly three deep and always holds
+    /// the three saves before the current one — no drift, no fourth file.
+    #[test]
+    fn fifty_consecutive_saves_leave_exactly_the_last_three_versions() {
+        let dir = TempDir::new("rotate-fifty");
+        let path = dir.join("t.wattmatt");
+
+        for save in 1..=50 {
+            rotate_backups(&path);
+            write_atomic(&path, &format!("save {save}")).expect("write");
+        }
+
+        assert_eq!(read_file(&path).expect("read"), "save 50");
+        let backups = list_backups_of(&path);
+        assert_eq!(backups.len(), 3, "the chain grew or shrank");
+        assert_eq!(
+            read_file(&backup_path(&path, "bak1")).expect("bak1"),
+            "save 49"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak2")).expect("bak2"),
+            "save 48"
+        );
+        assert_eq!(
+            read_file(&backup_path(&path, "bak3")).expect("bak3"),
+            "save 47"
+        );
+
+        // Nothing beyond the chain: a `bak4` would mean the rotation is
+        // appending rather than rotating, and 50 saves would fill a USB stick.
+        assert!(!backup_path(&path, "bak4").exists());
+    }
+
+    /// The tournament keeps its own path throughout. A rotation that *renamed*
+    /// the current file would leave nothing at that path until the write
+    /// finished, and a power cut in that window costs the host the file they
+    /// know how to find.
+    #[test]
+    fn rotation_never_leaves_the_tournament_without_a_file() {
+        let dir = TempDir::new("rotate-present");
+        let path = dir.join("t.wattmatt");
+        write_atomic(&path, "as it stood").expect("write");
+
+        rotate_backups(&path);
+
+        assert_eq!(read_file(&path).expect("read"), "as it stood");
+    }
+
+    #[test]
+    fn rotating_before_the_first_save_creates_nothing() {
+        let dir = TempDir::new("rotate-nothing");
+        let path = dir.join("t.wattmatt");
+
+        rotate_backups(&path);
+
+        assert!(list_backups_of(&path).is_empty());
+        assert!(!path.exists());
+    }
+
+    /// The command is what the frontend calls, and the acceptance criterion is
+    /// about saves rather than about `rotate_backups` being called correctly by
+    /// a test. `write_atomic` on its own deliberately does not rotate.
+    #[test]
+    fn the_write_command_rotates_and_the_bare_atomic_write_does_not() {
+        let dir = TempDir::new("rotate-command");
+        let path = dir.join("t.wattmatt");
+        let as_string = path.to_string_lossy().into_owned();
+
+        write_tournament(as_string.clone(), "first".to_string()).expect("first save");
+        write_tournament(as_string, "second".to_string()).expect("second save");
+        assert_eq!(
+            read_file(&backup_path(&path, "bak1")).expect("bak1"),
+            "first"
+        );
+
+        write_atomic(&path, "third").expect("bare write");
+        assert_eq!(
+            read_file(&backup_path(&path, "bak1")).expect("bak1"),
+            "first",
+            "write_atomic must not rotate"
+        );
     }
 
     #[test]

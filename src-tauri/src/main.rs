@@ -4,6 +4,7 @@
 mod fs;
 mod logging;
 mod power;
+mod session;
 mod windows;
 
 use tauri::{Manager, WindowEvent};
@@ -13,6 +14,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(windows::BeamerState::default())
         .manage(power::SleepInhibitor::default())
+        .manage(session::SessionState::default())
         .invoke_handler(tauri::generate_handler![
             windows::list_monitors,
             windows::beamer_status,
@@ -25,9 +27,18 @@ fn main() {
             fs::write_tournament,
             fs::list_tournaments,
             fs::list_backups,
+            session::pending_recovery,
+            session::dismiss_recovery,
+            session::mark_session_document,
+            session::end_session,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // Before anything else: the marker the last run left behind is the
+            // only evidence that it crashed, and it is overwritten by this
+            // run's own marker in the same call (src-tauri/src/session.rs).
+            session::begin(&app.state::<session::SessionState>());
 
             // A projector that is already attached should be showing the beamer
             // before the host has clicked anything (docs/ARCHITECTURE.md §2).
@@ -42,11 +53,24 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if !matches!(event, WindowEvent::Destroyed) {
+                return;
+            }
+
             // The host may close the beamer through its title bar in preview
             // placement. Republishing keeps the control panel from claiming the
             // beamer is still open.
-            if matches!(event, WindowEvent::Destroyed) && window.label() == windows::BEAMER_LABEL {
+            if window.label() == windows::BEAMER_LABEL {
                 windows::on_beamer_destroyed(&window.app_handle().clone());
+            }
+
+            // The frontend clears the marker before it destroys the window, so
+            // this is a backstop rather than the path. It matters for the exits
+            // the frontend never sees — a `destroy` from elsewhere, a shutdown
+            // that closed the window for us — where a surviving marker would
+            // offer a recovery of a tournament nothing happened to.
+            if window.label() == windows::HOST_LABEL {
+                session::end(&window.state::<session::SessionState>());
             }
         })
         .run(tauri::generate_context!())
