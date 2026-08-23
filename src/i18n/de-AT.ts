@@ -1,12 +1,102 @@
+import { pluralizeDeAT } from '@/i18n/plural';
+
 /**
  * Every user-visible string in WattMatt lives here (CLAUDE.md §1).
- * The full locale layout, typing and lookup helpers arrive with issue #6;
- * this seed only carries what the two-window shell renders.
+ *
+ * A leaf is either a plain string, or a function that takes a params object
+ * and returns one — the latter for text that needs a count or a name spliced
+ * in (`t('round.title', { n: 2 })`, docs/GLOSSARY.md). `t()` in `@/i18n/t`
+ * resolves either kind by dotted path.
+ *
+ * Terminology follows docs/GLOSSARY.md; copy follows its "UI copy
+ * conventions" section (Sie-form, infinitive buttons, no English loanwords).
  */
 export const deAT = {
   app: {
     name: 'WattMatt',
     bootstrapNotice: 'Grundgerüst steht. Turnierfunktionen folgen.',
+  },
+
+  common: {
+    undo: 'Rückgängig',
+  },
+
+  /**
+   * Every entry here says what happened **and** what to do next
+   * (docs/GLOSSARY.md "UI copy conventions"). Enforced by de-AT.test.ts: a
+   * host reading an error mid-event has no time to work out the next step.
+   */
+  error: {
+    fileUnreadable:
+      'Die Turnierdatei konnte nicht gelesen werden. Öffnen Sie die letzte Sicherung.',
+    fileInvalid:
+      'Die Turnierdatei passt nicht zum erwarteten Format. Öffnen Sie die letzte Sicherung.',
+    saveFailed:
+      'Das Turnier konnte nicht gespeichert werden. Prüfen Sie den Speicherort und versuchen Sie es erneut.',
+  },
+
+  tournament: {
+    label: 'Turnier',
+    /** docs/GLOSSARY.md: avoid "Host" in German UI — "Turnierleitung" instead. */
+    hostLabel: 'Turnierleitung',
+  },
+
+  phase: {
+    setup: 'Vorbereitung',
+    qualifyingRound: 'Qualifikationsrunde',
+    repechage: 'Hoffnungsrunde',
+    eliminationRound: 'Ausscheidungsrunde',
+    namingPhase: 'Namenserfassung',
+    finalPhase: 'Finalphase',
+  },
+
+  bracket: {
+    label: 'Turnierbaum',
+    roundOf16: 'Achtelfinale',
+    quarterFinal: 'Viertelfinale',
+    semiFinal: 'Halbfinale',
+    final: 'Finale',
+    thirdPlaceMatch: 'Spiel um Platz 3',
+    awardCeremony: 'Siegerehrung',
+  },
+
+  group: {
+    label: 'Gruppe',
+    numberLabel: 'Gruppennummer',
+    /** "1 Gruppe" / "5 Gruppen" — German pluralisation via @/i18n/plural. */
+    count: (params: { n: number }) => pluralizeDeAT(params.n, 'Gruppe', 'Gruppen'),
+  },
+
+  table: {
+    label: 'Tisch',
+    free: 'frei',
+    occupied: 'belegt',
+    disabled: 'gesperrt',
+    waitingForTable: 'wartet auf Tisch',
+  },
+
+  match: {
+    label: 'Partie',
+    running: 'läuft',
+    finished: 'beendet',
+  },
+
+  round: {
+    label: 'Runde',
+    title: (params: { n: number }) => `Runde ${params.n}`,
+  },
+
+  draw: {
+    label: 'Auslosung',
+    action: 'auslosen',
+  },
+
+  outcome: {
+    winner: 'Sieger',
+    loser: 'Verlierer',
+    eliminated: 'ausgeschieden',
+    advance: 'nachrücken',
+    bye: 'Freilos',
   },
 
   beamer: {
@@ -32,6 +122,8 @@ export const deAT = {
     activeMonitor: 'Aktiv',
     noMonitors: 'Keine Bildschirme erkannt.',
     focusHost: 'Steuerung nach vorne holen',
+    blackout: 'Bildschirm aus',
+    performanceMode: 'Performance-Modus',
 
     status: {
       closed: 'Beamer ist geschlossen. Ein zweiter Bildschirm ist bereit.',
