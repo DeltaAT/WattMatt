@@ -30,6 +30,10 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "createdAt": "2026-08-22T17:04:00+02:00",
   "updatedAt": "2026-08-22T19:31:12+02:00",
 
+  // These two are the whole record of the draw stream. The generator is
+  // mulberry32 seeded through an xmur3 hash of rngSeed (src/domain/rng.ts);
+  // changing either algorithm replays every saved tournament differently and
+  // is a schemaVersion bump under rule 7, not a refactor.
   "rngSeed": "8f3c1a7e…",          // draws are reproducible from this
   "rngCursor": 42,                  // how many values have been consumed
 

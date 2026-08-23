@@ -28,6 +28,7 @@ export {
   type TournamentId,
 } from '@/domain/ids';
 export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
+export { createRng, type Rng } from '@/domain/rng';
 export {
   appStampSchema,
   SCHEMA_VERSION,

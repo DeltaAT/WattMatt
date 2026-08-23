@@ -142,7 +142,7 @@ src/
     schema.ts          the .wattmatt file shape, schema version
     factory.ts         createTournament(), file wrap/unwrap
     lookup.ts          index entities by ID; nothing reaches an entity by position
-    rng.ts             seeded PRNG + shuffle
+    rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, candidate draw
     progression.ts     phase transitions
@@ -163,6 +163,7 @@ src/
     windowSync.ts      the Tauri transport behind sync.ts
     beamerWindow.ts    monitor list, beamer placement, sleep inhibition
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
+    seed.ts            crypto.getRandomValues — the one non-deterministic step
   windows/
     route.ts           `?window=` → host | beamer
     useBeamerStatus.ts live placement, shared by both windows
@@ -193,6 +194,35 @@ This is a lint rule, not a convention. `src/domain/**` may not import React, Zus
 Node builtins, or any other `src/` layer; `Math.random()`, `Date.now()`, `new Date()` and
 `fetch` are rejected there too. The layering is one-way — everything may import the domain,
 the domain imports nobody — so a violation fails `pnpm lint` and therefore CI.
+
+### The draw stream
+
+Randomness has exactly one source: `createRng(seed, cursor)` in `src/domain/rng.ts`.
+`Math.random()` is banned everywhere, tooling and config included — a second source of
+randomness would make the reproducibility claim false without making any test fail.
+
+The seed is drawn once, from `crypto.getRandomValues` in `src/platform/seed.ts`, when the
+tournament is created. It is written to the file and never changes. **The cursor is the part
+that is easy to miss:** it records how many values have been consumed, and without it a
+tournament reopened after a crash would restart the stream and re-draw pairings the room has
+already watched. Both fields are persisted (docs/FILE-FORMAT.md), and `(seed, cursor)` is
+enough to reproduce any draw in the event — which is what makes a disputed pairing
+defensible rather than a matter of trust.
+
+Resuming is O(1): mulberry32 advances its state by a constant, so the state after *n* draws
+is `initial + n × step`. The tests check that seek against an actual replay rather than
+trusting the arithmetic.
+
+**The generator is part of the file format.** A tournament stores `(rngSeed, rngCursor)` and
+nothing else about the stream, so changing mulberry32 or the xmur3 seed hash silently
+replays every saved tournament differently — including the one someone is disputing. Golden
+vectors in `rng.test.ts` pin the stream; changing it is a `schemaVersion` bump and a
+migration (docs/FILE-FORMAT.md rule 7), never a refactor.
+
+Two halves of this are not wired yet, by design: issue #9 calls `generateSeed()` when a
+tournament is created, and issue #16 writes `rng.cursor` back after each draw. See
+docs/OPEN-QUESTIONS.md #23 — until both land, a reopened tournament would restart its
+stream.
 
 Schemas and types are one definition, not two: every entity is declared as a Zod schema and
 its TypeScript type is `z.infer`red from it. A schema that drifts from its type is then not
