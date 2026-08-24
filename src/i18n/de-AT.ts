@@ -611,6 +611,43 @@ export const deAT = {
       count: (params: { participants: string }) => `${params.participants} am Start`,
     },
 
+    /**
+     * The `DRAW` scene: the auslosung, live in front of the room (issue #18).
+     *
+     * The heading is the round's own label (`Runde 1`), which the draw action
+     * already wrote — so what is left here is the pool caption, the two things
+     * a pairing can say instead of a table, and the word for a `Freilos` reveal.
+     */
+    draw: {
+      title: 'Auslosung',
+      /** Over the grid of numbers still to be drawn. */
+      poolTitle: 'Noch zu ziehen',
+      /**
+       * The pool once it is empty — the draw is over and the board is complete.
+       * Said rather than left blank, so an empty half of the screen reads as
+       * finished rather than broken.
+       */
+      poolEmpty: 'Alle gezogen.',
+      /**
+       * A pairing that has been drawn but has no table yet
+       * (docs/TOURNAMENT-RULES.md §3). The room needs to know the match exists
+       * and is not being played yet, or people go looking for a table.
+       */
+      waitingForTable: 'Wartet auf Tisch',
+      /**
+       * A `Freilos` reveal. It gets the word as well as its own colour: a card
+       * with one participant and an empty space looks like a bug from the back
+       * of a room, and this is the audience's only explanation of why somebody
+       * advanced without playing (rules §9 case 1).
+       */
+      byeAdvances: 'Freilos — steigt auf',
+      /** Under the heading while the sequence is still running. */
+      progress: (params: { drawn: number; total: number }) =>
+        `${params.drawn} von ${params.total} gezogen`,
+      /** Nothing to draw: a round with no matches, which should not happen. */
+      empty: 'Es wurde nichts ausgelost.',
+    },
+
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */
     tableOverview: {
       title: 'Tische',

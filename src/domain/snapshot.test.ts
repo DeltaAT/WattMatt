@@ -15,6 +15,7 @@ import {
   matchId,
   midTournament,
   occupiedTable,
+  roundId,
   table,
   tournament,
 } from '@/domain/testFixtures';
@@ -44,6 +45,7 @@ describe('the snapshot envelope', () => {
         // draws as busy for the rest of the event.
         tables: [occupiedTable(1, matchId(4)), table(2, { status: 'DISABLED' })],
         matches: [match(4, { tableId: table(1).id, status: 'RUNNING' })],
+        round: null,
       },
       delivery: 'live',
     });
@@ -96,11 +98,48 @@ describe('toTournamentSnapshot', () => {
     expect(toTournamentSnapshot(tournament({ tables })).tables).toEqual(tables);
   });
 
-  it('sends the matches that are on a table, and no others', () => {
+  /*
+   * Widened by issue #18 from "the matches on a table" to the whole current
+   * round: the draw scene has to show every pairing it deals, including the
+   * ones queued for a table and the byes, which never touch one.
+   */
+  it('sends the whole current round, not only what is on a table', () => {
     const projected = toTournamentSnapshot(midTournament());
 
-    // `midTournament` has three matches; exactly one of them is on a table.
+    // `midTournament`'s open round has two matches, one of them on a table.
+    expect(projected.matches.map((entry) => entry.id)).toEqual([matchId(1), matchId(3)]);
+    expect(projected.round?.id).toBe(roundId(2));
+  });
+
+  /*
+   * A match of a *closed* round must not travel: the beamer would draw a
+   * pairing that is over as though it were still to be played.
+   */
+  it('leaves the matches of a closed round behind', () => {
+    const projected = toTournamentSnapshot(midTournament());
+
+    expect(projected.matches.map((entry) => entry.id)).not.toContain(matchId(2));
+  });
+
+  /*
+   * Between two rounds there is no round to send, and what is still on a table
+   * is what the occupancy board has to keep drawing.
+   */
+  it('falls back to the tables when no round is open', () => {
+    const between = midTournament({
+      rounds: midTournament().rounds.map((entry) => ({ ...entry, state: 'CLOSED' as const })),
+    });
+    const projected = toTournamentSnapshot(between);
+
+    expect(projected.round).toBeNull();
     expect(projected.matches.map((entry) => entry.id)).toEqual([matchId(1)]);
+  });
+
+  /* The round travels without its matches — one list, so the two halves of a
+   * snapshot cannot disagree about which pairing is on which table. */
+  it('sends the round without duplicating its matches', () => {
+    const projected = toTournamentSnapshot(midTournament());
+    expect(projected.round).not.toHaveProperty('matches');
   });
 
   /*
@@ -132,6 +171,7 @@ describe('toTournamentSnapshot', () => {
       'matches',
       'participantLabel',
       'performanceMode',
+      'round',
       'tables',
     ]);
     expect(snapshotSchema.safeParse(snapshot({ tournament: projected })).success).toBe(true);
@@ -144,6 +184,7 @@ describe('toTournamentSnapshot', () => {
       performanceMode: false,
       tables: [],
       matches: [],
+      round: null,
     });
   });
 });

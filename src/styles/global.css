@@ -118,3 +118,76 @@
   text-transform: uppercase;
   color: var(--wm-text-muted);
 }
+
+/* ---------------------------------------------------------------------------
+ * The draw sequence (issue #18, docs/MOTION.md §4.1).
+ *
+ * CSS rather than JavaScript because the beats are predetermined: keyframes run
+ * off the main thread and stay smooth while React is busy building the next
+ * card, which is what holds 60 fps at 1080p with 32 pairings on integrated
+ * graphics (§6). Every duration is a token, so performance mode halves them
+ * without any of these rules knowing it exists.
+ * ------------------------------------------------------------------------- */
+
+/* Reveal + placement, run as one: the card lands, then settles into its slot.
+ * `scale 0.94 → 1.04 → 1` with the accent glow is the reveal beat; the
+ * translate is the placement beat that follows it. */
+@keyframes wm-draw-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+    box-shadow: 0 0 0 0 var(--wm-accent);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) translateY(0);
+    box-shadow: 0 0 0 6px var(--wm-accent-soft);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* The anticipation pulse on the pool grid: gentle, and on opacity only, so it
+ * costs nothing and keeps meaning under reduced motion. */
+@keyframes wm-draw-pool-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@utility wm-draw-reveal {
+  animation: wm-draw-reveal calc(var(--dur-reveal) + var(--dur-slow)) var(--ease-dramatic) both;
+  /* Only for the duration of the animation, per docs/MOTION.md §6. */
+  will-change: transform, opacity;
+}
+
+@utility wm-draw-pool-number {
+  animation: wm-draw-pool-pulse var(--dur-story) var(--ease-in-out) infinite;
+}
+
+/* docs/MOTION.md §6: reduced motion keeps opacity and colour — they carry
+ * meaning — and drops movement and scale. The reveal still happens, so the
+ * audience sees that a pairing landed; it simply no longer travels. The pool
+ * pulse stops entirely: a grid of numbers breathing indefinitely is the kind of
+ * ambient movement the setting exists to switch off. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-draw-reveal {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  .wm-draw-pool-number {
+    animation: none;
+  }
+}
