@@ -25,6 +25,7 @@ function groups(count: number): TournamentSnapshot {
     performanceMode: false,
     tables: [],
     matches: [],
+    round: null,
   };
 }
 

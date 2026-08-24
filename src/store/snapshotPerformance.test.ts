@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupIdSchema, matchIdSchema, tableIdSchema } from '@/domain/ids';
+import { groupIdSchema, matchIdSchema, roundIdSchema, tableIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
@@ -58,6 +58,16 @@ function fullHouse(): TournamentSnapshot {
       occupiedSince: '2026-08-23T10:00:00+02:00',
     })),
     matches,
+    // Issue #18 widened the snapshot to carry the round the matches belong to,
+    // so the measured payload carries one too — 32 pairings is exactly the
+    // draw size that issue names as the worst case.
+    round: {
+      id: roundIdSchema.parse('round-1'),
+      index: 1,
+      kind: 'QUALIFYING' as const,
+      label: 'Runde 1',
+      state: 'DRAWN' as const,
+    },
   };
 }
 
@@ -86,6 +96,7 @@ describe('snapshot round-trip performance', () => {
         performanceMode: tournament.performanceMode,
         tables: [...tournament.tables],
         matches: [...tournament.matches],
+        round: tournament.round,
       };
 
       const started = performance.now();

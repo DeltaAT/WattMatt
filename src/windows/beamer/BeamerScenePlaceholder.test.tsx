@@ -12,13 +12,33 @@ describe('the beamer scene surface', () => {
   it('renders the scene the host staged, not a fixed screen', () => {
     const markup = renderToStaticMarkup(
       <BeamerScenePlaceholder
+        scene={{ id: 'REPECHAGE', roundId: round('r2') }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+      />,
+    );
+    expect(markup).toContain('data-scene="REPECHAGE"');
+    expect(markup).toContain(de.beamer.scenePending);
+  });
+
+  /*
+   * The draw is drawn for real from issue #18 on. With no round in the snapshot
+   * there is nothing to deal, and the scene says so rather than falling back to
+   * the generic placeholder — a blank projector during the Auslosung is the one
+   * moment the room is actually watching.
+   */
+  it('draws the Auslosung rather than a placeholder', () => {
+    const markup = renderToStaticMarkup(
+      <BeamerScenePlaceholder
         scene={{ id: 'DRAW', roundId: round('r2') }}
         tournament={EMPTY_TOURNAMENT}
         settled
       />,
     );
+
     expect(markup).toContain('data-scene="DRAW"');
-    expect(markup).toContain(de.beamer.scenePending);
+    expect(markup).not.toContain(de.beamer.scenePending);
+    expect(markup).toContain(de.beamer.draw.empty);
   });
 
   /* Two scenes are drawn for real rather than as a placeholder: the occupancy

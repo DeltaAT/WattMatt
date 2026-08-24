@@ -1,14 +1,17 @@
 import { z } from 'zod';
 
 import { beamerSceneSchema, IDLE_SCENE } from '@/domain/beamerScene';
+import { currentRound } from '@/domain/selectors';
 import { matchesOnTables } from '@/domain/tables';
 import {
   groupSchema,
   matchSchema,
   participantLabelSchema,
+  roundSchema,
   tableSchema,
   type Group,
   type Match,
+  type Round,
   type Table,
   type Tournament,
 } from '@/domain/types';
@@ -42,6 +45,16 @@ export const groupSnapshotSchema = groupSchema;
 
 export type GroupSnapshot = Group;
 
+/**
+ * A round without its matches — they travel in `matches` alongside it.
+ *
+ * Split rather than sent whole so there is one list of matches in a snapshot
+ * instead of two that could disagree about which pairing is on which table.
+ */
+export const roundSnapshotSchema = roundSchema.omit({ matches: true });
+
+export type RoundSnapshot = z.infer<typeof roundSnapshotSchema>;
+
 export const tournamentSnapshotSchema = z.object({
   groups: z.array(groupSnapshotSchema),
   /**
@@ -68,14 +81,25 @@ export const tournamentSnapshotSchema = z.object({
   /** In the host's configured order, which is the order they stand in the room. */
   tables: z.array(tableSchema),
   /**
-   * The matches currently on a table, and only those.
+   * The current round's matches, or — between rounds, when there is no current
+   * round — the matches still sitting on a table.
    *
-   * Enough for the occupancy board, which is the one scene that reads them
-   * today. Issue #19 widens this to the current round's matches — the field is
-   * the same one, and `toTournamentSnapshot` is the only place that decides
-   * what goes in it.
+   * Widened from "on a table" by issue #18: the draw scene has to show every
+   * pairing, including the ones queued for a table and the byes, which never
+   * touch one. `TABLE_OVERVIEW` is unaffected, because `occupancyBoard` picks
+   * matches out by `table.currentMatchId` rather than by taking the whole list.
    */
   matches: z.array(matchSchema),
+  /**
+   * Which round those matches belong to, without them (issue #18).
+   *
+   * The scene descriptor names a `roundId`, and the beamer must be able to tell
+   * whether the round it has been handed is that one. Without this it would
+   * animate whatever arrived, so a `DRAW` scene left staged while the host drew
+   * the *next* round would re-run the sequence against pairings the audience
+   * has already seen.
+   */
+  round: roundSnapshotSchema.nullable(),
 });
 
 export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
@@ -124,6 +148,8 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   performanceMode: false,
   tables: [],
   matches: [],
+  // Nothing has been drawn, so there is no round to name.
+  round: null,
 };
 
 /**
@@ -137,15 +163,28 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
  * too, and nowhere else.
  */
 export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
+  const round = currentRound(tournament);
+
   return {
     groups: tournament.groups,
     participantLabel: tournament.settings.participantLabel,
     performanceMode: tournament.settings.performanceMode,
     tables: tournament.tables,
+    // The whole round while one is open, so the draw scene can show the queued
+    // pairings and the byes as well as what is on a table. Between rounds there
+    // is no round to send, and what is left on a table is what the occupancy
+    // board still has to draw.
+    //
     // Copied out of the readonly projection: the snapshot is a value the sync
     // layer serialises, and Zod's inferred array type is a mutable one.
-    matches: [...matchesOnTables(tournament)],
+    matches: round === null ? [...matchesOnTables(tournament)] : [...round.matches],
+    round: round === null ? null : withoutMatches(round),
   };
+}
+
+function withoutMatches(round: Round): RoundSnapshot {
+  const { matches: _matches, ...rest } = round;
+  return rest;
 }
 
 /** What a beamer renders before the host has answered its first request. */
