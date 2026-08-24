@@ -64,6 +64,21 @@ export {
 export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
 export { createRng, type Rng } from '@/domain/rng';
 export {
+  acceptCandidate,
+  canStartRepechage,
+  declineCandidate,
+  drawCandidate,
+  isRepechageComplete,
+  isRepechageNeeded,
+  repechageBlockers,
+  repechageState,
+  startRepechage,
+  useRepechageFallback,
+  type RepechageBlocker,
+  type RepechageRngInput,
+  type RepechageState,
+} from '@/domain/repechage';
+export {
   nextPowerOfTwo,
   repechageOutlook,
   roundBoard,

@@ -157,6 +157,7 @@ describe('removing a group', () => {
       nextGroupNumber: 3,
       repechage: {
         target: 4,
+        pool: [],
         draws: [{ groupId: groupId(2), accepted: null }],
         fallbackUsed: null,
       },

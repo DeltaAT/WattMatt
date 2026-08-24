@@ -18,7 +18,8 @@ When `SCHEMA_VERSION` is bumped:
 
 A new version's fixture is the previous one opened and saved by the build that introduced it —
 that is exactly what a host's file goes through, and it keeps every earlier fixture's data
-intact so the chain stays comparable. `v3.wattmatt` is `v2.wattmatt` after `v2_to_v3`.
+intact so the chain stays comparable. `v3.wattmatt` is `v2.wattmatt` after `v2_to_v3`, and
+`v4.wattmatt` is `v3.wattmatt` after `v3_to_v4`.
 
 A fixture is a mid-tournament file on purpose — rounds, tables, a repechage, a bracket and a
 log all populated. A migration that drops a section is invisible in an empty tournament, and

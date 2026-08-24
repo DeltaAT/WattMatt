@@ -163,6 +163,10 @@ export function midTournament(overrides: Partial<Tournament> = {}): Tournament {
     ],
     repechage: {
       target: 4,
+      // Empty because the phase is over: the pot ran dry, the host handed out
+      // the missing place as a `Freilos`, and the bracket below is what came of
+      // it (docs/TOURNAMENT-RULES.md §4).
+      pool: [],
       draws: [{ groupId: groupId(3), accepted: false }],
       fallbackUsed: 'BYES',
     },

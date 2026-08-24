@@ -195,7 +195,28 @@ export type RepechageFallback = z.infer<typeof repechageFallbackSchema>;
 export const repechageSchema = z.object({
   /** `2^ceil(log2(|W|))` — the power-of-two field the bracket needs. */
   target: z.number().int().positive(),
+  /**
+   * The losers not yet drawn, in the order the seeded shuffle produced. The
+   * next candidate is the front of the list (docs/TOURNAMENT-RULES.md §4).
+   *
+   * Stored rather than re-derived from the seed on load, and that is the whole
+   * reason schema v4 exists. The shuffle happened at one position of the RNG
+   * stream; every draw since has moved the cursor past it, so a file reopened
+   * mid-phase could only re-shuffle into a *different* order — and the room has
+   * already been shown the pot. A `Freilos` nobody drew and a candidate who was
+   * already eliminated are the two ways that goes wrong in front of an
+   * audience (CLAUDE.md §7, "loaded mid-tournament").
+   */
+  pool: z.array(groupIdSchema),
   draws: z.array(repechageDrawSchema),
+  /**
+   * Which §4 fallback the host took when the pool ran dry, or null.
+   *
+   * The **last** one, not a list: `REOPEN_DECLINED` can be taken more than once
+   * and can be followed by `BYES`, and what the tournament still needs to know
+   * afterwards is only whether byes are owed to the next draw. The full
+   * sequence is in the append-only log (docs/FILE-FORMAT.md rule 6).
+   */
   fallbackUsed: repechageFallbackSchema.nullable(),
 });
 export type Repechage = z.infer<typeof repechageSchema>;
