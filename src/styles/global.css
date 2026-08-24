@@ -94,6 +94,27 @@
   padding: var(--wm-beamer-safe-area);
 }
 
+/* Shrink-to-fit for a scene body (issue #55, `useFitToStage`).
+ *
+ * A beamer scene never scrolls and the stage is `overflow-hidden`, so anything
+ * that does not fit is gone with nothing to say it had been there. Everything is
+ * therefore drawn and the body is scaled down until it fits.
+ *
+ * `zoom` rather than `transform: scale()` or a smaller font size, for two
+ * reasons. It re-lays the content out at the new size, so the projector renders
+ * real glyphs rather than magnified ones — which is the difference between a
+ * small row and a blurry one at ten metres. And it multiplies *every* length
+ * inside: type, padding, borders, radii and gaps come down together, so the
+ * boxes get smaller instead of the text rattling around inside boxes that
+ * stayed put.
+ *
+ * The factor is written to `--wm-fit` by the hook, from a measurement. It
+ * defaults to 1, so a scene renders at full size before the first measurement
+ * and whenever there is nothing to measure. */
+@utility beamer-fit {
+  zoom: var(--wm-fit, 1);
+}
+
 /* Tabular figures for a numeric display that sits inside a context which
  * overrode the body's font-feature-settings (display font, third-party CSS). */
 @utility wm-tnum {

@@ -122,15 +122,32 @@ describe('the table overview scene', () => {
    * (docs/STYLEGUIDE.md §3) — so the grid gets denser rather than taller.
    */
   it.each([
-    [3, 'grid-cols-1'],
-    [10, 'grid-cols-2'],
-    [24, 'grid-cols-3'],
+    [3, 1],
+    [10, 2],
+    [24, 3],
   ])('lays %s tables out without needing to scroll', (count, columns) => {
     const many = tournament({
       tables: Array.from({ length: count }, (_unused, index) => table(index + 1)),
     });
 
-    expect(scene(toTournamentSnapshot(many))).toContain(columns);
+    expect(scene(toTournamentSnapshot(many))).toContain(`repeat(${columns}, minmax(0, 1fr))`);
+  });
+
+  /*
+   * Issue #55. A venue with more tables than the old three density steps
+   * anticipated lost the last ones off the bottom of an `overflow-hidden`
+   * stage — and the pair standing at that table would have been looking for
+   * themselves on a wall they were not on.
+   */
+  it.each([24, 40, 64])('draws every one of %s tables', (count) => {
+    const many = tournament({
+      tables: Array.from({ length: count }, (_unused, index) => table(index + 1)),
+    });
+
+    const markup = scene(toTournamentSnapshot(many));
+
+    expect(markup.match(/data-table-id=/g)).toHaveLength(count);
+    expect(markup).toContain(`data-table-id="tbl_${count}"`);
   });
 
   /* 32 px is the absolute floor for beamer text (docs/STYLEGUIDE.md §2). */
