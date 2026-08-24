@@ -5,6 +5,7 @@ import { matchesOnTables } from '@/domain/tables';
 import {
   groupSchema,
   matchSchema,
+  participantLabelSchema,
   tableSchema,
   type Group,
   type Match,
@@ -30,10 +31,11 @@ import {
  * the host has already eliminated.
  *
  * It carries groups and, since issue #13, tables and the matches that are on
- * them — exactly what `TABLE_OVERVIEW` draws. The scenes that need whole rounds
- * and the bracket are issues #18, #19, #25 and #27, and each extends this
- * schema with what it actually draws; the envelope around it is final either
- * way (docs/OPEN-QUESTIONS.md #19).
+ * them — exactly what `TABLE_OVERVIEW` draws — plus, since issue #14, the one
+ * setting that decides what the audience calls a participant. The scenes that
+ * need whole rounds and the bracket are issues #18, #19, #25 and #27, and each
+ * extends this schema with what it actually draws; the envelope around it is
+ * final either way (docs/OPEN-QUESTIONS.md #19).
  */
 export const groupSnapshotSchema = groupSchema;
 
@@ -41,6 +43,16 @@ export type GroupSnapshot = Group;
 
 export const tournamentSnapshotSchema = z.object({
   groups: z.array(groupSnapshotSchema),
+  /**
+   * Whether the room is playing in `Gruppen`, `Teams` or as `Spieler`
+   * (issue #14).
+   *
+   * The only piece of `settings` the beamer is sent, because it is the only one
+   * that changes what the audience reads. Sent rather than assumed: the host
+   * screen and the projector calling the same participant two different things
+   * is precisely the disagreement golden rule 4 exists to prevent.
+   */
+  participantLabel: participantLabelSchema,
   /** In the host's configured order, which is the order they stand in the room. */
   tables: z.array(tableSchema),
   /**
@@ -90,7 +102,14 @@ export const snapshotSchema = z.object({
 
 export type Snapshot = z.infer<typeof snapshotSchema>;
 
-export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [], tables: [], matches: [] };
+export const EMPTY_TOURNAMENT: TournamentSnapshot = {
+  groups: [],
+  // The default of `DEFAULT_SETTINGS`: with no tournament open there is nobody
+  // to call anything, and `Gruppe` is what the glossary calls a participant.
+  participantLabel: 'GROUP',
+  tables: [],
+  matches: [],
+};
 
 /**
  * The beamer's view of the tournament the host owns.
@@ -105,6 +124,7 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [], tables: [], ma
 export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
   return {
     groups: tournament.groups,
+    participantLabel: tournament.settings.participantLabel,
     tables: tournament.tables,
     // Copied out of the readonly projection: the snapshot is a value the sync
     // layer serialises, and Zod's inferred array type is a mutable one.

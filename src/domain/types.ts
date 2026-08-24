@@ -275,6 +275,17 @@ export const tournamentSchema = z.object({
    */
   nextTableNumber: z.number().int().min(1),
   groups: z.array(groupSchema),
+  /**
+   * The number the next group created will get, in its id and on its chip.
+   *
+   * The same counter as `nextTableNumber` and for the same reason, one stated
+   * by docs/TOURNAMENT-RULES.md §2 rather than inferred: a group number is
+   * stable for the whole tournament and is **never reused**, even after the
+   * group is removed. `max(number) + 1` breaks that the moment the
+   * highest-numbered group is the one deleted, and nothing left in `groups`
+   * remembers that its number is spent (docs/OPEN-QUESTIONS.md #22).
+   */
+  nextGroupNumber: z.number().int().min(1),
   rounds: z.array(roundSchema),
 
   /** Null when the phase was skipped, which is the common case (§4). */

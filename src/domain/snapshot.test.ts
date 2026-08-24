@@ -28,6 +28,7 @@ describe('the snapshot envelope', () => {
       revision: 7,
       scene: { id: 'BRACKET' },
       tournament: {
+        participantLabel: 'TEAM',
         groups: [
           {
             id: groupIdSchema.parse('g1'),
@@ -111,11 +112,21 @@ describe('toTournamentSnapshot', () => {
       tournament({ groups: [group(1)], tables: [table(1)], rngSeed: 'secret' }),
     );
 
-    expect(Object.keys(projected).sort()).toEqual(['groups', 'matches', 'tables']);
+    expect(Object.keys(projected).sort()).toEqual([
+      'groups',
+      'matches',
+      'participantLabel',
+      'tables',
+    ]);
     expect(snapshotSchema.safeParse(snapshot({ tournament: projected })).success).toBe(true);
   });
 
   it('projects an empty tournament as an empty picture', () => {
-    expect(toTournamentSnapshot(tournament())).toEqual({ groups: [], tables: [], matches: [] });
+    expect(toTournamentSnapshot(tournament())).toEqual({
+      groups: [],
+      participantLabel: 'GROUP',
+      tables: [],
+      matches: [],
+    });
   });
 });

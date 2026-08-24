@@ -146,6 +146,9 @@ export function midTournament(overrides: Partial<Tournament> = {}): Tournament {
       group(3, { status: 'ELIMINATED' }),
       group(4),
     ],
+    // Four groups have been created, so the next one is the fifth. Like the
+    // table counter, it is part of the document and has to be as real.
+    nextGroupNumber: 5,
     rounds: [
       round(1, {
         kind: 'QUALIFYING',

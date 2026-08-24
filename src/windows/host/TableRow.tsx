@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { GroupId, TableId } from '@/domain/ids';
 import { elapsedMs, type TableSlot } from '@/domain/tables';
-import type { Group, TableStatus, Timestamp } from '@/domain/types';
+import type { Group, ParticipantLabel, TableStatus, Timestamp } from '@/domain/types';
 import { de, formatDuration } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 
@@ -17,6 +17,7 @@ import { groupLabel } from '@/windows/groupLabel';
 export function TableRow({
   slot,
   groups,
+  participant,
   now,
   isFirst,
   isLast,
@@ -28,6 +29,8 @@ export function TableRow({
 }: {
   slot: TableSlot;
   groups: ReadonlyMap<GroupId, Group>;
+  /** The wording this tournament uses, for the pairing on the row. */
+  participant: ParticipantLabel;
   now: Timestamp;
   isFirst: boolean;
   isLast: boolean;
@@ -60,7 +63,7 @@ export function TableRow({
       />
 
       <p className="min-w-0 flex-1 truncate text-host-sm text-wm-text-muted" data-table-match="">
-        {occupancyText(slot, groups, now)}
+        {occupancyText(slot, groups, participant, now)}
       </p>
 
       <div className="flex shrink-0 gap-1">
@@ -183,6 +186,7 @@ function LabelField({ label, onRename }: { label: string; onRename: (label: stri
 function occupancyText(
   { table, match }: TableSlot,
   groups: ReadonlyMap<GroupId, Group>,
+  participant: ParticipantLabel,
   now: Timestamp,
 ): string {
   if (table.status === 'DISABLED') {
@@ -195,8 +199,8 @@ function occupancyText(
     return de.table.unknownMatch;
   }
 
-  const a = groupLabel(match.a, groups).text;
-  const b = groupLabel(match.b, groups).text;
+  const a = groupLabel(match.a, groups, participant).text;
+  const b = groupLabel(match.b, groups, participant).text;
   const running =
     table.occupiedSince === null
       ? ''

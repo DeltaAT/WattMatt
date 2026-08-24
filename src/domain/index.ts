@@ -20,6 +20,15 @@ export {
   type CreateTournamentInput,
 } from '@/domain/factory';
 export {
+  addGroups,
+  hasEnoughGroups,
+  hasStarted,
+  isRemovable,
+  MINIMUM_GROUPS,
+  nextGroupNumber,
+  removeGroup,
+} from '@/domain/groups';
+export {
   bracketNodeIdSchema,
   groupIdSchema,
   matchIdSchema,
@@ -43,6 +52,7 @@ export {
   type TournamentFile,
 } from '@/domain/schema';
 export { activeGroups, currentRound, freeTables, undecidedMatches } from '@/domain/selectors';
+export { setParticipantLabel } from '@/domain/settings';
 export {
   addTables,
   disableTable,

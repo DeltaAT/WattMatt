@@ -21,6 +21,21 @@ describe('the beamer scene surface', () => {
     expect(markup).toContain(de.beamer.scenePending);
   });
 
+  /* Two scenes are drawn for real rather than as a placeholder: the occupancy
+   * board (issue #13) and the field of participants (issue #14). */
+  it('draws the group overview rather than a placeholder', () => {
+    const markup = renderToStaticMarkup(
+      <BeamerScenePlaceholder
+        scene={{ id: 'GROUP_OVERVIEW' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+      />,
+    );
+
+    expect(markup).toContain('data-scene="GROUP_OVERVIEW"');
+    expect(markup).not.toContain(de.beamer.scenePending);
+  });
+
   it('shows nothing at all during a blackout', () => {
     const markup = renderToStaticMarkup(
       <BeamerScenePlaceholder scene={{ id: 'BLACKOUT' }} tournament={EMPTY_TOURNAMENT} settled />,

@@ -16,6 +16,10 @@ When `SCHEMA_VERSION` is bumped:
 2. Add `v<previous>.wattmatt` here if the version that is being left behind has none yet.
 3. Add the migration to `src/domain/migrations/registry.ts`.
 
+A new version's fixture is the previous one opened and saved by the build that introduced it —
+that is exactly what a host's file goes through, and it keeps every earlier fixture's data
+intact so the chain stays comparable. `v3.wattmatt` is `v2.wattmatt` after `v2_to_v3`.
+
 A fixture is a mid-tournament file on purpose — rounds, tables, a repechage, a bracket and a
 log all populated. A migration that drops a section is invisible in an empty tournament, and
 "works with a tournament loaded mid-tournament" is a Definition-of-Done box (CLAUDE.md §7).

@@ -31,7 +31,18 @@ SETUP → QUALIFYING → REPECHAGE? → ELIMINATION* → NAMING → BRACKET → 
 
 - The host creates tables (at least 1) and groups (at least 2) — groups via a `+` control.
 - Groups are numbered `1..n` in creation order. Numbers are stable for the whole tournament
-  and are never reused, even after a group is removed.
+  and are never reused, even after a group is removed. "Never reused" is carried by a stored
+  counter, `tournament.nextGroupNumber`, exactly as it is for tables: once `grp_3` is deleted
+  nothing left in `groups` remembers that 3 is spent (issue #14, docs/OPEN-QUESTIONS.md #22).
+- Groups may be added **at any point of the tournament**, not only during `SETUP` — a
+  participant who turns up late is a real thing that happens. After the first draw the host is
+  warned first: a group added then is not in the rounds already drawn (issue #14).
+- A group that has already been drawn — into a match, a repechage draw or a bracket slot —
+  cannot be **removed**. Those records name it, and a match against a group that no longer
+  exists would show the audience a `Freilos` the draw never granted. Such a participant leaves
+  the tournament by losing, by declining (§4), or by the host undoing back past the draw.
+- The German word for a participant is the host's choice — `Gruppe`, `Team` or `Spieler`
+  (`settings.participantLabel`). It changes UI copy only; the model is `Group` throughout.
 - The tournament cannot start unless: `groups >= 2` and `tables >= 1`.
 
 ## 3. QUALIFYING (round 1)

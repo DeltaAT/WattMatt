@@ -69,6 +69,16 @@ export const deAT = {
       tableRemoved: (params: { label: string }) => `Tisch gelöscht: ${params.label}`,
       tableDisabled: (params: { label: string }) => `Tisch gesperrt: ${params.label}`,
       tableEnabled: (params: { label: string }) => `Tisch freigegeben: ${params.label}`,
+      /**
+       * Groups (issue #14). Each is handed the participant wording it needs —
+       * `de.participant[label]` — because the host reads the undo button in the
+       * words they chose for this tournament, not in the code's.
+       */
+      groupsAdded: (params: { participants: string }) => `${params.participants} angelegt`,
+      groupRemoved: (params: { participant: string }) => `${params.participant} gelöscht`,
+      participantLabelSet: (params: { participants: string }) =>
+        `Bezeichnung geändert: ${params.participants}`,
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -214,14 +224,98 @@ export const deAT = {
   },
 
   group: {
-    label: 'Gruppe',
-    numberLabel: 'Gruppennummer',
-    /** The identity of a participant until the naming phase (§0). */
-    numbered: (params: { n: number }) => `Gruppe ${params.n}`,
     /** A group id that no longer names a group — a file repaired by hand. */
     unknown: 'Unbekannt',
-    /** "1 Gruppe" / "5 Gruppen" — German pluralisation via @/i18n/plural. */
-    count: (params: { n: number }) => pluralizeDeAT(params.n, 'Gruppe', 'Gruppen'),
+    /** On the chip, beside the number. Short: forty of them share one screen. */
+    remove: 'Löschen',
+    numberLabel: 'Gruppennummer',
+    /**
+     * The heading of the warning shown before a late entry is added. The same
+     * sentence whatever the participants are called — it is about the draw.
+     */
+    afterDrawTitle: 'Die Auslosung ist bereits gelaufen',
+  },
+
+  /**
+   * The three wordings `settings.participantLabel` selects between (issue #14,
+   * docs/GLOSSARY.md "Teilnehmer-Bezeichnung").
+   *
+   * Three complete word sets rather than one set of sentences with a noun
+   * spliced into them. German nouns carry gender — *keine* Gruppe, *kein* Team,
+   * *kein* Spieler — so a template would produce copy that is wrong in two of
+   * the three settings, and wrong in the way a native speaker notices
+   * immediately. Written out, each string is reviewable as the sentence it is.
+   *
+   * The model stays `Group` throughout: the three words describe the same
+   * thing, one participating unit with a number (CLAUDE.md golden rule 1).
+   */
+  participant: {
+    GROUP: {
+      one: 'Gruppe',
+      many: 'Gruppen',
+      /** The identity of a participant until the naming phase (§0). */
+      numbered: (params: { n: number }) => `Gruppe ${params.n}`,
+      /** "1 Gruppe" / "5 Gruppen" — German pluralisation via @/i18n/plural. */
+      count: (params: { n: number }) => pluralizeDeAT(params.n, 'Gruppe', 'Gruppen'),
+      add: 'Gruppe hinzufügen',
+      bulkAddLabel: 'Anzahl Gruppen',
+      bulkAdd: 'Gruppen anlegen',
+      removeNumbered: (params: { n: number }) => `Gruppe ${params.n} löschen`,
+      empty: 'Es ist noch keine Gruppe angelegt. Legen Sie mindestens zwei Gruppen an.',
+      tooFew: 'Ein Turnier braucht mindestens zwei Gruppen.',
+      drawn: 'Diese Gruppe ist bereits ausgelost und kann nicht mehr gelöscht werden.',
+      showOnBeamer: 'Gruppen auf den Beamer',
+      beamerEmpty: 'Es sind noch keine Gruppen angelegt.',
+      /** The warning before a group is added to a tournament already drawn. */
+      afterDrawBody:
+        'Neue Gruppen spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
+      afterDrawConfirm: 'Gruppen trotzdem anlegen',
+    },
+
+    TEAM: {
+      one: 'Team',
+      many: 'Teams',
+      numbered: (params: { n: number }) => `Team ${params.n}`,
+      count: (params: { n: number }) => pluralizeDeAT(params.n, 'Team', 'Teams'),
+      add: 'Team hinzufügen',
+      bulkAddLabel: 'Anzahl Teams',
+      bulkAdd: 'Teams anlegen',
+      removeNumbered: (params: { n: number }) => `Team ${params.n} löschen`,
+      empty: 'Es ist noch kein Team angelegt. Legen Sie mindestens zwei Teams an.',
+      tooFew: 'Ein Turnier braucht mindestens zwei Teams.',
+      drawn: 'Dieses Team ist bereits ausgelost und kann nicht mehr gelöscht werden.',
+      showOnBeamer: 'Teams auf den Beamer',
+      beamerEmpty: 'Es sind noch keine Teams angelegt.',
+      afterDrawBody:
+        'Neue Teams spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
+      afterDrawConfirm: 'Teams trotzdem anlegen',
+    },
+
+    PLAYER: {
+      one: 'Spieler',
+      /** Plural and singular are the same word; the count beside it disambiguates. */
+      many: 'Spieler',
+      numbered: (params: { n: number }) => `Spieler ${params.n}`,
+      count: (params: { n: number }) => pluralizeDeAT(params.n, 'Spieler', 'Spieler'),
+      add: 'Spieler hinzufügen',
+      bulkAddLabel: 'Anzahl Spieler',
+      bulkAdd: 'Spieler anlegen',
+      removeNumbered: (params: { n: number }) => `Spieler ${params.n} löschen`,
+      empty: 'Es ist noch kein Spieler angelegt. Legen Sie mindestens zwei Spieler an.',
+      tooFew: 'Ein Turnier braucht mindestens zwei Spieler.',
+      drawn: 'Dieser Spieler ist bereits ausgelost und kann nicht mehr gelöscht werden.',
+      showOnBeamer: 'Spieler auf den Beamer',
+      beamerEmpty: 'Es sind noch keine Spieler angelegt.',
+      afterDrawBody:
+        'Neue Spieler spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
+      afterDrawConfirm: 'Spieler trotzdem anlegen',
+    },
+  },
+
+  /** The host's choices about a tournament (docs/FILE-FORMAT.md `settings`). */
+  settings: {
+    /** docs/GLOSSARY.md: the German for `participantLabel`. */
+    participantLabel: 'Teilnehmer-Bezeichnung',
   },
 
   /**
@@ -327,6 +421,17 @@ export const deAT = {
      * components arrive with issues #18, #19, #25 and #27.
      */
     scenePending: 'Ansicht wird vorbereitet.',
+
+    /**
+     * The `GROUP_OVERVIEW` scene: everyone who is playing (issue #14).
+     *
+     * Its heading is the participant wording — `Gruppen`, `Teams`, `Spieler` —
+     * so there is no title here. What is left is the line under it, which is
+     * the one thing the room cannot count for itself at 64 chips.
+     */
+    groupOverview: {
+      count: (params: { participants: string }) => `${params.participants} am Start`,
+    },
 
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */
     tableOverview: {

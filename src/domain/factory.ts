@@ -50,6 +50,7 @@ export function createTournament(input: CreateTournamentInput): Tournament {
     tables: [],
     nextTableNumber: 1,
     groups: [],
+    nextGroupNumber: 1,
     rounds: [],
 
     // Skipped and not-yet-reached, respectively — not "empty". A repechage that

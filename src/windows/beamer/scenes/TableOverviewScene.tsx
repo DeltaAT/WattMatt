@@ -1,7 +1,7 @@
 import type { GroupId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
-import type { Group } from '@/domain/types';
+import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 
@@ -44,7 +44,13 @@ export function TableOverviewScene({
       ) : (
         <ul className={`grid flex-1 auto-rows-min gap-4 ${COLUMNS[density(board.length)]}`}>
           {board.map((slot) => (
-            <TableCard key={slot.table.id} slot={slot} groups={byId} size={density(board.length)} />
+            <TableCard
+              key={slot.table.id}
+              slot={slot}
+              groups={byId}
+              participant={tournament.participantLabel}
+              size={density(board.length)}
+            />
           ))}
         </ul>
       )}
@@ -55,10 +61,12 @@ export function TableOverviewScene({
 function TableCard({
   slot,
   groups,
+  participant,
   size,
 }: {
   slot: TableSlot;
   groups: ReadonlyMap<GroupId, Group>;
+  participant: ParticipantLabel;
   size: Density;
 }) {
   const { table } = slot;
@@ -73,7 +81,7 @@ function TableCard({
     >
       <span className={`wm-display shrink-0 font-bold ${TYPE[size]}`}>{table.label}</span>
       <span className={`min-w-0 flex-1 truncate font-semibold ${TYPE[size]}`}>
-        {pairingText(slot, groups)}
+        {pairingText(slot, groups, participant)}
       </span>
     </li>
   );
@@ -110,7 +118,11 @@ const TYPE: Record<Density, string> = {
   dense: 'text-beamer-body',
 };
 
-function pairingText({ table, match }: TableSlot, groups: ReadonlyMap<GroupId, Group>): string {
+function pairingText(
+  { table, match }: TableSlot,
+  groups: ReadonlyMap<GroupId, Group>,
+  participant: ParticipantLabel,
+): string {
   if (table.status === 'DISABLED') {
     return de.beamer.tableOverview.disabled;
   }
@@ -124,8 +136,8 @@ function pairingText({ table, match }: TableSlot, groups: ReadonlyMap<GroupId, G
     return de.table.unknownMatch;
   }
 
-  const a = groupLabel(match.a, groups).text;
-  const b = groupLabel(match.b, groups).text;
+  const a = groupLabel(match.a, groups, participant).text;
+  const b = groupLabel(match.b, groups, participant).text;
   return `${a} ${de.match.versus} ${b}`;
 }
 
