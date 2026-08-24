@@ -47,6 +47,7 @@ describe('the snapshot envelope', () => {
         tables: [occupiedTable(1, matchId(4)), table(2, { status: 'DISABLED' })],
         matches: [match(4, { tableId: table(1).id, status: 'RUNNING' })],
         round: null,
+        repechage: null,
       },
       delivery: 'live',
     });
@@ -173,6 +174,7 @@ describe('toTournamentSnapshot', () => {
       'name',
       'participantLabel',
       'performanceMode',
+      'repechage',
       'round',
       'tables',
     ]);
@@ -188,6 +190,7 @@ describe('toTournamentSnapshot', () => {
       tables: [],
       matches: [],
       round: null,
+      repechage: null,
     });
   });
 });

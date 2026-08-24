@@ -1,12 +1,16 @@
 import { z } from 'zod';
 
 import { beamerSceneSchema, IDLE_SCENE } from '@/domain/beamerScene';
+import { groupIdSchema } from '@/domain/ids';
+import { potEntrySchema, repechagePot, repechageState } from '@/domain/repechage';
 import { currentRound } from '@/domain/selectors';
 import { matchesOnTables } from '@/domain/tables';
 import {
   groupSchema,
   matchSchema,
   participantLabelSchema,
+  repechageDrawSchema,
+  repechageFallbackSchema,
   roundSchema,
   tableSchema,
   type Group,
@@ -54,6 +58,45 @@ export type GroupSnapshot = Group;
 export const roundSnapshotSchema = roundSchema.omit({ matches: true });
 
 export type RoundSnapshot = z.infer<typeof roundSnapshotSchema>;
+
+/**
+ * The `Hoffnungsrunde` as the projector draws it (issue #21).
+ *
+ * Derived, not raw: `repechage.pool` and `repechage.draws` are the file's
+ * record of what happened, and the scene needs the picture that follows from
+ * them — who is through, who is still in the pot, how many places are left. The
+ * derivation is `@/domain/repechage`'s and is done once, on the host, so the
+ * panel the host reads and the wall the room reads cannot come out of two
+ * different calculations and disagree about the count in front of everybody.
+ *
+ * Null for most of a tournament: before the phase, and for every tournament
+ * whose field was a power of two and skipped it (docs/TOURNAMENT-RULES.md §9
+ * case 2). Null is what tells the scene to draw nothing rather than an empty
+ * pot.
+ */
+export const repechageSnapshotSchema = z.object({
+  /** `2^ceil(log2(|W|))` — the field the bracket needs. */
+  target: z.number().int().positive(),
+  /** How many places are still open, which is the counter the room reads. */
+  need: z.number().int().nonnegative(),
+  /** Places the *Freilose vergeben* fallback owes the next draw. */
+  byes: z.number().int().nonnegative(),
+  /** The winners column: the qualifying winners plus everyone who accepted. */
+  through: z.array(groupIdSchema),
+  /** Every loser and where they stand, in the order the room has seen them. */
+  pot: z.array(potEntrySchema),
+  /**
+   * The last draw and what became of it — the one card that is moving
+   * (docs/MOTION.md §4.3). Null before the first candidate is drawn.
+   */
+  last: repechageDrawSchema.nullable(),
+  /** Which §4 fallback the host took, so the wall can say so. Usually null. */
+  fallbackUsed: repechageFallbackSchema.nullable(),
+  /** The field is full and nobody is waiting for an answer. */
+  complete: z.boolean(),
+});
+
+export type RepechageSnapshot = z.infer<typeof repechageSnapshotSchema>;
 
 export const tournamentSnapshotSchema = z.object({
   /**
@@ -108,6 +151,16 @@ export const tournamentSnapshotSchema = z.object({
    * has already seen.
    */
   round: roundSnapshotSchema.nullable(),
+  /**
+   * The running `Hoffnungsrunde`, or null (issue #21).
+   *
+   * Sent for the same reason `round` is: the `REPECHAGE` scene draws it, and
+   * the beamer holds no state of its own to draw it from (golden rule 4). It is
+   * also what makes the phase survive the projector being unplugged mid-draw —
+   * a beamer reopened between two candidates is handed the pot, the winners
+   * column and the counter exactly as they stood.
+   */
+  repechage: repechageSnapshotSchema.nullable(),
 });
 
 export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
@@ -160,6 +213,9 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   matches: [],
   // Nothing has been drawn, so there is no round to name.
   round: null,
+  // The common case for a real tournament too: the phase is skipped whenever
+  // the qualifying round leaves a power of two standing.
+  repechage: null,
 };
 
 /**
@@ -174,6 +230,7 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
  */
 export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
   const round = currentRound(tournament);
+  const repechage = repechageState(tournament);
 
   return {
     name: tournament.name,
@@ -190,6 +247,22 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
     // layer serialises, and Zod's inferred array type is a mutable one.
     matches: round === null ? [...matchesOnTables(tournament)] : [...round.matches],
     round: round === null ? null : withoutMatches(round),
+    // Copied out of the readonly projection for the same reason `matches` is:
+    // what crosses the channel is a value the sync layer serialises, and the
+    // schema's inferred arrays are mutable ones.
+    repechage:
+      repechage === null
+        ? null
+        : {
+            target: repechage.target,
+            need: repechage.need,
+            byes: repechage.byes,
+            through: [...repechage.through],
+            pot: [...repechagePot(tournament)],
+            last: repechage.last,
+            fallbackUsed: repechage.fallbackUsed,
+            complete: repechage.complete,
+          },
   };
 }
 

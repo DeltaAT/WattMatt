@@ -69,6 +69,9 @@ function fullHouse(): TournamentSnapshot {
       label: 'Runde 1',
       state: 'DRAWN' as const,
     },
+    // A field of 64 leaves 32 winners standing, which is already a power of two
+    // — docs/TOURNAMENT-RULES.md §4 skips the phase outright for it (issue #21).
+    repechage: null,
   };
 }
 
@@ -99,6 +102,7 @@ describe('snapshot round-trip performance', () => {
         tables: [...tournament.tables],
         matches: [...tournament.matches],
         round: tournament.round,
+        repechage: tournament.repechage,
       };
 
       const started = performance.now();

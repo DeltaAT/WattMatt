@@ -11,6 +11,7 @@ import {
   isRepechageComplete,
   isRepechageNeeded,
   repechageBlockers,
+  repechagePot,
   repechageState,
   startRepechage,
   useRepechageFallback,
@@ -619,6 +620,145 @@ describe('a repechage that has to survive the file', () => {
     expect(activeGroups(withLatecomer)).toHaveLength(8);
     expect(state(withLatecomer).through).toHaveLength(7);
     expect(state(withLatecomer).need).toBe(1);
+  });
+});
+
+/**
+ * The pot as the projector draws it (issue #21).
+ *
+ * The scene's promise is that everybody who lost is on the wall from the first
+ * frame and that nobody ever leaves it, so what is checked here is exactly
+ * that: one entry per loser, always, in an order that does not move under the
+ * audience's eyes.
+ */
+describe('repechagePot', () => {
+  /** Draws and declines everybody, which is what empties the pot. */
+  function declineEveryone(document: Tournament): Tournament {
+    let current = document;
+    while (state(current).pool.length > 0 && state(current).need > 0) {
+      current = answer(current, false);
+    }
+    return current;
+  }
+
+  it('is empty when there is no repechage', () => {
+    expect(repechagePot(qualified(8))).toEqual([]);
+  });
+
+  it('starts as every loser, all of them still in the pot', () => {
+    const started = inRepechage(13);
+    const losers = roundOutcome(openRound(started)).losers;
+
+    const pot = repechagePot(started);
+
+    // A set: the order is the shuffle's, and the test below is the one that
+    // pins it. What matters here is that nobody is missing and nobody is extra.
+    expect(new Set(pot.map((entry) => entry.groupId))).toEqual(new Set(losers));
+    expect(pot).toHaveLength(losers.length);
+    expect(pot.every((entry) => entry.status === 'POOL')).toBe(true);
+  });
+
+  it('is in the shuffled order, which is the order the room was shown', () => {
+    const started = inRepechage(13);
+
+    expect(repechagePot(started).map((entry) => entry.groupId)).toEqual(started.repechage?.pool);
+  });
+
+  it('marks the drawn candidate without taking them off the wall', () => {
+    const drawn = drawCandidate(inRepechage(13));
+    const candidate = state(drawn).pending;
+
+    const pot = repechagePot(drawn);
+
+    expect(pot).toHaveLength(repechagePot(inRepechage(13)).length);
+    expect(pot.find((entry) => entry.groupId === candidate)?.status).toBe('DRAWN');
+  });
+
+  it('keeps an accepted candidate in the pot, marked as through', () => {
+    const accepted = answer(inRepechage(13), true);
+    const through = state(accepted).through.at(-1);
+
+    expect(repechagePot(accepted).find((entry) => entry.groupId === through)?.status).toBe(
+      'ACCEPTED',
+    );
+  });
+
+  it('keeps a declined candidate in the pot, marked as out', () => {
+    const declined = answer(inRepechage(13), false);
+    const out = state(declined).declined[0];
+
+    expect(repechagePot(declined).find((entry) => entry.groupId === out)?.status).toBe('DECLINED');
+  });
+
+  /*
+   * The order is the whole reason the drawn ones come first: `drawCandidate`
+   * takes from the front of the pool, so draw order followed by what is left
+   * reproduces the shuffle the audience has been looking at. A card must not
+   * jump sideways when the next candidate comes out.
+   */
+  it('never moves a card once it has been drawn', () => {
+    let document = inRepechage(13);
+    const first = repechagePot(document).map((entry) => entry.groupId);
+
+    document = answer(document, false);
+    document = drawCandidate(document);
+
+    expect(repechagePot(document).map((entry) => entry.groupId)).toEqual(first);
+  });
+
+  /*
+   * `REOPEN_DECLINED` puts declined groups back into the pot, so one group can
+   * hold a `false` draw record *and* stand in the pool. Two cards for one
+   * person would be a person the room cannot follow.
+   */
+  it('shows a readmitted group once, and as back in the pot', () => {
+    let document = declineEveryone(inRepechage(13));
+    document = useRepechageFallback(document, 'REOPEN_DECLINED');
+
+    const pot = repechagePot(document);
+    const ids = pot.map((entry) => entry.groupId);
+
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(pot.filter((entry) => entry.status === 'POOL')).toHaveLength(
+      state(document).pool.length,
+    );
+    expect(pot.some((entry) => entry.status === 'DECLINED')).toBe(false);
+  });
+});
+
+/**
+ * `state.last` — the beat the beamer animates (docs/MOTION.md §4.3).
+ *
+ * One fact, "which card, and what happened to it", because a scene that
+ * reconstructed it from `pending`, `through` and `declined` would have to guess
+ * which of the three moved most recently.
+ */
+describe('the last draw', () => {
+  it('is null until the first candidate is drawn', () => {
+    expect(state(inRepechage(13)).last).toBeNull();
+  });
+
+  it('is the pending candidate while nobody has answered', () => {
+    const drawn = drawCandidate(inRepechage(13));
+
+    expect(state(drawn).last).toEqual({ groupId: state(drawn).pending, accepted: null });
+  });
+
+  it('carries the answer once it is given', () => {
+    const accepted = answer(inRepechage(13), true);
+    const declined = answer(inRepechage(13), false);
+
+    expect(accepted.repechage?.draws.at(-1)?.accepted).toBe(true);
+    expect(state(accepted).last?.accepted).toBe(true);
+    expect(state(declined).last?.accepted).toBe(false);
+  });
+
+  it('moves on to the next candidate rather than remembering the last answer', () => {
+    const first = answer(inRepechage(13), false);
+    const second = drawCandidate(first);
+
+    expect(state(second).last?.groupId).not.toBe(state(first).last?.groupId);
+    expect(state(second).last?.accepted).toBeNull();
   });
 });
 
