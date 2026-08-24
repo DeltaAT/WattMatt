@@ -93,8 +93,16 @@ The beamer root font size is resolution-relative so the same layout works on 720
 | `beamer-h1` | 6 | 96 px | Scene title (`ACHTELFINALE`) |
 | `beamer-h2` | 4 | 64 px | Group name in a match card |
 | `beamer-h3` | 3 | 48 px | Table label, round label |
-| `beamer-body` | 2 | 32 px | **Absolute minimum.** Anything smaller is unreadable at 10 m |
+| `beamer-body` | 2 | 32 px | **The floor a scene is designed to.** See the note below |
 | `beamer-caption` | 1.5 | 24 px | Only for persistent chrome (clock, tournament name) |
+
+**32 px is a design floor, not a hard limit.** Every scene is laid out so that the field sizes
+a host normally has land on it or above. Past that, the scene is scaled down until everything
+fits rather than dropping what does not (`beamer-fit` and `useFitToStage`, issue #55) — a row
+that ended up small can be read by walking closer, and a row that was cut off cannot be read at
+all. Anything that goes below 32 px is a scene showing more than it was designed for, which is
+the host's call to make; it is never the app quietly deciding what the room does not need to
+see.
 
 ### Host type scale
 
@@ -109,6 +117,10 @@ The beamer root font size is resolution-relative so the same layout works on 720
 - The beamer is always laid out for **16:9**. Letterbox rather than reflow if the projector
   reports something else.
 - Beamer screens show **one idea at a time**. If a scene needs a scrollbar, it is the wrong scene.
+- **Nothing is ever clipped or counted.** The stage is `overflow-hidden`, so a card that does
+  not fit is a card nobody in the room can know about — and the person it was about is exactly
+  the person looking for it. Scenes take more columns as the field grows and then scale the
+  whole body down (`beamer-fit`), instead of slicing a list and printing "… und 3 weitere".
 - Host hit targets: minimum 32 × 32 px, 40 px for destructive or high-frequency actions
   (setting a winner). The host is clicking fast, under pressure, possibly on a trackpad.
 

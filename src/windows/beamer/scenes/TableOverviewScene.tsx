@@ -3,6 +3,8 @@ import type { TournamentSnapshot } from '@/domain/snapshot';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitColumns, gridColumns } from '@/windows/beamer/fit';
+import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -11,6 +13,13 @@ import { groupLabel } from '@/windows/groupLabel';
  * The scene the audience gets between rounds — it answers the one question
  * fifty people in a room ask at once, and it answers it without anybody having
  * to walk to a table and read a piece of paper.
+ *
+ * Which means **every** table has to be on it. A venue with more tables than
+ * the grid held used to lose the last ones off the bottom of an
+ * `overflow-hidden` stage, and the pair standing at that table would have been
+ * left looking for themselves on a wall they were not on. So the grid takes as
+ * many columns as the room needs and the board is scaled down until it fits
+ * (issue #55, `useFitToStage`).
  *
  * One idea per screen (docs/STYLEGUIDE.md §3), so there is no stopwatch here:
  * how long a match has been running is the host's problem and belongs on their
@@ -30,6 +39,7 @@ export function TableOverviewScene({
   const byId: ReadonlyMap<GroupId, Group> = new Map(
     tournament.groups.map((group) => [group.id, group]),
   );
+  const { frame, content } = useFitToStage();
 
   return (
     <div
@@ -37,22 +47,31 @@ export function TableOverviewScene({
       data-scene="TABLE_OVERVIEW"
       data-settled={settled}
     >
+      {/* Outside the frame, so the title stays the same size at 3 tables and
+       * at 30 — it is what tells somebody walking in what they are reading. */}
       <h1 className="wm-display text-beamer-h1 font-extrabold">{de.beamer.tableOverview.title}</h1>
 
       {board.length === 0 ? (
         <p className="text-beamer-body text-wm-text-muted">{de.beamer.tableOverview.empty}</p>
       ) : (
-        <ul className={`grid flex-1 auto-rows-min gap-4 ${COLUMNS[density(board.length)]}`}>
-          {board.map((slot) => (
-            <TableCard
-              key={slot.table.id}
-              slot={slot}
-              groups={byId}
-              participant={tournament.participantLabel}
-              size={density(board.length)}
-            />
-          ))}
-        </ul>
+        <div className="min-h-0 flex-1 overflow-hidden" ref={frame}>
+          <div className="beamer-fit" ref={content}>
+            <ul
+              className="grid auto-rows-min gap-4"
+              style={gridColumns(fitColumns(board.length, CELL_ASPECT))}
+            >
+              {board.map((slot) => (
+                <TableCard
+                  key={slot.table.id}
+                  slot={slot}
+                  groups={byId}
+                  participant={tournament.participantLabel}
+                  size={density(board.length)}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -88,14 +107,21 @@ function TableCard({
 }
 
 /**
- * How much room each table gets.
+ * The shape of a table card: a label, and a pairing beside it that is most of
+ * the width. Wide, so the grid should stay narrow — at this value `fitColumns`
+ * puts 5 tables in one column and 16 in two, which is the ladder this scene
+ * used before, and 36 in three, 64 in four, instead of stopping.
+ */
+const CELL_ASPECT = 9;
+
+/**
+ * How much type each table gets.
  *
- * A beamer scene that needs a scrollbar is the wrong scene
- * (docs/STYLEGUIDE.md §3), and the number of tables is the host's decision
- * rather than the designer's — so the grid gets denser instead of taller. Three
- * steps and no more: `text-beamer-body` is the absolute floor at 32 px, so a
- * venue with more tables than the third step holds is a scene that needs a
- * different design, not a smaller font (§2).
+ * Three steps, as before, and they decide the *relative* emphasis inside a card
+ * rather than whether the board fits — that is `useFitToStage`'s job now, and
+ * it happens on top of this. So a venue with more tables than the densest step
+ * anticipated gets the same card drawn smaller rather than no card at all
+ * (issue #55, docs/OPEN-QUESTIONS.md #57).
  */
 type Density = 'roomy' | 'normal' | 'dense';
 
@@ -105,12 +131,6 @@ function density(count: number): Density {
   }
   return count <= 16 ? 'normal' : 'dense';
 }
-
-const COLUMNS: Record<Density, string> = {
-  roomy: 'grid-cols-1',
-  normal: 'grid-cols-2',
-  dense: 'grid-cols-3',
-};
 
 const TYPE: Record<Density, string> = {
   roomy: 'text-beamer-h2',

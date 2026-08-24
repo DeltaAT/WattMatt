@@ -241,36 +241,55 @@ describe('the round board', () => {
    */
   describe('auto-scaling', () => {
     it('gives a small board room and a large one columns', () => {
-      // 2 matches on 2 tables: shallow and narrow.
-      expect(scene(board({ pairs: 2, tables: 2 }))).toContain('grid-cols-2');
-      // 24 matches on 8 tables: three deep per table, and wide.
-      expect(scene(board({ pairs: 24, tables: 8 }))).toContain('grid-cols-4');
+      // 2 matches on 2 tables: two sections, side by side.
+      expect(scene(board({ pairs: 2, tables: 2 }))).toContain('repeat(2, minmax(0, 1fr))');
+      // 24 matches on 8 tables: eight sections plus the queue, so nine.
+      expect(scene(board({ pairs: 24, tables: 8 }))).toContain('repeat(3, minmax(0, 1fr))');
     });
 
-    /* Depth, not just count: the same sixteen matches on two tables is a much
-     * deeper board than on sixteen, and depth is what falls off the bottom. */
-    it('gets denser when few tables have to hold many matches', () => {
+    /*
+     * Depth is no longer what decides the layout — `useFitToStage` scales the
+     * board down for it. What still has to hold is that a deep board and a
+     * shallow one with the same matches are laid out differently at all: the
+     * deep one is two tables plus a queue, the shallow one is eight sections.
+     */
+    it('lays a deep board out differently from a shallow one', () => {
       const shallow = scene(board({ pairs: 8, tables: 8 }));
       const deep = scene(board({ pairs: 8, tables: 2 }));
 
       expect(shallow).not.toBe(deep);
-      expect(deep).toContain('grid-cols-4');
+      expect(shallow).toContain('repeat(3, minmax(0, 1fr))');
+      expect(deep).toContain('repeat(2, minmax(0, 1fr))');
     });
 
     /*
-     * The stage is `overflow-hidden`, so anything that does not fit is simply
-     * gone — with nothing to tell the room the list it is reading is partial.
-     * A 64-group round on few tables is exactly that case.
+     * The whole of issue #55. This scene used to slice each section and print
+     * a count of the rest, which meant the pair whose match came fourth in its
+     * section had to take the board's word for it that they were playing. The
+     * stage is `overflow-hidden`, so a card that is not drawn is a card nobody
+     * in the room can know about.
      */
-    it('counts what will not fit instead of clipping it', () => {
-      const markup = scene(board({ pairs: 32, tables: 2 }));
+    it.each([
+      [32, 2],
+      [32, 16],
+      [64, 4],
+    ])('draws all %s matches over %s tables', (pairs, tables) => {
+      const markup = scene(board({ pairs, tables }));
 
-      expect(markup).toContain('data-section-overflow');
-      expect(markup).toContain('und');
+      expect(markup.match(/data-match-id=/g)).toHaveLength(pairs);
     });
 
-    it('says nothing about overflow when everything fits', () => {
-      expect(scene(board({ pairs: 4, tables: 4 }))).not.toContain('data-section-overflow');
+    it('never counts a match instead of drawing it', () => {
+      const markup = scene(board({ pairs: 32, tables: 2 }));
+
+      expect(markup).not.toContain('data-section-overflow');
+      expect(markup).not.toContain('weitere');
+    });
+
+    /* The body is wrapped in a frame the hook measures against, and the thing
+     * inside it is what scales. Without both, nothing ever shrinks. */
+    it('puts the board inside a frame that can be scaled', () => {
+      expect(scene(board({ pairs: 4, tables: 4 }))).toContain('beamer-fit');
     });
 
     /* The queue is the section that grows without a table to bound it, so it

@@ -9,6 +9,8 @@ import {
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitColumns, gridColumns } from '@/windows/beamer/fit';
+import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -28,6 +30,12 @@ import { groupLabel } from '@/windows/groupLabel';
  * `tableId` (`@/domain/round`), which `setWinner` leaves alone, so the flip
  * happens in place. A board keyed on `table.currentMatchId` would make the card
  * vanish from its slot at the very moment the room is watching it.
+ *
+ * **Every match is on the board.** This scene used to draw as many cards as it
+ * guessed would fit and print a count of the rest, which meant the pair whose
+ * match came fourth in its section had to take the board's word for it that
+ * they were playing at all. Everything is drawn now, and the board is scaled
+ * down until it fits the stage instead (issue #55, `useFitToStage`).
  */
 export function RoundBoardScene({
   tournament,
@@ -40,13 +48,17 @@ export function RoundBoardScene({
   const sections = beamerBoard(tournament.tables, tournament.matches);
   const progress = matchesProgress(tournament.matches);
   // Both inputs matter. Sixteen matches spread over sixteen tables is a wide,
-  // shallow board; the same sixteen on two tables is a deep one, and it is
-  // depth that falls off the bottom of a stage that never scrolls.
+  // shallow board; the same sixteen on two tables is a deep one. Depth no
+  // longer decides whether the board fits — `useFitToStage` does that — but a
+  // deep board should reach for smaller type before it reaches for the scale,
+  // because type that was chosen is nicer than type that was shrunk.
   const size = density(sections.length, deepestSection(sections));
+  const columns = fitColumns(sections.length, SECTION_CELL_ASPECT);
 
   const byId: ReadonlyMap<GroupId, Group> = new Map(
     tournament.groups.map((group) => [group.id, group]),
   );
+  const { frame, content } = useFitToStage();
 
   return (
     <div
@@ -78,17 +90,20 @@ export function RoundBoardScene({
       {tournament.matches.length === 0 ? (
         <p className="text-beamer-body text-wm-text-muted">{de.beamer.roundBoard.empty}</p>
       ) : (
-        <div className={`grid min-h-0 flex-1 auto-rows-min gap-4 ${SECTION_COLUMNS[size]}`}>
-          {sections.map((section) => (
-            <Section
-              key={section.table?.id ?? 'queue'}
-              section={section}
-              groups={byId}
-              participant={tournament.participantLabel}
-              size={size}
-              columns={SECTION_COLUMNS[size]}
-            />
-          ))}
+        <div className="min-h-0 flex-1 overflow-hidden" ref={frame}>
+          <div className="beamer-fit" ref={content}>
+            <div className="grid auto-rows-min gap-4" style={gridColumns(columns)}>
+              {sections.map((section) => (
+                <Section
+                  key={section.table?.id ?? 'queue'}
+                  section={section}
+                  groups={byId}
+                  participant={tournament.participantLabel}
+                  size={size}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -100,25 +115,15 @@ function Section({
   groups,
   participant,
   size,
-  columns,
 }: {
   section: BoardSection;
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   size: Density;
-  /** The outer grid's column count, reused by the queue when it spans it. */
-  columns: string;
 }) {
   const { table } = section;
   const isQueue = table === null;
   const isDisabled = table?.status === 'DISABLED';
-
-  // Whatever does not fit is counted rather than clipped. The stage is
-  // `overflow-hidden` (LetterboxStage), so the surplus would otherwise fall off
-  // the bottom with nothing to say it had.
-  const room = MAX_PER_SECTION[size] * (isQueue ? QUEUE_COLUMNS[size] : 1);
-  const shown = section.matches.slice(0, room);
-  const hidden = section.matches.length - shown.length;
 
   return (
     <section
@@ -138,8 +143,13 @@ function Section({
           {isDisabled ? de.beamer.roundBoard.tableDisabled : de.beamer.roundBoard.tableIdle}
         </p>
       ) : (
-        <ul className={isQueue ? `grid auto-rows-min gap-2 ${columns}` : 'flex flex-col gap-2'}>
-          {shown.map((match) => (
+        <ul
+          className={isQueue ? 'grid auto-rows-min gap-2' : 'flex flex-col gap-2'}
+          style={
+            isQueue ? gridColumns(fitColumns(section.matches.length, QUEUE_CELL_ASPECT)) : undefined
+          }
+        >
+          {section.matches.map((match) => (
             <MatchCard
               key={match.id}
               match={match}
@@ -150,12 +160,6 @@ function Section({
           ))}
         </ul>
       )}
-
-      {hidden > 0 ? (
-        <p className={`text-wm-text-faint ${LABEL[size]}`} data-section-overflow="">
-          {de.beamer.roundBoard.more({ n: hidden })}
-        </p>
-      ) : null}
     </section>
   );
 }
@@ -312,13 +316,35 @@ const PHASE_CARD: Record<MatchPhase, string> = {
 };
 
 /**
- * How much room each match gets.
+ * The shape of a section: a heading with a stack of match cards under it.
  *
- * A beamer scene that needs a scrollbar is the wrong scene
- * (docs/STYLEGUIDE.md §3), so the grid gets denser rather than taller: 4
- * matches fill the screen, 32 shrink into columns. `text-beamer-body` is the
- * 32 px floor at 1080p (§2) and the densest step still sits on it, which is the
- * issue's "readable at 10 m for every field size" criterion.
+ * 16:9 is the stage's own ratio, which makes the grid of sections square-ish —
+ * `fitColumns` reduces to `round(sqrt(sections))` at this value, which is
+ * exactly the ladder this scene used before (2 columns at 4 sections, 3 at 9,
+ * 4 at 16) and keeps going past it instead of stopping.
+ */
+const SECTION_CELL_ASPECT = 16 / 9;
+
+/**
+ * The shape of a queued match card: two participants stacked, and wide.
+ *
+ * The queue gets its own column count rather than borrowing the board's,
+ * because it is the one section with no table to bound it: two tables and a
+ * thirty-match queue would otherwise stack fifteen cards deep and shrink the
+ * whole board to fit them.
+ */
+const QUEUE_CELL_ASPECT = 4;
+
+/**
+ * How much type each match gets.
+ *
+ * Three steps, and they decide the *relative* emphasis on a crowded board
+ * rather than whether it fits — fitting is `useFitToStage`'s job now and
+ * happens on top of this. `text-beamer-body` is the 32 px floor of
+ * docs/STYLEGUIDE.md §2, which holds for the field sizes a host normally has
+ * rather than absolutely: a card below it can be read by walking closer, and a
+ * card that was never drawn cannot be read at all (issue #55,
+ * docs/OPEN-QUESTIONS.md #57).
  */
 type Density = 'roomy' | 'normal' | 'dense';
 
@@ -333,34 +359,6 @@ function density(sections: number, deepest: number): Density {
 function deepestSection(sections: readonly BoardSection[]): number {
   return sections.reduce((most, section) => Math.max(most, section.matches.length), 0);
 }
-
-/**
- * How many cards a single column of a section can show before the rest is
- * counted instead of drawn.
- *
- * Deliberately conservative. The exact number that fits depends on the card's
- * rendered height, which nothing here can measure — so this errs towards saying
- * "und 3 weitere" a little early rather than towards clipping silently, which
- * is the failure the room cannot see.
- */
-const MAX_PER_SECTION: Record<Density, number> = {
-  roomy: 3,
-  normal: 4,
-  dense: 5,
-};
-
-/** The queue spans the grid, so it has this many columns to fill. */
-const QUEUE_COLUMNS: Record<Density, number> = {
-  roomy: 2,
-  normal: 3,
-  dense: 4,
-};
-
-const SECTION_COLUMNS: Record<Density, string> = {
-  roomy: 'grid-cols-2',
-  normal: 'grid-cols-3',
-  dense: 'grid-cols-4',
-};
 
 const TYPE: Record<Density, string> = {
   roomy: 'text-beamer-h2',

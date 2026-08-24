@@ -245,6 +245,8 @@ src/
     groupLabel.ts      what a participant is called, on both screens
     host/              panels, dialogs, control center
     beamer/scenes/     one component per BeamerScene id
+    beamer/fit.ts      how many columns a grid takes, and how far a scene shrinks
+    beamer/useFitToStage.ts  measures the stage and scales the scene body to it
   ui/                  Button, Card, GroupChip, TableChip, motion presets
   i18n/
     de-AT.ts           every user-visible string, one typed tree

@@ -89,14 +89,28 @@ describe('the group overview scene', () => {
   /*
    * The acceptance criterion of issue #14: the grid stays readable at 64
    * participants, and a beamer scene that needs a scrollbar is the wrong scene
-   * (docs/STYLEGUIDE.md §3) — so it gets denser rather than taller.
+   * (docs/STYLEGUIDE.md §3) — so it takes columns rather than height.
    */
   it.each([
-    [8, 'grid-cols-4'],
-    [24, 'grid-cols-6'],
-    [64, 'grid-cols-8'],
+    [8, 3],
+    [24, 5],
+    [64, 8],
   ])('lays %s participants out without needing to scroll', (count, columns) => {
-    expect(scene(withGroups(count))).toContain(columns);
+    expect(scene(withGroups(count))).toContain(`repeat(${columns}, minmax(0, 1fr))`);
+  });
+
+  /*
+   * The whole of issue #55, and the reason this scene exists: a participant who
+   * is in the tournament is on the wall. The grid used to stop at eight columns
+   * and the rest fell off the bottom of an `overflow-hidden` stage — and the one
+   * person whose chip was missing is exactly the person who came to look.
+   */
+  it.each([64, 100, 160])('draws every one of %s participants', (count) => {
+    const markup = scene(withGroups(count));
+
+    expect(markup.match(/data-group-id=/g)).toHaveLength(count);
+    // The last one specifically: a slice would keep the first ones and lose it.
+    expect(markup).toContain(`data-group-id="grp_${count}"`);
   });
 
   /* 32 px is the absolute floor for beamer text (docs/STYLEGUIDE.md §2), for a
