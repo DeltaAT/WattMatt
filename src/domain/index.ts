@@ -7,6 +7,25 @@ export {
   type BeamerSceneId,
 } from '@/domain/beamerScene';
 export {
+  assignMatch,
+  assignNextQueuedMatch,
+  canCloseRound,
+  canDrawRound,
+  closeRound,
+  closeRoundBlockers,
+  drawBlockers,
+  drawRound,
+  nextQueuedMatch,
+  queuedMatches,
+  roundOutcome,
+  setWinner,
+  type AssignMatchInput,
+  type CloseRoundBlocker,
+  type DrawBlocker,
+  type DrawRoundInput,
+  type RoundOutcome,
+} from '@/domain/draw';
+export {
   TOURNAMENT_FILE_EXTENSION,
   toTournamentFileName,
   tournamentNameFromFileName,

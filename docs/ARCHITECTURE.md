@@ -301,10 +301,12 @@ already watched those numbers, and a cursor that went backwards would let two di
 claim the same `(seed, cursor)` — which is the whole of the reproducibility claim. See "Taking a
 decision back" in §3 and docs/OPEN-QUESTIONS.md #32.
 
-Two halves of this are not wired yet, by design: issue #9 calls `generateSeed()` when a
-tournament is created, and issue #16 writes `rng.cursor` back after each draw. See
-docs/OPEN-QUESTIONS.md #23 — until both land, a reopened tournament would restart its
-stream.
+Both halves are wired: issue #9 calls `generateSeed()` when a tournament is created, and
+`drawRound` in `src/domain/draw.ts` (issue #16) writes `rng.cursor` back into `rngCursor` in
+the same object that carries the pairings it produced. It also *defaults* its generator to
+`createRng(rngSeed, rngCursor)`, so a caller cannot draw from the wrong position by mistake —
+which is the failure mode docs/OPEN-QUESTIONS.md #23 exists to prevent: a tournament reopened
+after a crash would otherwise restart the stream and re-deal pairings the room has watched.
 
 Schemas and types are one definition, not two: every entity is declared as a Zod schema and
 its TypeScript type is `z.infer`red from it. A schema that drifts from its type is then not
