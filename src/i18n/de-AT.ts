@@ -103,6 +103,19 @@ export const deAT = {
       performanceModeOff: 'Performance-Modus ausgeschaltet',
       tournamentStarted: 'Turnier gestartet',
 
+      /**
+       * The `Hoffnungsrunde` (issue #21). Each names the participant it is
+       * about, because the host reaching for undo has just said a number out
+       * loud to the room and needs to see the same one on the button.
+       */
+      repechageStarted: 'Hoffnungsrunde gestartet',
+      repechageCandidateDrawn: (params: { participant: string }) =>
+        `Nachrücker gezogen: ${params.participant}`,
+      repechageAccepted: (params: { participant: string }) => `Nachgerückt: ${params.participant}`,
+      repechageDeclined: (params: { participant: string }) => `Verzichtet: ${params.participant}`,
+      repechageByes: 'Freilose vergeben',
+      repechageReopened: 'Ausgeschiedene erneut zugelassen',
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -588,6 +601,92 @@ export const deAT = {
     bye: 'Freilos',
   },
 
+  /**
+   * The `Hoffnungsrunde` (issue #21, docs/TOURNAMENT-RULES.md §4).
+   *
+   * The most dramatic moment of the evening and the one the host has to narrate
+   * out loud, so the copy is written to be *said*: the panel's words are the
+   * words they will use at the microphone, and the two answer buttons are two
+   * verbs that cannot be confused with each other from a metre away.
+   */
+  repechage: {
+    label: 'Hoffnungsrunde',
+    sectionLabel: 'Hoffnungsrunde',
+
+    /**
+     * What the phase is for, in one sentence, above the button that starts it.
+     * The host reads this out; the room has no other explanation of why people
+     * who just lost are being drawn again.
+     */
+    intro: (params: { target: number }) =>
+      `Der Turnierbaum braucht ${params.target} Teilnehmende. Die fehlenden Plätze werden unter den Ausgeschiedenen ausgelost.`,
+    start: 'Hoffnungsrunde starten',
+    /** On the disabled start button, so the reason is where the click landed. */
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    notAfterQualifying: 'Die Hoffnungsrunde folgt auf die Qualifikationsrunde.',
+    qualifyingNotClosed:
+      'Die Qualifikationsrunde ist noch nicht abgeschlossen. Schließen Sie sie ab.',
+    alreadyStarted: 'Die Hoffnungsrunde läuft bereits.',
+    notNeeded: 'Die Hoffnungsrunde entfällt: das Feld ist bereits eine Zweierpotenz.',
+
+    /** The live numbers, side by side, in the words the host says. */
+    target: (params: { n: number }) => `Ziel: ${params.n}`,
+    field: (params: { n: number }) => `Im Feld: ${params.n}`,
+    slotsLeft: (params: { n: number }) => `${pluralizeDeAT(params.n, 'Platz', 'Plätze')} frei`,
+    slotsFilled: 'Alle Plätze sind besetzt.',
+
+    /** The draw itself. */
+    draw: 'Nachrücker auslosen',
+    drawPending: 'Erst entscheiden, dann weiter auslosen.',
+    drawPoolEmpty: 'Es sind keine Ausgeschiedenen mehr im Topf.',
+    drawn: (params: { participant: string }) => `Gezogen: ${params.participant}`,
+    question: 'Nachrücken?',
+    /**
+     * The two answers. Both are complete verbs rather than `Ja` and `Nein`: the
+     * host is aiming at one of two adjacent buttons while looking at the room,
+     * and two words that share no letters are harder to hit by mistake than two
+     * that are two characters long.
+     */
+    accept: 'Nimmt an',
+    decline: 'Verzichtet',
+
+    /** The three lists on the panel. */
+    throughTitle: 'Im Feld',
+    poolTitle: 'Im Topf',
+    poolEmpty: 'Der Topf ist leer.',
+    /**
+     * The third list, deliberately not called `Verzichtet`: that is the word on
+     * the button two centimetres away, and a column heading that repeats a
+     * button is a column a host clicks at. These are the people the offer has
+     * gone past for good.
+     */
+    declinedTitle: 'Ausgeschieden',
+    declinedEmpty: 'Niemand hat verzichtet.',
+    byes: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Freilos', 'Freilose')} für die nächste Runde`,
+
+    showOnBeamer: 'Hoffnungsrunde auf den Beamer',
+    complete: 'Das Feld ist vollständig.',
+
+    /**
+     * The fallback of §4: the pot has run dry with places still open. Both
+     * answers are spelt out in full, because the host has to choose one in
+     * front of a waiting room and neither is obviously right.
+     */
+    fallback: {
+      title: 'Der Topf ist leer',
+      body: (params: { n: number }) =>
+        `Es sind noch ${pluralizeDeAT(params.n, 'Platz', 'Plätze')} frei, aber niemand steht mehr im Topf. Entscheiden Sie, wie das Feld gefüllt wird.`,
+      byes: 'Freilose vergeben',
+      byesBody: (params: { n: number }) =>
+        `Die ${pluralizeDeAT(params.n, 'freie Platz', 'freien Plätze')} werden in der nächsten Runde als ${pluralizeDeAT(params.n, 'Freilos', 'Freilose')} vergeben. Das Turnier läuft sofort weiter.`,
+      reopen: 'Ausgeschiedene erneut zulassen',
+      reopenBody: (params: { n: number }) =>
+        `${pluralizeDeAT(params.n, 'Teilnehmende:r hat', 'Teilnehmende haben')} verzichtet. Sie kommen neu gemischt zurück in den Topf und werden noch einmal gezogen.`,
+      reopenNobody: 'Es hat niemand verzichtet, der zurückkommen könnte.',
+    },
+  },
+
   beamer: {
     /** Shown on the beamer itself while no scene has been selected. */
     idleTitle: 'WattMatt',
@@ -673,6 +772,41 @@ export const deAT = {
       tableDisabled: 'Gesperrt',
       /** Before anything has been drawn into this round. */
       empty: 'Es ist keine Partie angesetzt.',
+    },
+
+    /**
+     * The `REPECHAGE` scene: the second chance, live (issue #21,
+     * docs/MOTION.md §4.3).
+     *
+     * The room is watching people who have just lost being given a way back in,
+     * and most of them do not know the rule. So the wall says the target, the
+     * places left and what happened to each card in words — never in colour
+     * alone (docs/STYLEGUIDE.md §1).
+     */
+    repechage: {
+      title: 'Hoffnungsrunde',
+      /** Over the pot of losers. */
+      potTitle: 'Im Topf',
+      /** Over the column that fills up as places are taken. */
+      throughTitle: 'Weiter',
+      /** The counter the whole scene is about: "Noch 3 Plätze frei". */
+      slotsLeft: (params: { n: number }) =>
+        `Noch ${pluralizeDeAT(params.n, 'Platz', 'Plätze')} frei`,
+      /** Once the field is full. The counter must not simply vanish. */
+      slotsFilled: 'Alle Plätze besetzt',
+      target: (params: { n: number }) => `Ziel: ${params.n}`,
+      /** The word on each card, beside its colour and its icon. */
+      status: {
+        POOL: 'IM TOPF',
+        DRAWN: 'GEZOGEN',
+        ACCEPTED: 'NACHGERÜCKT',
+        DECLINED: 'VERZICHTET',
+      },
+      /** Byes owed to the next round after the *Freilose vergeben* fallback. */
+      byes: (params: { n: number }) =>
+        `${pluralizeDeAT(params.n, 'Freilos', 'Freilose')} in der nächsten Runde`,
+      /** Nobody lost, so there is nobody to draw — a field that should skip. */
+      empty: 'Es steht niemand im Topf.',
     },
 
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */

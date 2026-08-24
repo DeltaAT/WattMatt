@@ -277,6 +277,160 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * The Hoffnungsrunde (issue #21, docs/MOTION.md §4.3).
+ *
+ * Three beats, one per thing that can happen to a card, and never more than one
+ * card playing one of them at a time — the scene applies these only to the
+ * group the last draw was about, which keeps the whole phase far inside the
+ * 60-element budget of §6.
+ *
+ * The card never moves between lists, so none of these travel: the lift, the
+ * shake and the arrival are all in place. That is deliberate — the audience is
+ * following one person through the pot, and a card that flew across the screen
+ * would be a card they lose track of.
+ * ------------------------------------------------------------------------- */
+
+/* The draw: the candidate lifts out of the crowd while the rest dim behind
+ * them. `scale(1) -> 1.06` with an accent ring, 500 ms `--ease-dramatic`. */
+@keyframes wm-repechage-lift {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  100% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 8px var(--wm-accent-soft);
+  }
+}
+
+/* Accepted: the card settles back into the pot as a card that is through, and
+ * its counterpart lands in the winners column (`wm-repechage-arrive`). */
+@keyframes wm-repechage-accept {
+  0% {
+    transform: scale(1.06);
+  }
+  60% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The chip arriving in the winners column: the place being taken. Starts at
+ * 0.94 and never at 0 — nothing in the physical world appears out of nothing
+ * (docs/MOTION.md §3). */
+@keyframes wm-repechage-arrive {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Declined: 200 ms shake at ±4 px, two cycles, then the fade and desaturation
+ * that leave the card as one of the eliminated. */
+@keyframes wm-repechage-decline {
+  0% {
+    transform: translateX(0) scale(1.06);
+    opacity: 1;
+    filter: saturate(1);
+  }
+  10% {
+    transform: translateX(-4px) scale(1);
+  }
+  20% {
+    transform: translateX(4px) scale(1);
+  }
+  30% {
+    transform: translateX(-4px) scale(1);
+  }
+  40% {
+    transform: translateX(4px) scale(1);
+  }
+  50% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    filter: saturate(1);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 0.2;
+    filter: saturate(0.5);
+  }
+}
+
+@utility wm-repechage-lift {
+  animation: wm-repechage-lift var(--dur-reveal) var(--ease-dramatic) both;
+  /* Only for the duration of the animation, per docs/MOTION.md §6. */
+  will-change: transform;
+}
+
+@utility wm-repechage-accept {
+  animation: wm-repechage-accept var(--dur-reveal) var(--ease-out) both;
+}
+
+@utility wm-repechage-arrive {
+  /* The spring-ish landing of §4.3, as a keyframe: the chip is one of up to
+   * sixty-four in the column and CSS keeps it off the main thread. */
+  animation: wm-repechage-arrive var(--dur-reveal) var(--ease-dramatic) both;
+}
+
+@utility wm-repechage-decline {
+  /* 200 ms of shake inside a beat that also has to carry the fade, so the whole
+   * thing runs over `--dur-reveal` + `--dur-slow` with the shake in its first
+   * half. */
+  animation: wm-repechage-decline calc(var(--dur-reveal) + var(--dur-slow)) var(--ease-out) both;
+}
+
+/* docs/MOTION.md §6: reduced motion keeps opacity and colour, which is what
+ * carries the meaning here, and drops movement and scale. A decline still fades
+ * out and an acceptance still arrives — the room still sees that something
+ * happened — but nothing shakes and nothing grows. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-repechage-lift {
+    0% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    100% {
+      box-shadow: 0 0 0 8px var(--wm-accent-soft);
+    }
+  }
+
+  @keyframes wm-repechage-accept {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wm-repechage-arrive {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wm-repechage-decline {
+    0% {
+      opacity: 1;
+      filter: saturate(1);
+    }
+    100% {
+      opacity: 0.2;
+      filter: saturate(0.5);
+    }
+  }
+}
+
 /* The beamer's equivalent of `wm-label` (issue #19).
  *
  * `wm-label` cannot be reused here: it hardcodes `--text-host-xs` (12 px), and

@@ -16,7 +16,18 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
   z.object({ id: z.literal('TABLE_OVERVIEW') }),
   z.object({ id: z.literal('DRAW'), roundId: roundIdSchema }),
   z.object({ id: z.literal('ROUND_BOARD'), roundId: roundIdSchema }),
-  z.object({ id: z.literal('REPECHAGE'), roundId: roundIdSchema }),
+  /*
+   * The `Hoffnungsrunde` carries no round id, unlike the two scenes above it
+   * (issue #21, docs/OPEN-QUESTIONS.md #59).
+   *
+   * There is no round to name. The phase is not one: it produces no pairings
+   * and appends nothing to `rounds`, and everything it shows lives in
+   * `tournament.repechage`, of which a tournament has exactly one. A qualifying
+   * round id would also be a promise the beamer could not keep — the qualifying
+   * round is `CLOSED` by then, so the snapshot carries no round at all and the
+   * guard the other two use could never match.
+   */
+  z.object({ id: z.literal('REPECHAGE') }),
   z.object({ id: z.literal('BRACKET') }),
   z.object({ id: z.literal('CEREMONY') }),
 ]);

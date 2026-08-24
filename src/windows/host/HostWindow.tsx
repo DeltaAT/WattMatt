@@ -6,6 +6,7 @@ import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
 import { PreStartPanel } from '@/windows/host/PreStartPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
+import { RepechagePanel } from '@/windows/host/RepechagePanel';
 import { RoundPanel } from '@/windows/host/RoundPanel';
 import { SettingsPanel } from '@/windows/host/SettingsPanel';
 import { StartScreen } from '@/windows/host/StartScreen';
@@ -16,6 +17,7 @@ import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { usePreStart } from '@/windows/host/usePreStart';
+import { useRepechage } from '@/windows/host/useRepechage';
 import { useRound } from '@/windows/host/useRound';
 import { useSettings } from '@/windows/host/useSettings';
 import { useTables } from '@/windows/host/useTables';
@@ -45,6 +47,7 @@ export function HostWindow() {
   const settings = useSettings();
   const preStart = usePreStart();
   const round = useRound();
+  const repechage = useRepechage();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
   // open buys nothing.
@@ -139,6 +142,30 @@ export function HostWindow() {
                 onStartNext={round.startNext}
                 onClose={round.close}
                 onShowOnBeamer={round.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              Directly under the round it follows on from, and only when the
+              host has something to do about it: the phase is skipped for every
+              field that is already a power of two, and a panel explaining that
+              it does not apply is a panel in the way (issue #21).
+            */}
+            {repechage.isActive ? (
+              <RepechagePanel
+                state={repechage.state}
+                target={repechage.target}
+                blockers={repechage.blockers}
+                canStart={repechage.canStart}
+                canDraw={repechage.canDraw}
+                groups={repechage.groups}
+                participant={repechage.participant}
+                onStart={repechage.start}
+                onDraw={repechage.drawCandidate}
+                onAccept={repechage.accept}
+                onDecline={repechage.decline}
+                onFallback={repechage.useFallback}
+                onShowOnBeamer={repechage.showOnBeamer}
               />
             ) : null}
 

@@ -12,13 +12,36 @@ describe('the beamer scene surface', () => {
   it('renders the scene the host staged, not a fixed screen', () => {
     const markup = renderToStaticMarkup(
       <BeamerScenePlaceholder
-        scene={{ id: 'REPECHAGE', roundId: round('r2') }}
+        scene={{ id: 'CEREMONY' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        delivery="catchUp"
       />,
     );
-    expect(markup).toContain('data-scene="REPECHAGE"');
+    expect(markup).toContain('data-scene="CEREMONY"');
     expect(markup).toContain(de.beamer.scenePending);
+  });
+
+  /*
+   * The Hoffnungsrunde is drawn for real from issue #21 on. Staged before the
+   * phase is started there is no pot to show, and the scene says so rather than
+   * falling back to the generic placeholder: the host can stage it by hand, and
+   * a projector reading "Ansicht wird vorbereitet" would leave the room waiting
+   * for something that is not coming.
+   */
+  it('draws the Hoffnungsrunde rather than a placeholder', () => {
+    const markup = renderToStaticMarkup(
+      <BeamerScenePlaceholder
+        scene={{ id: 'REPECHAGE' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+        delivery="catchUp"
+      />,
+    );
+
+    expect(markup).toContain('data-scene="REPECHAGE"');
+    expect(markup).not.toContain(de.beamer.scenePending);
+    expect(markup).toContain(de.beamer.repechage.empty);
   });
 
   /*
@@ -33,6 +56,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'DRAW', roundId: round('r2') }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        delivery="catchUp"
       />,
     );
 
@@ -49,6 +73,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'GROUP_OVERVIEW' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        delivery="catchUp"
       />,
     );
 
@@ -58,7 +83,12 @@ describe('the beamer scene surface', () => {
 
   it('shows nothing at all during a blackout', () => {
     const markup = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'BLACKOUT' }} tournament={EMPTY_TOURNAMENT} settled />,
+      <BeamerScenePlaceholder
+        scene={{ id: 'BLACKOUT' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+        delivery="catchUp"
+      />,
     );
     expect(markup).toContain('data-scene="BLACKOUT"');
     // Any text here would be a lit rectangle in a dark room.
@@ -68,13 +98,19 @@ describe('the beamer scene surface', () => {
 
   it('marks a caught-up scene as settled so it is not animated in', () => {
     const settled = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'BRACKET' }} tournament={EMPTY_TOURNAMENT} settled />,
+      <BeamerScenePlaceholder
+        scene={{ id: 'BRACKET' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+        delivery="catchUp"
+      />,
     );
     const animating = renderToStaticMarkup(
       <BeamerScenePlaceholder
         scene={{ id: 'BRACKET' }}
         tournament={EMPTY_TOURNAMENT}
         settled={false}
+        delivery="live"
       />,
     );
 

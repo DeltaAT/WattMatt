@@ -185,10 +185,13 @@ type BeamerScene =
   | { id: 'TABLE_OVERVIEW' }
   | { id: 'DRAW'; roundId: RoundId }
   | { id: 'ROUND_BOARD'; roundId: RoundId }
-  | { id: 'REPECHAGE'; roundId: RoundId }
+  | { id: 'REPECHAGE' }
   | { id: 'BRACKET' }
   | { id: 'CEREMONY' };
 ```
+
+`REPECHAGE` deliberately carries no round: the phase is not one, and everything it shows lives
+in `tournament.repechage` (docs/OPEN-QUESTIONS.md #59).
 
 `autoFollow` (default on) makes the scene follow the tournament phase. The host can turn it
 off and drive the beamer manually at any moment — see issue *Beamer control center*. Staging a
@@ -247,6 +250,7 @@ src/
     beamer/scenes/     one component per BeamerScene id
     beamer/fit.ts      how many columns a grid takes, and how far a scene shrinks
     beamer/useFitToStage.ts  measures the stage and scales the scene body to it
+    beamer/useRepechageBeat.ts  which card this window may animate, if any
   ui/                  Button, Card, GroupChip, TableChip, motion presets
   i18n/
     de-AT.ts           every user-visible string, one typed tree

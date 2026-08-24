@@ -79,6 +79,15 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | To close the round | Runde abschließen | |
 | To correct a result | Ergebnis ändern | Needs a second, deliberate interaction |
 | Live round summary | Zwischenstand | Winners, losers and the repechage target |
+| Repechage candidate | Nachrücker | The loser a repechage draw has just produced (issue #21) |
+| To draw a candidate | Nachrücker auslosen | |
+| The pot of losers | Topf | Everybody eligible for a second chance |
+| To accept the place | Nimmt an | One of the two answers to a draw |
+| To decline the place | Verzichtet | The other; a decision, not a pass |
+| Candidates still in the field | Im Feld | The winners column, on both screens |
+| Places still open | Plätze frei | The counter the whole `REPECHAGE` scene is about |
+| To hand out byes (§4 fallback 1) | Freilose vergeben | Always available, so the phase can always be left |
+| To readmit the declined (§4 fallback 2) | Ausgeschiedene erneut zulassen | |
 
 ## Files
 

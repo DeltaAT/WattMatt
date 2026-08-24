@@ -23,6 +23,7 @@ export function BeamerWindow() {
         scene={view.snapshot.scene}
         tournament={view.snapshot.tournament}
         settled={!view.animate}
+        delivery={view.snapshot.delivery}
       />
     </BeamerSurface>
   );

@@ -1,8 +1,17 @@
+import { z } from 'zod';
+
 import { roundOutcome } from '@/domain/draw';
-import type { GroupId } from '@/domain/ids';
+import { groupIdSchema, type GroupId } from '@/domain/ids';
 import { createRng, type Rng } from '@/domain/rng';
 import { nextPowerOfTwo, repechageOutlook } from '@/domain/round';
-import type { Group, Repechage, RepechageFallback, Round, Tournament } from '@/domain/types';
+import type {
+  Group,
+  Repechage,
+  RepechageDraw,
+  RepechageFallback,
+  Round,
+  Tournament,
+} from '@/domain/types';
 
 /**
  * The repechage engine — `Hoffnungsrunde`, issue #20,
@@ -192,6 +201,18 @@ export interface RepechageState {
   pool: readonly GroupId[];
   /** The candidate on the beamer, waiting for the host's answer. */
   pending: GroupId | null;
+  /**
+   * The most recent draw and what became of it, or null before the first one.
+   *
+   * The beat the beamer animates (issue #21, docs/MOTION.md §4.3): the drawn
+   * card lifts while `accepted` is null, flies into the winners column when it
+   * turns true, and shakes and fades when it turns false. Carried as the whole
+   * record rather than as three booleans, because "which card, and what
+   * happened to it" is one fact and a scene that reconstructed it from
+   * `pending`, `through` and `declined` would have to guess which of them moved
+   * last.
+   */
+  last: RepechageDraw | null;
   /** Declined, and still eligible for the `REOPEN_DECLINED` fallback. */
   declined: readonly GroupId[];
   /**
@@ -260,6 +281,7 @@ export function repechageState(tournament: Tournament): RepechageState | null {
     through,
     pool: repechage.pool,
     pending,
+    last: repechage.draws.at(-1) ?? null,
     declined,
     byes,
     size,
@@ -281,6 +303,75 @@ export function repechageState(tournament: Tournament): RepechageState | null {
  */
 export function isRepechageComplete(tournament: Tournament): boolean {
   return repechageState(tournament)?.complete ?? false;
+}
+
+/**
+ * What the pot looks like on the projector: every loser, and where they stand
+ * (issue #21).
+ *
+ * The `REPECHAGE` scene's first job is "show all losers first, so everyone sees
+ * who is in the pot", and its second is that nobody ever disappears off it —
+ * the audience has to be able to follow the person they came to watch from the
+ * moment the pot is shown to the moment they are through or out. So this is one
+ * list of everybody who lost, not four lists the scene would have to stitch
+ * back together.
+ *
+ * **Draw order first, then the pot.** `drawCandidate` takes from the front, so
+ * the drawn ones in the order they were drawn, followed by what is left in the
+ * shuffle's order, reproduces the order the room has been looking at all along.
+ * A card therefore never jumps sideways when the next candidate comes out.
+ *
+ * **A group appears once.** `REOPEN_DECLINED` puts declined groups back into the
+ * pot, so one can hold a `false` draw record *and* stand in the pool. Being in
+ * the pool wins — that is where they are now — and of two draw records the last
+ * one does, for the same reason.
+ */
+/**
+ * `POOL` — still to be drawn.
+ * `DRAWN` — on the beamer, waiting for the host's answer.
+ * `ACCEPTED` — took the place: through, and in the winners column.
+ * `DECLINED` — said no, and out unless the host readmits them (§4 fallback 2).
+ *
+ * A schema rather than a bare union because the pot crosses the window boundary
+ * in every snapshot, and docs/ARCHITECTURE.md §4 parses everything that does.
+ * Defined here rather than in `@/domain/snapshot` so the projection and the
+ * function that produces it cannot come to mean different things.
+ */
+export const potStatusSchema = z.enum(['POOL', 'DRAWN', 'ACCEPTED', 'DECLINED']);
+export type PotStatus = z.infer<typeof potStatusSchema>;
+
+export const potEntrySchema = z.object({ groupId: groupIdSchema, status: potStatusSchema });
+export type PotEntry = z.infer<typeof potEntrySchema>;
+
+export function repechagePot(tournament: Tournament): readonly PotEntry[] {
+  const repechage = tournament.repechage;
+  if (repechage === null) {
+    return [];
+  }
+
+  const inPool = new Set<GroupId>(repechage.pool);
+  // Keyed by group, so a second draw record for the same group replaces the
+  // first rather than putting them in the pot twice.
+  const answered = new Map<GroupId, PotEntry>();
+
+  for (const draw of repechage.draws) {
+    if (inPool.has(draw.groupId)) {
+      continue;
+    }
+    answered.set(draw.groupId, { groupId: draw.groupId, status: answeredStatus(draw) });
+  }
+
+  return [
+    ...answered.values(),
+    ...repechage.pool.map((groupId): PotEntry => ({ groupId, status: 'POOL' })),
+  ];
+}
+
+function answeredStatus(draw: RepechageDraw): PotStatus {
+  if (draw.accepted === null) {
+    return 'DRAWN';
+  }
+  return draw.accepted ? 'ACCEPTED' : 'DECLINED';
 }
 
 // ---------------------------------------------------------------------------

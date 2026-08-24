@@ -27,6 +27,7 @@ function groups(count: number): TournamentSnapshot {
     tables: [],
     matches: [],
     round: null,
+    repechage: null,
   };
 }
 
