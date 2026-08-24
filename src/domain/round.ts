@@ -1,0 +1,151 @@
+import { queuedMatches, roundOutcome } from '@/domain/draw';
+import type { GroupId } from '@/domain/ids';
+import { occupancyBoard, type TableSlot } from '@/domain/tables';
+import type { Match, Round, Tournament } from '@/domain/types';
+
+/**
+ * What the host's round panel reads (issue #17).
+ *
+ * The panel is the screen the host stares at for most of the event, so the
+ * arithmetic behind it — how far the round has got, which match is where, what
+ * the repechage will need — lives here rather than in the component. Pure and
+ * unit-tested, for the reason `@/domain/start` gives about the pre-start
+ * report: two answers to "how many are still open?" would eventually disagree,
+ * and the disagreement would surface as a *Runde abschließen* button that is
+ * enabled while a match has no winner.
+ *
+ * Nothing here mutates. The decisions are `@/domain/draw`'s — `setWinner`,
+ * `assignNextQueuedMatch`, `closeRound` — and this module only says what the
+ * host is looking at while they make them.
+ */
+
+/** How far a round has got, for the header (`7 / 12 Partien entschieden`). */
+export interface RoundProgress {
+  /** Matches with a winner, byes included — they are decided by the draw (§3). */
+  decided: number;
+  /** Matches still waiting for the host to say who won. */
+  open: number;
+  total: number;
+}
+
+export function roundProgress(round: Round): RoundProgress {
+  const decided = round.matches.filter((match) => match.winnerId !== null).length;
+  return { decided, open: round.matches.length - decided, total: round.matches.length };
+}
+
+/**
+ * Every match of a round, in the three places the host looks for one.
+ *
+ * The split is the physical truth of the room: a match is on a table, or it is
+ * waiting for one, or it is over. Grouping by table rather than listing all
+ * matches flat is what the issue asks for, and it is also how the host works —
+ * they walk to a table, look at it, and press the winner.
+ *
+ * `queued` comes from `@/domain/draw` rather than being recomputed here, so the
+ * list the host reads is exactly the one `assignNextQueuedMatch` will take
+ * from. Two definitions of "next" would put a different pair on the table than
+ * the one at the top of the screen.
+ */
+export interface RoundBoard {
+  /** Every table in the host's order, with this round's match on it, if any. */
+  tables: readonly TableSlot[];
+  /** Waiting for a table, in draw order — which is queue order (§3). */
+  queued: readonly Match[];
+  /** Decided, in draw order. Byes are here from the moment they are drawn. */
+  decided: readonly Match[];
+  progress: RoundProgress;
+}
+
+export function roundBoard(tournament: Tournament, round: Round): RoundBoard {
+  return {
+    // Restricted to this round's matches on purpose: a table still naming a
+    // match of a closed round is a table the host has to be able to see is
+    // wrong, and `occupancyBoard` renders that as an empty slot rather than
+    // reaching into rounds that are over.
+    tables: occupancyBoard(tournament.tables, round.matches),
+    queued: queuedMatches(round),
+    decided: round.matches.filter((match) => match.winnerId !== null),
+    progress: roundProgress(round),
+  };
+}
+
+/**
+ * The smallest power of two that is at least `value` — the `2^ceil(log2(n))`
+ * of docs/TOURNAMENT-RULES.md §4.
+ *
+ * Doubled rather than computed through `Math.log2`, which is exact for the
+ * powers of two it is handed today but is a floating-point round trip that
+ * would have to be argued about rather than read.
+ */
+export function nextPowerOfTwo(value: number): number {
+  if (value <= 1) {
+    return Math.max(0, Math.ceil(value));
+  }
+  let power = 1;
+  while (power < value) {
+    power *= 2;
+  }
+  return power;
+}
+
+/**
+ * What the repechage will have to do after this round
+ * (docs/TOURNAMENT-RULES.md §4, issue #20).
+ *
+ * The number this is computed from is **not** the winners decided so far: every
+ * match produces exactly one winner, byes included, so `|W|` at the close of a
+ * round is the number of matches in it — known the moment it is drawn. A live
+ * summary that counted decided winners would tell the host "Ziel 8" at half
+ * time and "Ziel 16" at the end, and a host reading the second number would
+ * think something had gone wrong.
+ *
+ * Null outside a qualifying round: §1 puts `REPECHAGE` after `QUALIFYING` and
+ * nowhere else, and from the elimination rounds on `|W|` is already a power of
+ * two by §5's invariant.
+ */
+export interface RepechageOutlook {
+  /** `|W|` at the close of this round — one winner per match. */
+  winners: number;
+  /** `2^ceil(log2(|W|))`, the power-of-two field the bracket needs. */
+  target: number;
+  /** `target - |W|` — how many losers would have to come back. */
+  need: number;
+  /** True when `|W|` is already the target, which skips §4 entirely. */
+  skipped: boolean;
+}
+
+export function repechageOutlook(round: Round): RepechageOutlook | null {
+  if (round.kind !== 'QUALIFYING') {
+    return null;
+  }
+  const winners = round.matches.length;
+  const target = nextPowerOfTwo(winners);
+  return { winners, target, need: target - winners, skipped: target === winners };
+}
+
+/**
+ * The live summary the host panel shows beside the matches: who is through, who
+ * is out, and what that leaves the repechage to do.
+ *
+ * Winners and losers come from `roundOutcome`, which reads them off the matches
+ * rather than off `group.status` — the repechage puts a loser back to `ACTIVE`,
+ * and the record of who lost *this* round has to survive that.
+ */
+export interface RoundSummary {
+  progress: RoundProgress;
+  /** Through to the next round, including the recipient of a bye. */
+  winners: readonly GroupId[];
+  /** Knocked out. A bye produces no loser. */
+  losers: readonly GroupId[];
+  repechage: RepechageOutlook | null;
+}
+
+export function roundSummary(round: Round): RoundSummary {
+  const { winners, losers } = roundOutcome(round);
+  return {
+    progress: roundProgress(round),
+    winners,
+    losers,
+    repechage: repechageOutlook(round),
+  };
+}
