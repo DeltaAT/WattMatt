@@ -29,11 +29,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v3)
+## Schema (v4)
 
 ```jsonc
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -103,8 +103,13 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
   "repechage": {
     "target": 16,
+    // The losers still in the pot, in the order the seeded shuffle produced.
+    // The next candidate is the front of the list. It is in the file because
+    // nothing can rebuild it: the shuffle happened at one position of the RNG
+    // stream and every draw since has moved the cursor past it.
+    "pool": [ "grp_4", "grp_11" ],
     "draws": [ { "groupId": "grp_9", "accepted": true } ],  // accepted null = not yet answered
-    "fallbackUsed": null            // null | BYES | REOPEN_DECLINED
+    "fallbackUsed": null            // null | BYES | REOPEN_DECLINED — the last one taken
   },
 
   "bracket": {
@@ -133,8 +138,8 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 All seven rules are live. #9 landed the atomic write and the "open a backup instead" answer;
 #10 landed the rotation, the debounced autosave and the crash recovery; #11 landed the writer
 behind the action log; #12 landed the migration framework, the refusal of a newer file and the
-preservation of unknown fields; #13 landed the first real migration, v1 → v2, and #14 the
-second, v2 → v3.
+preservation of unknown fields; #13 landed the first real migration, v1 → v2, #14 the
+second, v2 → v3, and #20 the third, v3 → v4.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.
@@ -215,6 +220,17 @@ second, v2 → v3.
    state v1 could express and v2 cannot: a table calling itself `OCCUPIED` while naming no
    match comes back **free**, because a free table the host marks busy again costs one click
    while a busy table that is really free holds up the queue for the rest of the event.
+
+   **v3 → v4** (issue #20) gives the repechage its `pool`, and is the first step that admits
+   it cannot reconstruct what it adds. `occupiedSince` and `nextGroupNumber` could each be
+   inferred from evidence the old file still carried; who was left standing in the pot cannot
+   be, because `draws` records only who came *out* of it and the shuffle that produced the
+   order ran at an RNG cursor the file has long since moved past. The pool therefore comes
+   back **empty**, which is the honest answer and also the conservative one — an empty pot
+   with places still open is exactly the state docs/TOURNAMENT-RULES.md §4's fallback dialog
+   exists for, so the host is asked rather than handed a candidate the app invented. No
+   released build ever wrote a repechage, so in practice every v3 file says `null` here and
+   the step does nothing at all.
 
    Three things happen when a file is opened (`openTournamentAt` in
    `src/store/persistence.ts`), and the order is the whole design.

@@ -212,7 +212,7 @@ src/
     tables.ts          the table lifecycle: create, rename, reorder, block, occupy, free
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
-    repechage.ts       power-of-two target, candidate draw
+    repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
     progression.ts     phase transitions
     bracket.ts         bracket construction, third-place match
     selectors.ts       derived data (standings, free tables, …)
@@ -305,7 +305,9 @@ decision back" in §3 and docs/OPEN-QUESTIONS.md #32.
 
 Both halves are wired: issue #9 calls `generateSeed()` when a tournament is created, and
 `drawRound` in `src/domain/draw.ts` (issue #16) writes `rng.cursor` back into `rngCursor` in
-the same object that carries the pairings it produced. It also *defaults* its generator to
+the same object that carries the pairings it produced. `startRepechage` and the
+`REOPEN_DECLINED` fallback in `src/domain/repechage.ts` (issue #20) do the same for the shuffle
+that fills the pot. All three *default* their generator to
 `createRng(rngSeed, rngCursor)`, so a caller cannot draw from the wrong position by mistake —
 which is the failure mode docs/OPEN-QUESTIONS.md #23 exists to prevent: a tournament reopened
 after a crash would otherwise restart the stream and re-deal pairings the room has watched.

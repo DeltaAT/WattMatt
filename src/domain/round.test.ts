@@ -155,6 +155,9 @@ describe('nextPowerOfTwo', () => {
     expect(nextPowerOfTwo(5)).toBe(8);
     expect(nextPowerOfTwo(9)).toBe(16);
     expect(nextPowerOfTwo(17)).toBe(32);
+    // One below a power of two is the case a `<=` written as `<` gets wrong,
+    // and it is the field size a 61-group evening actually reaches.
+    expect(nextPowerOfTwo(31)).toBe(32);
   });
 
   it('has nothing to round up when there is nobody', () => {

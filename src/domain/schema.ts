@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v3)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v4)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -27,8 +27,16 @@ import { tournamentSchema } from '@/domain/types';
  * rather than optional for the same reason `nextTableNumber` is: a counter that
  * may be absent is one every caller has to guess a default for, and the guess
  * is exactly the `max + 1` the counter exists to avoid.
+ *
+ * v4 added `repechage.pool`, the candidates the `Hoffnungsrunde` has still to
+ * draw (issue #20, docs/TOURNAMENT-RULES.md §4). A v3 file cannot say who is
+ * left in the pot: the order was produced by one shuffle at one position of the
+ * RNG stream, and the cursor has moved on past it with every draw since. It is
+ * required rather than optional because an absent pool and an empty one are the
+ * two states §4 has to tell apart — the second is what triggers the fallback
+ * dialog.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -38,7 +46,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v3)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v4)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *
