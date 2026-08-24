@@ -64,6 +64,17 @@ export {
 export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
 export { createRng, type Rng } from '@/domain/rng';
 export {
+  nextPowerOfTwo,
+  repechageOutlook,
+  roundBoard,
+  roundProgress,
+  roundSummary,
+  type RepechageOutlook,
+  type RoundBoard,
+  type RoundProgress,
+  type RoundSummary,
+} from '@/domain/round';
+export {
   appStampSchema,
   SCHEMA_VERSION,
   tournamentFileSchema,

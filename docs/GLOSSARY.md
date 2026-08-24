@@ -71,6 +71,14 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Naming threshold (`settings.namingAt`) | Namen ab Feldgröße |
 | RNG seed | Startwert der Auslosung |
 | Group overview (beamer scene) | Gruppen / Teams / Spieler | Headed by the participant label itself |
+| Round control panel | Aktuelle Runde | The host's screen for a running round (issue #17) |
+| Match queue | Warteschlange | The matches waiting for a table |
+| Round state `DRAWN` / `RUNNING` / `CLOSED` | ausgelost / läuft / abgeschlossen | |
+| To start the draw | Auslosung starten | |
+| To start the next match | Nächste Partie starten | Offered on a table that has come free |
+| To close the round | Runde abschließen | |
+| To correct a result | Ergebnis ändern | Needs a second, deliberate interaction |
+| Live round summary | Zwischenstand | Winners, losers and the repechage target |
 
 ## Files
 

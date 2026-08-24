@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 
-import { de } from '@/i18n';
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
 import { PreStartPanel } from '@/windows/host/PreStartPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
+import { RoundPanel } from '@/windows/host/RoundPanel';
 import { SettingsPanel } from '@/windows/host/SettingsPanel';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TablePanel } from '@/windows/host/TablePanel';
@@ -16,6 +16,7 @@ import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { usePreStart } from '@/windows/host/usePreStart';
+import { useRound } from '@/windows/host/useRound';
 import { useSettings } from '@/windows/host/useSettings';
 import { useTables } from '@/windows/host/useTables';
 import { useTournamentDocument } from '@/windows/host/useTournamentDocument';
@@ -43,6 +44,7 @@ export function HostWindow() {
   const tables = useTables();
   const settings = useSettings();
   const preStart = usePreStart();
+  const round = useRound();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
   // open buys nothing.
@@ -114,6 +116,33 @@ export function HostWindow() {
         ) : (
           <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
             {/*
+              First once the tournament is under way, and absent before it: from
+              the draw on, the round is the only thing the host is working in,
+              and it must not be below sixty-four group chips when a table comes
+              free (issue #17).
+            */}
+            {round.isActive ? (
+              <RoundPanel
+                round={round.round}
+                board={round.board}
+                summary={round.summary}
+                groups={round.groups}
+                participant={round.participant}
+                now={now}
+                drawBlockers={round.drawBlockers}
+                canDraw={round.canDraw}
+                closeBlockers={round.closeBlockers}
+                canClose={round.canClose}
+                undecided={round.undecided}
+                onDraw={round.draw}
+                onSetWinner={round.setWinner}
+                onStartNext={round.startNext}
+                onClose={round.close}
+                onShowOnBeamer={round.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
               Settings first, because they decide the words the panels below are
               written in: a host who runs `Teams` rather than `Gruppen` should
               not read the wrong noun on their way to changing it (issue #15).
@@ -168,8 +197,7 @@ export function HostWindow() {
               onStart={preStart.start}
             />
 
-            {/* Rounds and the phase navigation land with #17. */}
-            <p className="text-host-xs text-wm-text-faint">{de.app.bootstrapNotice}</p>
+            {/* The phase navigation lands with #22. */}
           </main>
         )}
       </div>

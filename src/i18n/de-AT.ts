@@ -14,7 +14,6 @@ import { pluralizeDeAT } from '@/i18n/plural';
 export const deAT = {
   app: {
     name: 'WattMatt',
-    bootstrapNotice: 'Grundgerüst steht. Turnierfunktionen folgen.',
   },
 
   common: {
@@ -56,8 +55,22 @@ export const deAT = {
      * commits, added by the issue that adds the action.
      */
     action: {
-      /** The example from issue #11; issue #17 wires the action itself. */
-      matchWinnerSet: (params: { group: number }) => `Sieger festgelegt: Gruppe ${params.group}`,
+      /**
+       * The round panel (issue #17). Each names its subject — the participant
+       * whose result is about to disappear, the table the next pair is about to
+       * leave again — because a host reaching for undo during a live event is
+       * looking for one decision among the dozen they have just made.
+       *
+       * `matchWinnerSet` is the example from issue #11 and keeps the wording it
+       * was written with, spelt in the words this tournament uses.
+       */
+      matchWinnerSet: (params: { participant: string }) =>
+        `Sieger festgelegt: ${params.participant}`,
+      matchWinnerCorrected: (params: { participant: string }) =>
+        `Sieger geändert: ${params.participant}`,
+      matchStarted: (params: { table: string }) => `Partie gestartet: ${params.table}`,
+      roundDrawn: (params: { round: string }) => `Ausgelost: ${params.round}`,
+      roundClosed: (params: { round: string }) => `Runde abgeschlossen: ${params.round}`,
       sceneShown: 'Beamer-Ansicht gewechselt',
 
       /** Tables (issue #13). Each names the table, because a host taking a step
@@ -469,16 +482,102 @@ export const deAT = {
     finished: 'beendet',
     /** Between the two groups of a match: "Gruppe 4 gegen Gruppe 9". */
     versus: 'gegen',
+
+    /**
+     * The two targets of a match card (issue #17). The whole button is the
+     * participant, because the host is aiming at a name across a busy screen
+     * rather than reading a sentence — the verb lives in the label beside it.
+     */
+    winnerAction: (params: { participant: string }) => `${params.participant} gewinnt`,
+    /** On the card of a decided match: "Sieger: Gruppe 4". */
+    winnerIs: (params: { participant: string }) => `Sieger: ${params.participant}`,
+    /**
+     * A decided match is not flipped by one stray click (issue #17 acceptance
+     * criteria): the host arms the card first, and only then are the two
+     * targets back.
+     */
+    correct: 'Ergebnis ändern',
+    correctPrompt: 'Neuen Sieger wählen',
+    correctCancel: 'Ergebnis behalten',
   },
 
+  /**
+   * The round control panel: the screen the host stares at for most of the
+   * event (issue #17).
+   *
+   * Short words and no sentences on the controls. The host is reading this
+   * standing up, under time pressure, with the room waiting — every string here
+   * is either a label they scan or a reason a control is doing nothing.
+   */
   round: {
     label: 'Runde',
     title: (params: { n: number }) => `Runde ${params.n}`,
+
+    sectionLabel: 'Aktuelle Runde',
+    /** Between two rounds, and before the first draw of a phase. */
+    none: 'Es ist keine Runde offen. Losen Sie die nächste Runde aus.',
+    /** The three states of docs/FILE-FORMAT.md, as the host would say them. */
+    state: {
+      DRAWN: 'ausgelost',
+      RUNNING: 'läuft',
+      CLOSED: 'abgeschlossen',
+    },
+    /** The header's progress: "7 / 12 Partien entschieden". */
+    progress: (params: { decided: number; total: number }) =>
+      `${params.decided} / ${pluralizeDeAT(params.total, 'Partie', 'Partien')} entschieden`,
+
+    tablesTitle: 'An den Tischen',
+    queueTitle: 'Warteschlange',
+    queueCount: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Partie', 'Partien')} wartet auf einen Tisch`,
+    queueEmpty: 'Keine Partie wartet auf einen Tisch.',
+    decidedTitle: 'Entschieden',
+    decidedEmpty: 'Es ist noch keine Partie entschieden.',
+
+    /**
+     * On a free table while somebody is waiting. The table was already freed
+     * when its winner was marked — what is left is the host's confirmation that
+     * the next pair walks up, which never happens on its own (golden rule 3).
+     */
+    startNext: 'Nächste Partie starten',
+    startNextOn: (params: { table: string }) => `Nächste Partie auf ${params.table} starten`,
+
+    close: 'Runde abschließen',
+    /** On the disabled button, so the reason is where the click was aimed. */
+    closeBlocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    closeNoRound: 'Es ist keine Runde offen, die abgeschlossen werden könnte.',
+    closeUndecided: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Partie', 'Partien')} ohne Sieger. Legen Sie für jede Partie einen Sieger fest.`,
+
+    showOnBeamer: 'Runde auf den Beamer',
+
+    /** The live summary beside the matches (issue #17, docs/TOURNAMENT-RULES.md §3). */
+    summaryTitle: 'Zwischenstand',
+    summaryWinners: (params: { n: number }) => `${params.n} weiter`,
+    summaryLosers: (params: { n: number }) => `${params.n} ausgeschieden`,
+    summaryOpen: (params: { n: number }) => `${pluralizeDeAT(params.n, 'Partie', 'Partien')} offen`,
+    /**
+     * The repechage the draw already determines: every match yields exactly one
+     * winner, so the field size at the close of the round is known from the
+     * moment it is drawn (docs/TOURNAMENT-RULES.md §4, issue #20).
+     */
+    summaryRepechage: (params: { target: number; need: number }) =>
+      `Hoffnungsrunde: Ziel ${params.target} — ${pluralizeDeAT(params.need, 'Platz', 'Plätze')} werden nachbesetzt.`,
+    summaryRepechageSkipped: (params: { target: number }) =>
+      `Die Hoffnungsrunde entfällt: ${params.target} kommen weiter, das ist bereits eine Zweierpotenz.`,
   },
 
   draw: {
     label: 'Auslosung',
     action: 'auslosen',
+
+    /** The button that starts a round, and every reason it is greyed out. */
+    start: 'Auslosung starten',
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    notADrawingPhase: 'In dieser Phase wird nicht ausgelost.',
+    roundOpen: 'Die laufende Runde ist noch offen. Schließen Sie sie ab, bevor Sie neu auslosen.',
+    qualifyingAlreadyDrawn:
+      'Die Qualifikationsrunde ist bereits ausgelost. Es gibt nur eine davon.',
   },
 
   outcome: {
