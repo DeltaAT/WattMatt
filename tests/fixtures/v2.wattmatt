@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "app": {
+    "name": "WattMatt",
+    "version": "0.1.0"
+  },
+  "id": "tnm_01HXFIXTURE0000000000001",
+  "name": "Vereinsturnier 2026",
+  "createdAt": "2026-08-22T17:04:00+02:00",
+  "updatedAt": "2026-08-22T19:31:12+02:00",
+  "rngSeed": "8f3c1a7e5b2d4096",
+  "rngCursor": 42,
+  "settings": {
+    "participantLabel": "GROUP",
+    "namingAt": 16,
+    "performanceMode": false
+  },
+  "phase": "BRACKET",
+  "tables": [
+    {
+      "id": "tbl_1",
+      "label": "Tisch 1",
+      "status": "OCCUPIED",
+      "currentMatchId": "mt_3",
+      "occupiedSince": "2026-08-22T19:31:12+02:00"
+    },
+    {
+      "id": "tbl_2",
+      "label": "Tisch 2",
+      "status": "FREE",
+      "currentMatchId": null,
+      "occupiedSince": null
+    },
+    {
+      "id": "tbl_3",
+      "label": "Tisch 3",
+      "status": "DISABLED",
+      "currentMatchId": null,
+      "occupiedSince": null
+    }
+  ],
+  "nextTableNumber": 4,
+  "groups": [
+    {
+      "id": "grp_1",
+      "number": 1,
+      "name": "Die Schnellen",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "grp_2",
+      "number": 2,
+      "name": "Grünauer Buam",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "grp_3",
+      "number": 3,
+      "name": null,
+      "status": "ELIMINATED"
+    },
+    {
+      "id": "grp_4",
+      "number": 4,
+      "name": null,
+      "status": "ACTIVE"
+    }
+  ],
+  "rounds": [
+    {
+      "id": "rnd_1",
+      "index": 1,
+      "kind": "QUALIFYING",
+      "label": "Runde 1",
+      "state": "CLOSED",
+      "matches": [
+        {
+          "id": "mt_1",
+          "tableId": "tbl_1",
+          "a": "grp_1",
+          "b": "grp_3",
+          "winnerId": "grp_1",
+          "status": "DONE"
+        },
+        {
+          "id": "mt_2",
+          "tableId": null,
+          "a": "grp_4",
+          "b": null,
+          "winnerId": "grp_4",
+          "status": "DONE"
+        }
+      ]
+    },
+    {
+      "id": "rnd_2",
+      "index": 2,
+      "kind": "BRACKET",
+      "label": "Halbfinale",
+      "state": "RUNNING",
+      "matches": [
+        {
+          "id": "mt_3",
+          "tableId": "tbl_1",
+          "a": "grp_1",
+          "b": "grp_2",
+          "winnerId": null,
+          "status": "RUNNING"
+        },
+        {
+          "id": "mt_4",
+          "tableId": null,
+          "a": "grp_4",
+          "b": null,
+          "winnerId": null,
+          "status": "WAITING_FOR_TABLE"
+        }
+      ]
+    }
+  ],
+  "repechage": {
+    "target": 4,
+    "draws": [
+      {
+        "groupId": "grp_3",
+        "accepted": false
+      },
+      {
+        "groupId": "grp_4",
+        "accepted": true
+      }
+    ],
+    "fallbackUsed": "BYES"
+  },
+  "bracket": {
+    "size": 4,
+    "nodes": [
+      {
+        "id": "bn_1",
+        "round": "SEMI_FINAL",
+        "slotA": "grp_1",
+        "slotB": "grp_2",
+        "winnerId": null,
+        "nextNodeId": "bn_3",
+        "tableId": "tbl_1"
+      },
+      {
+        "id": "bn_2",
+        "round": "THIRD_PLACE",
+        "slotA": null,
+        "slotB": null,
+        "winnerId": null,
+        "nextNodeId": null,
+        "tableId": null
+      },
+      {
+        "id": "bn_3",
+        "round": "FINAL",
+        "slotA": null,
+        "slotB": null,
+        "winnerId": null,
+        "nextNodeId": null,
+        "tableId": null
+      }
+    ],
+    "thirdPlaceNodeId": "bn_2"
+  },
+  "log": [
+    {
+      "at": "2026-08-22T18:02:11+02:00",
+      "action": "MATCH_WINNER_SET",
+      "payload": {
+        "matchId": "mt_1",
+        "winnerId": "grp_1"
+      }
+    },
+    {
+      "at": "2026-08-22T18:02:19+02:00",
+      "action": "ACTION_UNDONE",
+      "payload": {
+        "action": "MATCH_WINNER_SET",
+        "label": "Sieger festgelegt: Gruppe 1"
+      }
+    },
+    {
+      "at": "2026-08-22T18:44:03+02:00",
+      "action": "ROUND_CLOSED",
+      "payload": {
+        "roundId": "rnd_1"
+      }
+    }
+  ]
+}

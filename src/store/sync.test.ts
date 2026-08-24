@@ -21,6 +21,8 @@ function groups(count: number): TournamentSnapshot {
       name: `Gruppe ${index + 1}`,
       status: 'ACTIVE' as const,
     })),
+    tables: [],
+    matches: [],
   };
 }
 

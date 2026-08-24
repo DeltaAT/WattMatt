@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { roundIdSchema } from '@/domain/ids';
+import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
 import { de } from '@/i18n';
 import { BeamerScenePlaceholder } from '@/windows/beamer/BeamerScenePlaceholder';
 
@@ -10,7 +11,11 @@ const round = (value: string) => roundIdSchema.parse(value);
 describe('the beamer scene surface', () => {
   it('renders the scene the host staged, not a fixed screen', () => {
     const markup = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'DRAW', roundId: round('r2') }} settled />,
+      <BeamerScenePlaceholder
+        scene={{ id: 'DRAW', roundId: round('r2') }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+      />,
     );
     expect(markup).toContain('data-scene="DRAW"');
     expect(markup).toContain(de.beamer.scenePending);
@@ -18,7 +23,7 @@ describe('the beamer scene surface', () => {
 
   it('shows nothing at all during a blackout', () => {
     const markup = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'BLACKOUT' }} settled />,
+      <BeamerScenePlaceholder scene={{ id: 'BLACKOUT' }} tournament={EMPTY_TOURNAMENT} settled />,
     );
     expect(markup).toContain('data-scene="BLACKOUT"');
     // Any text here would be a lit rectangle in a dark room.
@@ -28,10 +33,14 @@ describe('the beamer scene surface', () => {
 
   it('marks a caught-up scene as settled so it is not animated in', () => {
     const settled = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'BRACKET' }} settled />,
+      <BeamerScenePlaceholder scene={{ id: 'BRACKET' }} tournament={EMPTY_TOURNAMENT} settled />,
     );
     const animating = renderToStaticMarkup(
-      <BeamerScenePlaceholder scene={{ id: 'BRACKET' }} settled={false} />,
+      <BeamerScenePlaceholder
+        scene={{ id: 'BRACKET' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled={false}
+      />,
     );
 
     expect(settled).toContain('data-settled="true"');

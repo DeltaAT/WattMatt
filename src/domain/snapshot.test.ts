@@ -8,7 +8,15 @@ import {
   toTournamentSnapshot,
   type Snapshot,
 } from '@/domain/snapshot';
-import { group, table, tournament } from '@/domain/testFixtures';
+import {
+  group,
+  match,
+  matchId,
+  midTournament,
+  occupiedTable,
+  table,
+  tournament,
+} from '@/domain/testFixtures';
 
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return { ...INITIAL_SNAPSHOT, ...overrides };
@@ -28,6 +36,11 @@ describe('the snapshot envelope', () => {
             status: 'ACTIVE',
           },
         ],
+        // Tables and the match on one of them travel the same wire (issue #13);
+        // a `null` that came back as `undefined` would be a table the beamer
+        // draws as busy for the rest of the event.
+        tables: [occupiedTable(1, matchId(4)), table(2, { status: 'DISABLED' })],
+        matches: [match(4, { tableId: table(1).id, status: 'RUNNING' })],
       },
       delivery: 'live',
     });
@@ -70,7 +83,21 @@ describe('toTournamentSnapshot', () => {
   it('hands the beamer the real groups, not a parallel copy of them', () => {
     const groups = [group(1), group(2, { name: 'Die Schnellen' })];
 
-    expect(toTournamentSnapshot(tournament({ groups }))).toEqual({ groups });
+    expect(toTournamentSnapshot(tournament({ groups })).groups).toEqual(groups);
+  });
+
+  /** Issue #13: the beamer draws the occupancy board from what it is sent. */
+  it('sends the tables in the order the host arranged them', () => {
+    const tables = [table(3), table(1), table(2, { status: 'DISABLED' })];
+
+    expect(toTournamentSnapshot(tournament({ tables })).tables).toEqual(tables);
+  });
+
+  it('sends the matches that are on a table, and no others', () => {
+    const projected = toTournamentSnapshot(midTournament());
+
+    // `midTournament` has three matches; exactly one of them is on a table.
+    expect(projected.matches.map((entry) => entry.id)).toEqual([matchId(1)]);
   });
 
   /**
@@ -84,11 +111,11 @@ describe('toTournamentSnapshot', () => {
       tournament({ groups: [group(1)], tables: [table(1)], rngSeed: 'secret' }),
     );
 
-    expect(Object.keys(projected)).toEqual(['groups']);
+    expect(Object.keys(projected).sort()).toEqual(['groups', 'matches', 'tables']);
     expect(snapshotSchema.safeParse(snapshot({ tournament: projected })).success).toBe(true);
   });
 
   it('projects an empty tournament as an empty picture', () => {
-    expect(toTournamentSnapshot(tournament())).toEqual({ groups: [] });
+    expect(toTournamentSnapshot(tournament())).toEqual({ groups: [], tables: [], matches: [] });
   });
 });

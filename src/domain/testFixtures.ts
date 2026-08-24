@@ -58,8 +58,19 @@ export function table(n: number, overrides: Partial<Table> = {}): Table {
     label: `Table ${n}`,
     status: 'FREE',
     currentMatchId: null,
+    occupiedSince: null,
     ...overrides,
   };
+}
+
+/** A table with a match on it, with the three occupancy fields kept in step. */
+export function occupiedTable(
+  n: number,
+  matchId: MatchId,
+  at: Timestamp = FIXED_NOW,
+  overrides: Partial<Table> = {},
+): Table {
+  return table(n, { status: 'OCCUPIED', currentMatchId: matchId, occupiedSince: at, ...overrides });
 }
 
 export function match(n: number, overrides: Partial<Match> = {}): Match {
@@ -122,10 +133,13 @@ export function midTournament(overrides: Partial<Tournament> = {}): Tournament {
     phase: 'BRACKET',
     rngCursor: 17,
     tables: [
-      table(1, { status: 'OCCUPIED', currentMatchId: runningMatch.id }),
+      occupiedTable(1, runningMatch.id),
       table(2, { status: 'FREE' }),
       table(3, { status: 'DISABLED' }),
     ],
+    // Three tables have been created, so the next one is the fourth — the
+    // counter is part of the document and has to be as real as the rest of it.
+    nextTableNumber: 4,
     groups: [
       group(1),
       group(2, { name: 'Die Schnellen' }),

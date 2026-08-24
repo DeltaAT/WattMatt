@@ -1,7 +1,16 @@
 import { z } from 'zod';
 
 import { beamerSceneSchema, IDLE_SCENE } from '@/domain/beamerScene';
-import { groupSchema, type Group, type Tournament } from '@/domain/types';
+import { matchesOnTables } from '@/domain/tables';
+import {
+  groupSchema,
+  matchSchema,
+  tableSchema,
+  type Group,
+  type Match,
+  type Table,
+  type Tournament,
+} from '@/domain/types';
 
 /**
  * The full picture the host broadcasts to the beamer (docs/ARCHITECTURE.md §3).
@@ -20,10 +29,11 @@ import { groupSchema, type Group, type Tournament } from '@/domain/types';
  * silently, and the difference would surface as a projector showing a group
  * the host has already eliminated.
  *
- * It still carries only groups. The scenes that need rounds, tables and the
- * bracket are issues #18, #19, #25 and #27, and each extends this schema with
- * what it actually draws — the envelope around it is final either way
- * (docs/OPEN-QUESTIONS.md #19).
+ * It carries groups and, since issue #13, tables and the matches that are on
+ * them — exactly what `TABLE_OVERVIEW` draws. The scenes that need whole rounds
+ * and the bracket are issues #18, #19, #25 and #27, and each extends this
+ * schema with what it actually draws; the envelope around it is final either
+ * way (docs/OPEN-QUESTIONS.md #19).
  */
 export const groupSnapshotSchema = groupSchema;
 
@@ -31,9 +41,23 @@ export type GroupSnapshot = Group;
 
 export const tournamentSnapshotSchema = z.object({
   groups: z.array(groupSnapshotSchema),
+  /** In the host's configured order, which is the order they stand in the room. */
+  tables: z.array(tableSchema),
+  /**
+   * The matches currently on a table, and only those.
+   *
+   * Enough for the occupancy board, which is the one scene that reads them
+   * today. Issue #19 widens this to the current round's matches — the field is
+   * the same one, and `toTournamentSnapshot` is the only place that decides
+   * what goes in it.
+   */
+  matches: z.array(matchSchema),
 });
 
 export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
+
+export type TableSnapshot = Table;
+export type MatchSnapshot = Match;
 
 /**
  * Why this snapshot was sent.
@@ -66,7 +90,7 @@ export const snapshotSchema = z.object({
 
 export type Snapshot = z.infer<typeof snapshotSchema>;
 
-export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [] };
+export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [], tables: [], matches: [] };
 
 /**
  * The beamer's view of the tournament the host owns.
@@ -79,7 +103,13 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = { groups: [] };
  * too, and nowhere else.
  */
 export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
-  return { groups: tournament.groups };
+  return {
+    groups: tournament.groups,
+    tables: tournament.tables,
+    // Copied out of the readonly projection: the snapshot is a value the sync
+    // layer serialises, and Zod's inferred array type is a mutable one.
+    matches: [...matchesOnTables(tournament)],
+  };
 }
 
 /** What a beamer renders before the host has answered its first request. */

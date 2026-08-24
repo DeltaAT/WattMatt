@@ -9,6 +9,13 @@ improvise in code.
 - **Group** (`Gruppe`) — a participating unit: one player or a team. Identified by a **number**
   from the moment it is created. It gets a **name** only in the naming phase.
 - **Table** (`Tisch`) — a physical playing surface. A table is `FREE`, `OCCUPIED` or `DISABLED`.
+  A `DISABLED` table is one the host has taken out of service — a wobbly leg, a spilled drink —
+  and is never offered to a queued match. Tables may be created, renamed, reordered, taken out
+  of service and deleted **at any point of the tournament**, not only during `SETUP`: a table
+  breaks during a round, not before it (issue #13). Table numbers follow the same rule as group
+  numbers (§2): stable for the whole tournament and **never reused**, even after a table is
+  deleted, so a match that records where it was played cannot come to mean another table. A
+  table's *name* is the host's to change and must stay unique across tables.
 - **Match** (`Partie`) — exactly two groups, or one group plus a bye.
 - **Bye** (`Freilos`) — a group that advances without playing, because the count was odd.
 
@@ -40,6 +47,11 @@ if n is odd: the last remaining group receives a BYE and advances automatically
 matches than tables, the remaining matches get status `WAITING_FOR_TABLE` and are queued.
 When the host closes a match, its table returns to `FREE` and the next queued match is offered
 to it — the host confirms, so nothing moves on the beamer without the host wanting it.
+
+A table that is taken out of service or deleted **while a match is on it** does not simply drop
+that match: the host is asked whether it goes back into the queue or straight onto another free
+table, and a table added mid-round joins the free ones immediately (issue #13,
+docs/OPEN-QUESTIONS.md #35).
 
 **Results.** The host marks a winner per match. On the beamer the winner card turns green,
 the loser card red (see [MOTION.md](MOTION.md) §4.2). Results can be corrected until the

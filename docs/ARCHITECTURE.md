@@ -206,6 +206,8 @@ src/
     factory.ts         createTournament(), file wrap/unwrap
     fileName.ts        tournament name -> a file name Windows accepts
     lookup.ts          index entities by ID; nothing reaches an entity by position
+    snapshot.ts        what the beamer is sent, and the one place that projects it
+    tables.ts          the table lifecycle: create, rename, reorder, block, occupy, free
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, candidate draw
@@ -237,6 +239,8 @@ src/
   windows/
     route.ts           `?window=` → host | beamer
     useBeamerStatus.ts live placement, shared by both windows
+    useNow.ts          the display clock behind running times; never committed
+    groupLabel.ts      what a participant is called, on both screens
     host/              panels, dialogs, control center
     beamer/scenes/     one component per BeamerScene id
   ui/                  Button, Card, GroupChip, TableChip, motion presets
@@ -244,7 +248,7 @@ src/
     de-AT.ts           every user-visible string, one typed tree
     t.ts               `t('round.title', { n: 2 })`, typed dotted-path keys
     plural.ts          German singular/plural via Intl.PluralRules
-    format.ts          date/time via Intl, locale `de-AT`
+    format.ts          date/time and running durations, locale `de-AT`
 src-tauri/src/
   main.rs
   fs.rs                atomic write, backup rotation, the tournament library

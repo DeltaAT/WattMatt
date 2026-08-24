@@ -59,6 +59,16 @@ export const deAT = {
       /** The example from issue #11; issue #17 wires the action itself. */
       matchWinnerSet: (params: { group: number }) => `Sieger festgelegt: Gruppe ${params.group}`,
       sceneShown: 'Beamer-Ansicht gewechselt',
+
+      /** Tables (issue #13). Each names the table, because a host taking a step
+       * back needs to know which piece of furniture is about to move. */
+      tablesAdded: (params: { n: number }) =>
+        `${pluralizeDeAT(params.n, 'Tisch', 'Tische')} angelegt`,
+      tableRenamed: (params: { label: string }) => `Tisch umbenannt: ${params.label}`,
+      tableMoved: (params: { label: string }) => `Tisch verschoben: ${params.label}`,
+      tableRemoved: (params: { label: string }) => `Tisch gelöscht: ${params.label}`,
+      tableDisabled: (params: { label: string }) => `Tisch gesperrt: ${params.label}`,
+      tableEnabled: (params: { label: string }) => `Tisch freigegeben: ${params.label}`,
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -206,22 +216,86 @@ export const deAT = {
   group: {
     label: 'Gruppe',
     numberLabel: 'Gruppennummer',
+    /** The identity of a participant until the naming phase (§0). */
+    numbered: (params: { n: number }) => `Gruppe ${params.n}`,
+    /** A group id that no longer names a group — a file repaired by hand. */
+    unknown: 'Unbekannt',
     /** "1 Gruppe" / "5 Gruppen" — German pluralisation via @/i18n/plural. */
     count: (params: { n: number }) => pluralizeDeAT(params.n, 'Gruppe', 'Gruppen'),
   },
 
+  /**
+   * Tables and the live occupancy board (issue #13).
+   *
+   * The board is read at a glance from across the room, so its words are short
+   * and its status words are the three of docs/TOURNAMENT-RULES.md §0 and
+   * nothing else.
+   */
   table: {
     label: 'Tisch',
     free: 'frei',
     occupied: 'belegt',
     disabled: 'gesperrt',
     waitingForTable: 'wartet auf Tisch',
+
+    sectionLabel: 'Tische',
+    boardLabel: 'Tischbelegung',
+    /** "1 Tisch" / "5 Tische". */
+    count: (params: { n: number }) => pluralizeDeAT(params.n, 'Tisch', 'Tische'),
+    /** The name a table is created with; the host renames it if the room differs. */
+    defaultLabel: (params: { n: number }) => `Tisch ${params.n}`,
+    empty: 'Es ist noch kein Tisch angelegt. Legen Sie mindestens einen Tisch an.',
+
+    add: 'Tisch hinzufügen',
+    /** The "Anzahl Tische" quick-add of issue #13. */
+    quickAddLabel: 'Anzahl Tische',
+    quickAdd: 'Tische anlegen',
+
+    nameLabel: 'Tischbezeichnung',
+    moveUp: 'Nach oben',
+    moveDown: 'Nach unten',
+    disable: 'Sperren',
+    enable: 'Freigeben',
+    remove: 'Löschen',
+
+    /**
+     * Beside the match on the board: "läuft 12:31".
+     *
+     * Not "läuft seit 12:31": `duration` is elapsed time, and "seit" in front
+     * of a `mm:ss` reads as a clock time on a board that is glanced at from
+     * across the room — the one reading the host must not have to double-check
+     * mid-round.
+     */
+    runningFor: (params: { duration: string }) => `läuft ${params.duration}`,
+    /** A table that says it is busy with a match nobody can find any more. */
+    unknownMatch: 'Partie nicht auffindbar',
+    showOnBeamer: 'Tische auf den Beamer',
+
+    /**
+     * The question a host is asked before a table with a match on it goes away.
+     *
+     * There is no "leave it there": the table is going, so the match has to go
+     * somewhere, and the host says where.
+     */
+    occupiedDialog: {
+      title: 'Auf diesem Tisch läuft eine Partie',
+      removeBody: (params: { label: string }) =>
+        `Der Tisch „${params.label}“ soll gelöscht werden. Entscheiden Sie, was mit der laufenden Partie geschieht.`,
+      disableBody: (params: { label: string }) =>
+        `Der Tisch „${params.label}“ soll gesperrt werden. Entscheiden Sie, was mit der laufenden Partie geschieht.`,
+      requeue: 'Partie zurück in die Warteschlange',
+      moveTo: 'Partie auf einen freien Tisch verschieben',
+      moveTargetLabel: 'Freier Tisch',
+      noFreeTable: 'Es ist kein anderer Tisch frei. Die Partie geht zurück in die Warteschlange.',
+    },
   },
 
   match: {
     label: 'Partie',
     running: 'läuft',
     finished: 'beendet',
+    /** Between the two groups of a match: "Gruppe 4 gegen Gruppe 9". */
+    versus: 'gegen',
   },
 
   round: {
@@ -253,6 +327,14 @@ export const deAT = {
      * components arrive with issues #18, #19, #25 and #27.
      */
     scenePending: 'Ansicht wird vorbereitet.',
+
+    /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */
+    tableOverview: {
+      title: 'Tische',
+      free: 'Frei',
+      disabled: 'Gesperrt',
+      empty: 'Es sind keine Tische angelegt.',
+    },
   },
 
   beamerControl: {

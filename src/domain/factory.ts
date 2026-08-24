@@ -48,6 +48,7 @@ export function createTournament(input: CreateTournamentInput): Tournament {
     phase: 'SETUP',
 
     tables: [],
+    nextTableNumber: 1,
     groups: [],
     rounds: [],
 

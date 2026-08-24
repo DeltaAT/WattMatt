@@ -16,7 +16,11 @@ export function BeamerWindow() {
 
   return (
     <BeamerSurface placement={status.placement}>
-      <BeamerScenePlaceholder scene={view.snapshot.scene} settled={!view.animate} />
+      <BeamerScenePlaceholder
+        scene={view.snapshot.scene}
+        tournament={view.snapshot.tournament}
+        settled={!view.animate}
+      />
     </BeamerSurface>
   );
 }

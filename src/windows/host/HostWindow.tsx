@@ -6,13 +6,16 @@ import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { StartScreen } from '@/windows/host/StartScreen';
+import { TablePanel } from '@/windows/host/TablePanel';
 import { TournamentBar } from '@/windows/host/TournamentBar';
 import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
+import { useTables } from '@/windows/host/useTables';
 import { useTournamentDocument } from '@/windows/host/useTournamentDocument';
 import { useUndo, useUndoShortcuts } from '@/windows/host/useUndo';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
+import { useNow } from '@/windows/useNow';
 
 /**
  * The control window on the laptop screen (docs/ARCHITECTURE.md §2).
@@ -30,6 +33,11 @@ export function HostWindow() {
   const beamerAlive = useBeamerAlive();
   const document = useTournamentDocument();
   const undo = useUndo();
+  const tables = useTables();
+  // Only while something is actually running: a setup screen has no stopwatch
+  // to move, and re-rendering it once a second for an hour before the doors
+  // open buys nothing.
+  const now = useNow(tables.isAnyRunning);
 
   // Registered for the whole window, not just while the toolbar has focus:
   // the host's hands are on the keyboard between decisions (issue #11).
@@ -95,8 +103,22 @@ export function HostWindow() {
             onOpenAt={document.openAt}
           />
         ) : (
-          <main className="flex flex-1 flex-col items-center justify-center gap-2">
-            <p className="text-host-sm text-wm-text-muted">{de.app.bootstrapNotice}</p>
+          <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
+            <TablePanel
+              board={tables.board}
+              groups={document.state.tournament.groups}
+              now={now}
+              onAdd={tables.add}
+              onRename={tables.rename}
+              onMove={tables.move}
+              onDisable={tables.disable}
+              onEnable={tables.enable}
+              onRemove={tables.remove}
+              onShowOnBeamer={tables.showOnBeamer}
+            />
+
+            {/* Groups, rounds and the phase navigation land with #14 and #17. */}
+            <p className="text-host-xs text-wm-text-faint">{de.app.bootstrapNotice}</p>
           </main>
         )}
       </div>
