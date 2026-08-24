@@ -5,6 +5,8 @@ import {
   nextPowerOfTwo,
   repechageOutlook,
   roundBoard,
+  roundById,
+  roundHistory,
   roundProgress,
   roundSummary,
 } from '@/domain/round';
@@ -16,6 +18,7 @@ import {
   matchId,
   occupiedTable,
   round,
+  roundId,
   table,
   tableId,
   tournament,
@@ -241,5 +244,62 @@ describe('roundSummary', () => {
     expect(summary.losers).toEqual([groupId(1)]);
     expect(summary.progress).toEqual({ decided: 2, open: 1, total: 3 });
     expect(summary.repechage?.target).toBe(4);
+  });
+});
+
+/**
+ * The history the host browses between rounds (issue #22).
+ *
+ * The question it answers is asked out loud at every tournament — *wen habe ich
+ * in der zweiten Runde geschlagen?* — and the answer has to survive the
+ * repechage putting a loser back to `ACTIVE`, which is why the outcome is read
+ * off the matches rather than off the groups.
+ */
+describe('roundHistory', () => {
+  const qualifying = round(1, {
+    kind: 'QUALIFYING',
+    state: 'CLOSED',
+    matches: [
+      match(1, { a: groupId(1), b: groupId(2), winnerId: groupId(1), status: 'DONE' }),
+      match(2, { a: groupId(3), b: null, winnerId: groupId(3), status: 'DONE' }),
+    ],
+  });
+  const elimination = round(2, {
+    kind: 'ELIMINATION',
+    state: 'RUNNING',
+    matches: [match(3, { a: groupId(1), b: groupId(3) })],
+  });
+  const played = tournament({
+    // Group 2 lost round 1 and came back through the `Hoffnungsrunde`, so its
+    // status says ACTIVE while the record of round 1 must still say it lost.
+    groups: [group(1), group(2), group(3)],
+    rounds: [qualifying, elimination],
+  });
+
+  it('hands over every round in the order it was played', () => {
+    expect(roundHistory(played).map((record) => record.round.id)).toEqual([
+      qualifying.id,
+      elimination.id,
+    ]);
+  });
+
+  it('remembers who lost a round even after they came back', () => {
+    const [first] = roundHistory(played);
+
+    expect(first?.summary.winners).toEqual([groupId(1), groupId(3)]);
+    expect(first?.summary.losers).toEqual([groupId(2)]);
+  });
+
+  it('keeps the round that is still running in the list', () => {
+    const [, second] = roundHistory(played);
+
+    expect(second?.round.state).toBe('RUNNING');
+    expect(second?.summary.progress).toEqual({ decided: 0, open: 1, total: 1 });
+  });
+
+  it('finds a round by the id a beamer scene names, and nothing by one it does not', () => {
+    expect(roundById(played, qualifying.id)).toBe(qualifying);
+    // An undo can take a round away while the projector is still pointed at it.
+    expect(roundById(played, roundId(99))).toBeNull();
   });
 });

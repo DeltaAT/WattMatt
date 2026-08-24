@@ -116,6 +116,13 @@ export const deAT = {
       repechageByes: 'Freilose vergeben',
       repechageReopened: 'Ausgeschiedene erneut zugelassen',
 
+      /**
+       * The phase step (issue #22). It names the phase the tournament has just
+       * moved into, because that is what the host announced to the room a
+       * second ago and what is about to be taken back off the projector.
+       */
+      phaseAdvanced: (params: { phase: string }) => `Phase gewechselt: ${params.phase}`,
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -248,6 +255,66 @@ export const deAT = {
     eliminationRound: 'Ausscheidungsrunde',
     namingPhase: 'Namenserfassung',
     finalPhase: 'Finalphase',
+
+    /**
+     * The phase panel (issue #22, docs/TOURNAMENT-RULES.md §1).
+     *
+     * The one control that moves the evening on, so the copy has to answer two
+     * questions at a glance: where are we, and what happens when I press this.
+     * The destination is named on the button rather than left as "Weiter",
+     * because the host says it out loud to the room before they press it.
+     */
+    sectionLabel: 'Turnierverlauf',
+    /** What each phase is called where the host reads their current position. */
+    name: {
+      SETUP: 'Vorbereitung',
+      QUALIFYING: 'Qualifikationsrunde',
+      REPECHAGE: 'Hoffnungsrunde',
+      ELIMINATION: 'Ausscheidungsrunden',
+      NAMING: 'Namenserfassung',
+      BRACKET: 'Turnierbaum',
+      CEREMONY: 'Siegerehrung',
+    },
+    /** How many are still in, beside the phase. */
+    field: (params: { n: number }) => `${params.n} im Feld`,
+    /** The button, with the phase it leads to spelt out. */
+    advance: (params: { phase: string }) => `Weiter zur ${params.phase}`,
+    /** Reached the end of what this issue can move: nothing to press. */
+    noStep: 'In dieser Phase gibt es keinen nächsten Schritt.',
+    /** On the disabled button, so the reason is where the click was aimed. */
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    roundNotDrawn: 'Die Runde ist noch nicht ausgelost. Losen Sie sie aus.',
+    roundOpen: 'Die laufende Runde ist noch offen. Schließen Sie sie ab.',
+    repechageOpen: 'Die Hoffnungsrunde ist noch nicht vollständig.',
+    fieldTooLarge: (params: { n: number; final: number }) =>
+      `Es sind noch ${params.n} im Feld. Die Finalphase beginnt bei ${params.final}. Losen Sie eine weitere Ausscheidungsrunde aus.`,
+    /** What the panel says the step will do, above the button. */
+    outlook: (params: { phase: string; n: number }) =>
+      `Als Nächstes: ${params.phase} mit ${params.n} Teilnehmenden.`,
+  },
+
+  /**
+   * The round history (issue #22).
+   *
+   * The host is asked "wen habe ich in der zweiten Runde geschlagen?" at every
+   * tournament, so every round of the evening stays reachable — and any of them
+   * can be put back on the projector without disturbing the round that is
+   * running.
+   */
+  history: {
+    sectionLabel: 'Rundenverlauf',
+    empty: 'Es wurde noch keine Runde ausgelost.',
+    /** On the row, beside the round's own label. */
+    result: (params: { winners: number; losers: number }) =>
+      `${params.winners} weiter, ${params.losers} ausgeschieden`,
+    show: 'Partien anzeigen',
+    hide: 'Partien ausblenden',
+    showOnBeamer: 'Diese Runde auf den Beamer',
+    /** The pairing itself, on one line: the winner first, then the loser. */
+    pairing: (params: { winner: string; loser: string }) =>
+      `${params.winner} schlägt ${params.loser}`,
+    byePairing: (params: { participant: string }) => `${params.participant} — Freilos`,
+    undecided: (params: { a: string; b: string }) => `${params.a} gegen ${params.b} — offen`,
   },
 
   bracket: {
@@ -591,6 +658,13 @@ export const deAT = {
     roundOpen: 'Die laufende Runde ist noch offen. Schließen Sie sie ab, bevor Sie neu auslosen.',
     qualifyingAlreadyDrawn:
       'Die Qualifikationsrunde ist bereits ausgelost. Es gibt nur eine davon.',
+    /**
+     * The `while |W| > 16` of docs/TOURNAMENT-RULES.md §5, as the host reads it:
+     * another round here would take the field below the bracket the room has
+     * been promised.
+     */
+    finalPhaseReached:
+      'Das Feld ist bereits vollständig für die Finalphase. Wechseln Sie in die nächste Phase.',
   },
 
   outcome: {

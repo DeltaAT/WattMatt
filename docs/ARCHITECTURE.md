@@ -216,7 +216,7 @@ src/
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
-    progression.ts     phase transitions
+    progression.ts     the phase machine: what the field carries, where it goes next
     bracket.ts         bracket construction, third-place match
     selectors.ts       derived data (standings, free tables, …)
   store/

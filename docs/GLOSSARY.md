@@ -28,6 +28,9 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Elimination round | Ausscheidungsrunde |
 | Naming phase | Namenserfassung |
 | Final phase | Finalphase |
+| Elimination rounds (the phase) | Ausscheidungsrunden | Plural where the host reads their current position (issue #22) |
+| Phase panel | Turnierverlauf | Where the tournament stands, and the one control that moves it on |
+| Round history | Rundenverlauf | Every round of the evening, browsable and projectable |
 | Round of 16 | Achtelfinale |
 | Quarter-final | Viertelfinale |
 | Semi-final | Halbfinale |
@@ -88,6 +91,10 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Places still open | Plätze frei | The counter the whole `REPECHAGE` scene is about |
 | To hand out byes (§4 fallback 1) | Freilose vergeben | Always available, so the phase can always be left |
 | To readmit the declined (§4 fallback 2) | Ausgeschiedene erneut zulassen | |
+| To move to the next phase | Weiter zur … | Names the phase it leads to, never a bare *Weiter* (issue #22) |
+| The field carried on | Im Feld | How many the phase hands to the next one |
+| To show the pairings of a past round | Partien anzeigen | |
+| To project a past round | Diese Runde auf den Beamer | Changes the picture only; the running round carries on |
 
 ## Files
 

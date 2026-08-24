@@ -169,7 +169,7 @@ fire automatically the instant the final is decided, because the host may still 
 | 2 | `\|W\|` already a power of two | Repechage skipped, no empty scene shown |
 | 3 | More matches than tables | Matches queue as `WAITING_FOR_TABLE`, host assigns as tables free up |
 | 4 | Fewer than 2 groups | Tournament cannot start |
-| 5 | Exactly 2 groups | One match, then straight to naming and a 2-slot final |
+| 5 | Exactly 2 groups | One match, then straight to naming and a 2-slot final — that match **is** the `Finale`, and no qualifying round is drawn (docs/OPEN-QUESTIONS.md #62) |
 | 6 | Repechage pool exhausted | §4 fallback dialog |
 | 7 | All losers decline | Same as #6 |
 | 8 | Host marks the wrong winner | Correctable in place; undo restores table status too |

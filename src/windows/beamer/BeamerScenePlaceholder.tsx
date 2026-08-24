@@ -77,18 +77,18 @@ export function BeamerScenePlaceholder({
 
   if (scene.id === 'ROUND_BOARD') {
     /*
-     * Same guard as `DRAW` below: the descriptor names a round and the snapshot
-     * carries one, and they can disagree for a moment. Drawing whatever arrived
-     * would put the *next* round's pairings under the previous round's heading
-     * — so a mismatch renders the board empty rather than confidently wrong.
+     * The descriptor names a round, and the board is drawn from exactly that
+     * one — the open round when it is the open round, otherwise the closed
+     * round of that id out of the history the snapshot carries (issue #22).
+     * Without the second case, pointing the projector back at *Runde 2* while
+     * *Runde 3* is running would show the room an empty board.
+     *
+     * An id that names neither still renders empty rather than confidently
+     * wrong: an undo can take a round away while the scene is still staged
+     * against it, and the *next* round's pairings under the previous round's
+     * heading is the one picture that must never appear.
      */
-    const staged = tournament.round?.id === scene.roundId;
-    return (
-      <RoundBoardScene
-        tournament={staged ? tournament : { ...tournament, matches: [], round: null }}
-        settled={settled}
-      />
-    );
+    return <RoundBoardScene tournament={stageRound(tournament, scene.roundId)} settled={settled} />;
   }
 
   if (scene.id === 'REPECHAGE') {
@@ -131,6 +131,30 @@ export function BeamerScenePlaceholder({
       <p className="text-beamer-body text-wm-text-muted">{de.beamer.scenePending}</p>
     </div>
   );
+}
+
+/**
+ * The snapshot as the `ROUND_BOARD` scene should read it: `round` and `matches`
+ * are the round the descriptor names, whichever round that is.
+ *
+ * The scene draws `tournament.round` and `tournament.matches` and nothing else,
+ * so a past round is shown by handing it a snapshot whose open round is that
+ * one. Cheaper than teaching the scene about the history, and it keeps
+ * `RoundBoardScene` a pure function of one round — which is what lets a closed
+ * round and a live one be tested through the same component.
+ */
+function stageRound(tournament: TournamentSnapshot, roundId: RoundId): TournamentSnapshot {
+  if (tournament.round?.id === roundId) {
+    return tournament;
+  }
+
+  const past = tournament.history.find((round) => round.id === roundId);
+  if (past === undefined) {
+    return { ...tournament, matches: [], round: null };
+  }
+
+  const { matches, ...withoutMatches } = past;
+  return { ...tournament, matches, round: withoutMatches };
 }
 
 /**

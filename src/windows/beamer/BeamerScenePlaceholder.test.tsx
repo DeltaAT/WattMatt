@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { roundIdSchema } from '@/domain/ids';
-import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
+import { groupIdSchema, matchIdSchema, roundIdSchema } from '@/domain/ids';
+import { EMPTY_TOURNAMENT, type TournamentSnapshot } from '@/domain/snapshot';
+import type { Round } from '@/domain/types';
 import { de } from '@/i18n';
 import { BeamerScenePlaceholder } from '@/windows/beamer/BeamerScenePlaceholder';
 
@@ -94,6 +95,101 @@ describe('the beamer scene surface', () => {
     // Any text here would be a lit rectangle in a dark room.
     expect(markup).not.toContain(de.beamer.idleTitle);
     expect(markup).not.toContain(de.beamer.scenePending);
+  });
+
+  /*
+   * Issue #22: the host is asked "wen hat er in der zweiten Runde geschlagen?"
+   * and puts that round back on the wall while the next one is running. The
+   * board has to draw the round the descriptor names, not the one that happens
+   * to be open.
+   */
+  describe('a round board pointed at the history', () => {
+    const past: Round = {
+      id: round('rnd_1'),
+      index: 1,
+      kind: 'QUALIFYING',
+      label: 'Runde 1',
+      state: 'CLOSED',
+      matches: [
+        {
+          id: matchIdSchema.parse('mt_1'),
+          tableId: null,
+          a: groupIdSchema.parse('grp_1'),
+          b: groupIdSchema.parse('grp_2'),
+          winnerId: groupIdSchema.parse('grp_1'),
+          status: 'DONE',
+        },
+      ],
+    };
+
+    const snapshot: TournamentSnapshot = {
+      ...EMPTY_TOURNAMENT,
+      groups: [
+        { id: groupIdSchema.parse('grp_1'), number: 1, name: null, status: 'ACTIVE' },
+        { id: groupIdSchema.parse('grp_2'), number: 2, name: null, status: 'ELIMINATED' },
+      ],
+      // A different round is open — the live one the host has not left.
+      round: {
+        id: round('rnd_2'),
+        index: 2,
+        kind: 'ELIMINATION',
+        label: 'Runde 2',
+        state: 'RUNNING',
+      },
+      matches: [],
+      history: [past],
+    };
+
+    it('draws the closed round the scene names', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: past.id }}
+          tournament={snapshot}
+          settled
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('data-scene="ROUND_BOARD"');
+      expect(markup).toContain(past.label);
+      // The pairing of that round, not of the one that is running.
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 1 }));
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 2 }));
+    });
+
+    it('still draws the open round when that is the one named', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2') }}
+          tournament={snapshot}
+          settled
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('Runde 2');
+      expect(markup).not.toContain(past.label);
+    });
+
+    /*
+     * An undo can take a round away while the projector is still pointed at it.
+     * An empty board is honest; the next round's pairings under the previous
+     * round's heading would not be.
+     */
+    it('draws an empty board for a round that no longer exists', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_9') }}
+          tournament={snapshot}
+          settled
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('data-scene="ROUND_BOARD"');
+      expect(markup).not.toContain(past.label);
+      expect(markup).not.toContain('Runde 2');
+    });
   });
 
   it('marks a caught-up scene as settled so it is not animated in', () => {

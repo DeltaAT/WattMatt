@@ -161,6 +161,22 @@ export const tournamentSnapshotSchema = z.object({
    * column and the counter exactly as they stood.
    */
   repechage: repechageSnapshotSchema.nullable(),
+  /**
+   * Every round that is over, with its matches — the history (issue #22).
+   *
+   * The `ROUND_BOARD` scene names a round, and until now the only round the
+   * beamer could be handed was the open one: pointing the projector at *Runde 2*
+   * while *Runde 3* was running rendered an empty board. The host browses the
+   * evening back on their own screen and must be able to put any of it on the
+   * wall — "who did you beat in the second round?" is a question asked out loud
+   * at every tournament.
+   *
+   * Closed rounds only, so no match travels twice: the open round is `round`
+   * plus `matches` above, and a snapshot with two lists that could disagree
+   * about which pairing is on which table is the thing `roundSnapshotSchema`
+   * was split to avoid.
+   */
+  history: z.array(roundSchema),
 });
 
 export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
@@ -216,6 +232,8 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   // The common case for a real tournament too: the phase is skipped whenever
   // the qualifying round leaves a power of two standing.
   repechage: null,
+  // Nothing has been played, so there is nothing to look back at.
+  history: [],
 };
 
 /**
@@ -263,6 +281,10 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
             fallbackUsed: repechage.fallbackUsed,
             complete: repechage.complete,
           },
+    // Copied for the same reason the two lists above are: what crosses the
+    // channel is a value the sync layer serialises, and the schema's inferred
+    // arrays are mutable ones.
+    history: tournament.rounds.filter((candidate) => candidate.state === 'CLOSED'),
   };
 }
 

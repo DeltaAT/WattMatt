@@ -9,12 +9,16 @@ export {
 export {
   assignMatch,
   assignNextQueuedMatch,
+  byesOwed,
   canCloseRound,
   canDrawRound,
   closeRound,
   closeRoundBlockers,
   drawBlockers,
   drawRound,
+  fieldSize,
+  FINAL_PHASE_SIZE,
+  MINIMUM_BRACKET_SIZE,
   nextQueuedMatch,
   queuedMatches,
   roundOutcome,
@@ -62,6 +66,15 @@ export {
   type TournamentId,
 } from '@/domain/ids';
 export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
+export {
+  advancePhase,
+  canAdvancePhase,
+  carriedField,
+  nextPhase,
+  phaseStep,
+  type PhaseBlocker,
+  type PhaseStep,
+} from '@/domain/progression';
 export { createRng, type Rng } from '@/domain/rng';
 export {
   acceptCandidate,
@@ -87,11 +100,14 @@ export {
   nextPowerOfTwo,
   repechageOutlook,
   roundBoard,
+  roundById,
+  roundHistory,
   roundProgress,
   roundSummary,
   type RepechageOutlook,
   type RoundBoard,
   type RoundProgress,
+  type RoundRecord,
   type RoundSummary,
 } from '@/domain/round';
 export {
