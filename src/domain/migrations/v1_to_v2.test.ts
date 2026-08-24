@@ -125,4 +125,53 @@ describe('v1 → v2', () => {
   it('passes a table entry that is not an object straight through', () => {
     expect(migratedTables(v1File([null, 'Tisch 1']))).toEqual([null, 'Tisch 1']);
   });
+
+  /*
+   * v2's table-number counter. v1 derived the number from the tables it had, so
+   * the reconstruction is the highest `tbl_<n>` the file still mentions — and it
+   * has to look past `tables`, or a file whose highest table was deleted before
+   * it was saved hands that number back out to a new one (OPEN-QUESTIONS #37).
+   */
+  describe('nextTableNumber', () => {
+    it('counts on from the highest table in the file', () => {
+      expect(v1ToV2.migrate(v1File([OCCUPIED, FREE, DISABLED]))['nextTableNumber']).toBe(4);
+    });
+
+    it('counts on from a match played on a table that is gone', () => {
+      const file = {
+        ...v1File([FREE]),
+        rounds: [
+          { id: 'rnd_1', state: 'CLOSED', matches: [{ id: 'mt_1', tableId: 'tbl_7' }] },
+          { id: 'rnd_2', state: 'DRAWN', matches: [{ id: 'mt_2', tableId: null }] },
+        ],
+      };
+
+      expect(v1ToV2.migrate(file)['nextTableNumber']).toBe(8);
+    });
+
+    it('counts on from a bracket node pointing at a table that is gone', () => {
+      const file = {
+        ...v1File([FREE]),
+        bracket: { size: 4, nodes: [{ id: 'bn_1', tableId: 'tbl_5' }, { id: 'bn_2' }] },
+      };
+
+      expect(v1ToV2.migrate(file)['nextTableNumber']).toBe(6);
+    });
+
+    it('starts at one for a file with no table anywhere', () => {
+      expect(v1ToV2.migrate(v1File([]))['nextTableNumber']).toBe(1);
+    });
+
+    /* A hand-repaired file must lose one number, not the whole tournament. */
+    it.each([
+      ['a round in an unexpected shape', { rounds: ['Runde 1', null, { matches: 'mt_1' }] }],
+      ['a bracket in an unexpected shape', { bracket: 'Turnierbaum' }],
+      ['an id that does not follow the scheme', { rounds: [{ matches: [{ tableId: 'hinten' }] }] }],
+    ])('survives %s', (_case, extra) => {
+      const file = { ...v1File([FREE]), ...extra };
+
+      expect(() => v1ToV2.migrate(file)).not.toThrow();
+      expect(v1ToV2.migrate(file)['nextTableNumber']).toBe(3);
+    });
+  });
 });

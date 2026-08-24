@@ -19,6 +19,14 @@ import type { Migration, RawTournamentFile } from '@/domain/migrations/types';
  * or the other, and it comes back **free** — a free table the host has to mark
  * busy again costs one click, while a busy table that is really free silently
  * holds up the queue for the rest of the event.
+ *
+ * The third is `nextTableNumber`, v2's table-number counter. v1 derived the
+ * number from the tables it had, so a v1 file does not record how high the
+ * numbering ever reached. The best reconstruction is the highest `tbl_<n>` the
+ * file still mentions anywhere — a table, a match that was played on one, a
+ * bracket node — plus one. That can under-count, but only by numbers no
+ * surviving record refers to, which is exactly the case the counter exists to
+ * protect (docs/OPEN-QUESTIONS.md #37).
  */
 export const v1ToV2: Migration = {
   from: 1,
@@ -40,9 +48,61 @@ export const v1ToV2: Migration = {
       throw new Error('v1 file has an occupied table but no usable updatedAt');
     }
 
-    return { ...file, tables: tables.map((table) => migrateTable(table, updatedAt)) };
+    return {
+      ...file,
+      tables: tables.map((table) => migrateTable(table, updatedAt)),
+      nextTableNumber: highestTableNumberInFile(file) + 1,
+    };
   },
 };
+
+const NUMBERED_ID = /^tbl_(\d+)$/;
+
+/**
+ * The highest `tbl_<n>` mentioned anywhere in a v1 file, or zero.
+ *
+ * Deliberately a walk over the raw JSON rather than over parsed entities: this
+ * runs *before* the file is a `Tournament`, on bytes that may be repaired by
+ * hand, and a round or a bracket node in an unexpected shape has to be skipped
+ * rather than throw. A missed reference costs one reused number in a file that
+ * was already broken; a throw costs the host the whole tournament.
+ */
+function highestTableNumberInFile(file: RawTournamentFile): number {
+  const ids: unknown[] = [];
+
+  for (const table of asArray(file['tables'])) {
+    ids.push(asFields(table)?.['id']);
+  }
+  for (const round of asArray(file['rounds'])) {
+    for (const match of asArray(asFields(round)?.['matches'])) {
+      ids.push(asFields(match)?.['tableId']);
+    }
+  }
+  for (const node of asArray(asFields(file['bracket'])?.['nodes'])) {
+    ids.push(asFields(node)?.['tableId']);
+  }
+
+  let highest = 0;
+  for (const id of ids) {
+    if (typeof id !== 'string') {
+      continue;
+    }
+    const matched = NUMBERED_ID.exec(id);
+    highest = Math.max(highest, matched?.[1] === undefined ? 0 : Number(matched[1]));
+  }
+  return highest;
+}
+
+function asArray(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asFields(value: unknown): RawTournamentFile | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as RawTournamentFile;
+}
 
 function migrateTable(table: unknown, updatedAt: unknown): unknown {
   if (table === null || typeof table !== 'object' || Array.isArray(table)) {

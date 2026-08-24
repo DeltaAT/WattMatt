@@ -39,6 +39,7 @@
       "occupiedSince": null
     }
   ],
+  "nextTableNumber": 4,
   "groups": [
     {
       "id": "grp_1",

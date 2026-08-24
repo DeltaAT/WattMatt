@@ -64,6 +64,12 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
       "occupiedSince": "2026-08-22T19:12:40+02:00" }
   ],
 
+  // The number the next table gets. A counter, not tables.length + 1: it only
+  // ever goes up, so a number belonging to a deleted table is never handed out
+  // again and a match still pointing at tbl_2 cannot come to mean a different
+  // table (docs/OPEN-QUESTIONS.md #37).
+  "nextTableNumber": 2,
+
   "groups": [
     // name is null until the naming phase. status: ACTIVE | ELIMINATED
     { "id": "grp_1", "number": 1, "name": null, "status": "ACTIVE" }

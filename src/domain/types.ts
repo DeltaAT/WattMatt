@@ -262,6 +262,18 @@ export const tournamentSchema = z.object({
   phase: phaseSchema,
 
   tables: z.array(tableSchema),
+  /**
+   * The number the next table created will get, in its id and in its default
+   * label — a counter, not `tables.length + 1`.
+   *
+   * It is persisted because "highest ever used" is not derivable from a file:
+   * once `tbl_3` has been deleted, nothing in `tables` remembers that the
+   * number is spent. Deriving it would hand the number back out, and
+   * `docs/OPEN-QUESTIONS.md` #37 leans on it never being handed back —
+   * `match.tableId` keeps pointing at a deleted table as the record of where a
+   * match was played, and that record must not come to mean a different one.
+   */
+  nextTableNumber: z.number().int().min(1),
   groups: z.array(groupSchema),
   rounds: z.array(roundSchema),
 

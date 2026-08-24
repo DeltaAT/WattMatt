@@ -13,9 +13,11 @@ import type { Match, Table, Timestamp, Tournament } from '@/domain/types';
  * same two functions at the bottom of this file rather than writing a table by
  * hand.
  *
- * Pure, like everything in `src/domain`: no clock, no ids invented here. The
- * ids are derived from the tables that already exist, and the one timestamp a
- * table carries is passed in by the caller (ARCHITECTURE.md §5).
+ * Pure, like everything in `src/domain`: no clock, no randomness. A table id is
+ * the one thing built here rather than passed in, and it is built from a
+ * counter the tournament carries — not from a random value and not from the
+ * length of the list. The timestamp a table carries comes from the caller
+ * (ARCHITECTURE.md §5).
  *
  * Every function returns the tournament unchanged when it is asked for
  * something that cannot happen — an unknown table, a move off the end of the
@@ -38,18 +40,31 @@ const NUMBERED_ID = /^tbl_(\d+)$/;
  * of furniture mid-event. Same reasoning as group numbers
  * (docs/TOURNAMENT-RULES.md §2).
  *
- * Ids that do not follow the pattern — a file repaired by hand, a later build's
- * scheme — are ignored rather than rejected. They cannot collide with
- * `tbl_<n>`, which is all this has to guarantee.
+ * "Ever" is why this reads a stored counter (`tournament.nextTableNumber`)
+ * rather than the tables in front of it: after `tbl_3` is deleted, the list no
+ * longer contains any evidence that the number 3 is spent.
+ *
+ * The counter is floored by the tables that do exist, which only matters for a
+ * file repaired in Notepad (docs/FILE-FORMAT.md §Encoding): a counter that has
+ * been edited back below an existing table would otherwise mint a duplicate id,
+ * and `indexById` throws on those at load time. Ids that do not follow the
+ * `tbl_<n>` pattern — a hand-written one, a later build's scheme — are ignored
+ * rather than rejected. They cannot collide, which is all this has to
+ * guarantee.
  */
-export function nextTableNumber(tables: readonly Table[]): number {
+export function nextTableNumber(tournament: Tournament): number {
+  return Math.max(tournament.nextTableNumber, highestTableNumber(tournament.tables) + 1);
+}
+
+/** The largest `tbl_<n>` number among these tables, or zero if there is none. */
+function highestTableNumber(tables: readonly Table[]): number {
   let highest = 0;
   for (const table of tables) {
     const match = NUMBERED_ID.exec(table.id);
     const number = match?.[1] === undefined ? 0 : Number(match[1]);
     highest = Math.max(highest, number);
   }
-  return highest + 1;
+  return highest;
 }
 
 export interface AddTablesInput {
@@ -76,7 +91,7 @@ export function addTables(tournament: Tournament, { count, label }: AddTablesInp
     return tournament;
   }
 
-  const first = nextTableNumber(tournament.tables);
+  const first = nextTableNumber(tournament);
   const created: Table[] = Array.from({ length: wanted }, (_unused, index) => {
     const number = first + index;
     return {
@@ -88,22 +103,53 @@ export function addTables(tournament: Tournament, { count, label }: AddTablesInp
     };
   });
 
-  return { ...tournament, tables: [...tournament.tables, ...created] };
+  // The counter moves on with the tables, in the same commit: a create that
+  // advanced the list without advancing the counter would mint the same id
+  // twice on the next `+`.
+  return {
+    ...tournament,
+    tables: [...tournament.tables, ...created],
+    nextTableNumber: first + wanted,
+  };
 }
 
 /**
  * Renames a table.
  *
- * The label is trimmed, and a label that is empty after trimming is refused:
- * `tableSchema` requires a non-empty one, so accepting it would write a file
- * that cannot be opened again.
+ * Two labels are refused, both by leaving the tournament untouched:
+ *
+ * - **Empty after trimming.** `tableSchema` requires a non-empty label, so
+ *   accepting it would write a file that cannot be opened again.
+ * - **Already worn by another table.** The label is what the host says out loud
+ *   ("Gruppe 3 auf Tisch 2") and what the move-target dropdown offers when a
+ *   busy table is deleted; two tables answering to the same name is a match
+ *   sent to the wrong one in front of the room. Compared case-insensitively,
+ *   because "tisch 2" is not a distinguishable second name across ten metres.
+ *
+ * `isLabelAvailable` is the same rule, so the host UI can put the old label
+ * back rather than leave a name on screen that was never committed.
  */
 export function renameTable(tournament: Tournament, tableId: TableId, label: string): Tournament {
-  const trimmed = label.trim();
-  if (trimmed === '') {
+  if (!isLabelAvailable(tournament, tableId, label)) {
     return tournament;
   }
-  return mapTable(tournament, tableId, (table) => ({ ...table, label: trimmed }));
+  return mapTable(tournament, tableId, (table) => ({ ...table, label: label.trim() }));
+}
+
+/** Whether `renameTable` would accept this label for this table. */
+export function isLabelAvailable(tournament: Tournament, tableId: TableId, label: string): boolean {
+  const trimmed = label.trim();
+  if (trimmed === '') {
+    return false;
+  }
+
+  const wanted = fold(trimmed);
+  return !tournament.tables.some((table) => table.id !== tableId && fold(table.label) === wanted);
+}
+
+/** Locale-aware, so "TISCH 2" and "Tisch 2" are the one name they look like. */
+function fold(label: string): string {
+  return label.trim().toLocaleLowerCase('de-AT');
 }
 
 /**

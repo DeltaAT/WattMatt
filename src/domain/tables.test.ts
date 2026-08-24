@@ -7,6 +7,7 @@ import {
   disableTable,
   elapsedMs,
   enableTable,
+  isLabelAvailable,
   matchesOnTables,
   moveTable,
   nextTableNumber,
@@ -91,7 +92,7 @@ describe('the occupancy invariant', () => {
 
 describe('nextTableNumber', () => {
   it('starts at one', () => {
-    expect(nextTableNumber([])).toBe(1);
+    expect(nextTableNumber(tournament())).toBe(1);
   });
 
   /*
@@ -99,19 +100,72 @@ describe('nextTableNumber', () => {
    * the number of a table deleted an hour ago would put "Tisch 2" on a
    * different piece of furniture mid-event — the same reasoning that keeps
    * group numbers stable (docs/TOURNAMENT-RULES.md §2).
+   *
+   * The deleted table has to be the *highest* one for this to prove anything.
+   * Deleting a middle table leaves the highest id in place, and a counter
+   * derived from `tables` would pass that case while still handing the number
+   * back in the one that matters.
    */
-  it('never reuses the number of a table that was deleted', () => {
+  it('never reuses the number of the highest table, once it is deleted', () => {
     const three = withTables(3);
 
-    const afterDelete = removeTable(three, tableId(2));
+    const afterDelete = removeTable(three, tableId(3));
 
-    expect(nextTableNumber(afterDelete.tables)).toBe(4);
+    expect(afterDelete.tables.map((entry) => entry.id)).toEqual([tableId(1), tableId(2)]);
+    expect(nextTableNumber(afterDelete)).toBe(4);
+  });
+
+  it('never reuses a number after every table has been deleted', () => {
+    const emptied = [tableId(1), tableId(2), tableId(3)].reduce(
+      (document, id) => removeTable(document, id),
+      withTables(3),
+    );
+
+    expect(emptied.tables).toEqual([]);
+    expect(nextTableNumber(emptied)).toBe(4);
+  });
+
+  /*
+   * The whole point of the counter: the id a closed round still points at
+   * (`match.tableId`, docs/OPEN-QUESTIONS.md #37) must not come to mean a
+   * different piece of furniture.
+   */
+  it('gives a table added after a deletion an id no match refers to', () => {
+    const played = removeTable(
+      addTables(
+        tournament({
+          rounds: [round(1, { state: 'CLOSED', matches: [match(1, { tableId: tableId(3) })] })],
+        }),
+        { count: 3, label },
+      ),
+      tableId(3),
+    );
+
+    const added = addTables(played, { count: 1, label });
+
+    const created = added.tables.at(-1);
+    expect(created?.id).toBe(tableId(4));
+    expect(created?.label).toBe('Tisch 4');
+    expect(allMatches(added).map((entry) => entry.tableId)).not.toContain(created?.id);
   });
 
   it('ignores ids that do not follow the scheme', () => {
-    const odd = table(1, { id: 'tisch-hinten' as Table['id'] });
+    const odd = tournament({ tables: [table(1, { id: 'tisch-hinten' as Table['id'] }), table(7)] });
 
-    expect(nextTableNumber([odd, table(7)])).toBe(8);
+    expect(nextTableNumber(odd)).toBe(8);
+  });
+
+  /*
+   * docs/FILE-FORMAT.md invites repairing a file in Notepad, and a counter
+   * edited back below the tables that exist would mint a duplicate id —
+   * `indexById` throws on those, which loses the tournament rather than one
+   * number.
+   */
+  it('never falls below the tables that already exist', () => {
+    const repaired = tournament({ tables: [table(1), table(9)], nextTableNumber: 2 });
+
+    expect(nextTableNumber(repaired)).toBe(10);
+    expect(addTables(repaired, { count: 1, label }).tables.at(-1)?.id).toBe(tableId(10));
   });
 });
 
@@ -201,6 +255,40 @@ describe('renameTable', () => {
     const before = withTables(1);
 
     expect(renameTable(before, tableId(9), 'Nirgendwo')).toBe(before);
+  });
+
+  /*
+   * The label is what the host says out loud and what the move-target dropdown
+   * offers when a busy table is deleted (`TableOccupiedDialog`). Two tables
+   * answering to one name is a match sent to the wrong one in front of the
+   * room.
+   */
+  it.each([
+    ['the exact label of another table', 'Tisch 2'],
+    ['it in another case', 'TISCH 2'],
+    ['it with whitespace around it', '  Tisch 2  '],
+  ])('refuses a label that is %s', (_case, taken) => {
+    const before = withTables(2);
+
+    expect(renameTable(before, tableId(1), taken)).toBe(before);
+    expect(isLabelAvailable(before, tableId(1), taken)).toBe(false);
+  });
+
+  it('lets a table keep its own label, in any case', () => {
+    const before = withTables(2);
+
+    expect(renameTable(before, tableId(2), 'TISCH 2').tables[1]?.label).toBe('TISCH 2');
+  });
+
+  it('accepts a label no other table wears', () => {
+    expect(isLabelAvailable(withTables(2), tableId(1), 'Bühne')).toBe(true);
+  });
+
+  /* A table that is gone took its name with it. */
+  it('accepts the label of a table that was deleted', () => {
+    const remaining = removeTable(withTables(2), tableId(2));
+
+    expect(renameTable(remaining, tableId(1), 'Tisch 2').tables[0]?.label).toBe('Tisch 2');
   });
 });
 

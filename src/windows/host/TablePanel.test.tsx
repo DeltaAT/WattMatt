@@ -160,6 +160,24 @@ describe('the table panel', () => {
     expect(field.value).toBe('Table 2');
   });
 
+  /*
+   * `renameTable` refuses a name another table already answers to, and it
+   * refuses by committing nothing — so the row never re-renders and the field
+   * has to put the old name back itself. Leaving the refused one on screen
+   * would show two identical rows and hand the next blur the same rejection.
+   */
+  it('puts a label another table already wears back', () => {
+    const spies = setup();
+
+    const field = row(tableId(2)).querySelector('input') as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'Table 3' } });
+    fireEvent.blur(field);
+
+    // The panel asks — only the domain knows the rule — and shows the refusal.
+    expect(spies.onRename).toHaveBeenCalledWith(tableId(2), 'Table 3');
+    expect(field.value).toBe('Table 2');
+  });
+
   it('moves a table up and down, and not off either end', () => {
     const spies = setup();
 

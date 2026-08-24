@@ -12,7 +12,10 @@ improvise in code.
   A `DISABLED` table is one the host has taken out of service — a wobbly leg, a spilled drink —
   and is never offered to a queued match. Tables may be created, renamed, reordered, taken out
   of service and deleted **at any point of the tournament**, not only during `SETUP`: a table
-  breaks during a round, not before it (issue #13).
+  breaks during a round, not before it (issue #13). Table numbers follow the same rule as group
+  numbers (§2): stable for the whole tournament and **never reused**, even after a table is
+  deleted, so a match that records where it was played cannot come to mean another table. A
+  table's *name* is the host's to change and must stay unique across tables.
 - **Match** (`Partie`) — exactly two groups, or one group plus a bye.
 - **Bye** (`Freilos`) — a group that advances without playing, because the count was odd.
 

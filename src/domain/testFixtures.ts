@@ -137,6 +137,9 @@ export function midTournament(overrides: Partial<Tournament> = {}): Tournament {
       table(2, { status: 'FREE' }),
       table(3, { status: 'DISABLED' }),
     ],
+    // Three tables have been created, so the next one is the fourth — the
+    // counter is part of the document and has to be as real as the rest of it.
+    nextTableNumber: 4,
     groups: [
       group(1),
       group(2, { name: 'Die Schnellen' }),

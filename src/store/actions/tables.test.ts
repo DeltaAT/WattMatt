@@ -94,11 +94,31 @@ describe('addTables', () => {
 
   it('takes the whole thing back in one step', () => {
     const store = setup(tournament());
+    const before = restored(store);
     addTables(store, 8);
 
     store.undo();
 
     expect(documentOf(store).tables).toEqual([]);
+    // Including the number counter. An undo says the eight tables never
+    // happened, so the next `+` is table one again — unlike a *deletion*, which
+    // says they did and spends their numbers for good (OPEN-QUESTIONS #37).
+    expect(restored(store)).toEqual(before);
+    expect(documentOf(store).nextTableNumber).toBe(1);
+  });
+
+  it('spends the numbers of tables that were deleted rather than undone', () => {
+    const store = setup(tournament());
+    addTables(store, 3);
+
+    removeTable(store, tableId(3));
+    addTables(store, 1);
+
+    expect(documentOf(store).tables.map((table) => table.id)).toEqual([
+      tableId(1),
+      tableId(2),
+      tableId(4),
+    ]);
   });
 
   it.each([0, -1])('does nothing at all for a count of %s', (count) => {
@@ -145,12 +165,20 @@ describe('renameTable', () => {
     );
   });
 
-  it('does not commit a rename the domain refused', () => {
+  it.each([
+    ['an empty label', '   '],
+    // A second "Table 3" would be a second identical option in the dialog that
+    // asks where the match on a deleted table should go.
+    ['a label another table already wears', 'Table 3'],
+  ])('does not commit a rename the domain refused: %s', (_case, refused) => {
     const store = setup();
     const before = store.getState();
 
-    renameTable(store, tableId(2), '   ');
+    renameTable(store, tableId(2), refused);
 
+    // Not merely "the label is unchanged": a refusal must not reach the undo
+    // stack or the audit log either, or the host's next undo takes back
+    // nothing visible.
     expect(store.getState()).toBe(before);
   });
 });

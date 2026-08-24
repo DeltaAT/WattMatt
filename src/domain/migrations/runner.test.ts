@@ -342,6 +342,7 @@ function exampleFile(): RawTournamentFile {
         occupiedSince: null,
       },
     ],
+    nextTableNumber: 2,
     groups: [{ id: 'grp_1', number: 1, name: null, status: 'ACTIVE' }],
     rounds: [
       {

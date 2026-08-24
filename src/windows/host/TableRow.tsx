@@ -132,16 +132,23 @@ function LabelField({ label, onRename }: { label: string; onRename: (label: stri
   const [typed, setTyped] = useState(label);
 
   const commit = () => {
-    // An emptied field is a host who deleted the old name and walked away, not
-    // a table without a name: `renameTable` would refuse it anyway, and putting
-    // the label back is the only way the field can say so.
-    if (typed.trim() === '') {
-      setTyped(label);
+    const wanted = typed.trim();
+    if (wanted === label) {
       return;
     }
-    if (typed.trim() !== label) {
+    // An emptied field is a host who deleted the old name and walked away, not
+    // a table without a name. `renameTable` refuses it anyway; not asking keeps
+    // it out of the audit log as well.
+    if (wanted !== '') {
       onRename(typed);
     }
+    // Then put the old label back, whatever was asked for. `renameTable` also
+    // refuses a name another table already answers to, and this field is the
+    // only place that can say so — a refused name left on screen is one the
+    // next blur would try to write again. A name that *was* accepted never sees
+    // this: the row is keyed by the label, so by now the field is a new one
+    // with the new name already in it.
+    setTyped(label);
   };
 
   return (

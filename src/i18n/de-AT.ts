@@ -258,8 +258,15 @@ export const deAT = {
     enable: 'Freigeben',
     remove: 'Löschen',
 
-    /** Beside the match on the board: "läuft seit 12:31". */
-    runningFor: (params: { duration: string }) => `läuft seit ${params.duration}`,
+    /**
+     * Beside the match on the board: "läuft 12:31".
+     *
+     * Not "läuft seit 12:31": `duration` is elapsed time, and "seit" in front
+     * of a `mm:ss` reads as a clock time on a board that is glanced at from
+     * across the room — the one reading the host must not have to double-check
+     * mid-round.
+     */
+    runningFor: (params: { duration: string }) => `läuft ${params.duration}`,
     /** A table that says it is busy with a match nobody can find any more. */
     unknownMatch: 'Partie nicht auffindbar',
     showOnBeamer: 'Tische auf den Beamer',
