@@ -46,7 +46,9 @@ describe('the table overview scene', () => {
 
     // `midTournament` runs group 1 against group 2 on the first table, and
     // group 2 has a name while group 1 has only its number.
-    expect(markup).toContain(`${de.group.numbered({ n: 1 })} ${de.match.versus} Die Schnellen`);
+    expect(markup).toContain(
+      `${de.participant.GROUP.numbered({ n: 1 })} ${de.match.versus} Die Schnellen`,
+    );
   });
 
   /* Colour is never the only signal: a projector in a bright room destroys hue
@@ -77,6 +79,7 @@ describe('the table overview scene', () => {
   it('reports a table whose match cannot be found', () => {
     const broken: TournamentSnapshot = {
       groups: [group(1)],
+      participantLabel: 'GROUP',
       tables: [occupiedTable(1, matchId(99))],
       matches: [],
     };

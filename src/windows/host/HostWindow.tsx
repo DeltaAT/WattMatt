@@ -4,12 +4,14 @@ import { de } from '@/i18n';
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
+import { GroupPanel } from '@/windows/host/GroupPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TablePanel } from '@/windows/host/TablePanel';
 import { TournamentBar } from '@/windows/host/TournamentBar';
 import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
+import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useTables } from '@/windows/host/useTables';
 import { useTournamentDocument } from '@/windows/host/useTournamentDocument';
@@ -33,6 +35,7 @@ export function HostWindow() {
   const beamerAlive = useBeamerAlive();
   const document = useTournamentDocument();
   const undo = useUndo();
+  const groups = useGroups();
   const tables = useTables();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
@@ -104,9 +107,25 @@ export function HostWindow() {
           />
         ) : (
           <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
+            {/*
+              Groups first: the host fills the field before the room has tables
+              in it, and the panel order is the order of the evening.
+            */}
+            <GroupPanel
+              groups={groups.groups}
+              participant={groups.participant}
+              hasStarted={groups.hasStarted}
+              canRemove={groups.canRemove}
+              onAdd={groups.add}
+              onRemove={groups.remove}
+              onParticipantChange={groups.setParticipant}
+              onShowOnBeamer={groups.showOnBeamer}
+            />
+
             <TablePanel
               board={tables.board}
               groups={document.state.tournament.groups}
+              participant={groups.participant}
               now={now}
               onAdd={tables.add}
               onRename={tables.rename}
@@ -117,7 +136,7 @@ export function HostWindow() {
               onShowOnBeamer={tables.showOnBeamer}
             />
 
-            {/* Groups, rounds and the phase navigation land with #14 and #17. */}
+            {/* Rounds and the phase navigation land with #17. */}
             <p className="text-host-xs text-wm-text-faint">{de.app.bootstrapNotice}</p>
           </main>
         )}

@@ -18,8 +18,8 @@ describe('t()', () => {
   });
 
   it('interpolates through the German pluralisation helper', () => {
-    expect(t('group.count', { n: 1 })).toBe('1 Gruppe');
-    expect(t('group.count', { n: 5 })).toBe('5 Gruppen');
+    expect(t('participant.GROUP.count', { n: 1 })).toBe('1 Gruppe');
+    expect(t('participant.GROUP.count', { n: 5 })).toBe('5 Gruppen');
   });
 
   it('throws for a key that does not resolve to a leaf', () => {

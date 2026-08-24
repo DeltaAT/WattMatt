@@ -1,5 +1,5 @@
 import type { GroupId } from '@/domain/ids';
-import type { Group } from '@/domain/types';
+import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
 
 /**
@@ -12,10 +12,17 @@ import { de } from '@/i18n';
  * Shared by the host and the beamer on purpose: the two must never disagree
  * about who is playing where, and one function is the cheapest way to make that
  * true (CLAUDE.md golden rule 4).
+ *
+ * `participant` is passed rather than defaulted, so a screen that forgot to
+ * thread the host's choice through fails to compile instead of quietly saying
+ * `Gruppe 4` at a tournament that has been calling them `Teams` all evening
+ * (issue #14). The host reads it from the open tournament, the beamer from the
+ * snapshot — which carries it for exactly this reason.
  */
 export function groupLabel(
   groupId: GroupId | null,
   byId: ReadonlyMap<GroupId, Group>,
+  participant: ParticipantLabel,
 ): { text: string; isBye: boolean } {
   // A match with no second group is a bye, not a missing group
   // (docs/TOURNAMENT-RULES.md §0).
@@ -29,5 +36,8 @@ export function groupLabel(
     // rather than drawn as a blank, so the host can see which table is wrong.
     return { text: de.group.unknown, isBye: false };
   }
-  return { text: group.name ?? de.group.numbered({ n: group.number }), isBye: false };
+  return {
+    text: group.name ?? de.participant[participant].numbered({ n: group.number }),
+    isBye: false,
+  };
 }

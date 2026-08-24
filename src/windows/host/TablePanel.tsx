@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { GroupId, TableId } from '@/domain/ids';
 import type { MatchDisposition, TableSlot } from '@/domain/tables';
-import type { Group, Timestamp } from '@/domain/types';
+import type { Group, ParticipantLabel, Timestamp } from '@/domain/types';
 import { de } from '@/i18n';
 import { TableOccupiedDialog } from '@/windows/host/TableOccupiedDialog';
 import { TableRow } from '@/windows/host/TableRow';
@@ -21,6 +21,7 @@ import { TableRow } from '@/windows/host/TableRow';
 export function TablePanel({
   board,
   groups,
+  participant,
   now,
   onAdd,
   onRename,
@@ -32,6 +33,8 @@ export function TablePanel({
 }: {
   board: readonly TableSlot[];
   groups: readonly Group[];
+  /** The wording this tournament uses, for the pairings on the board. */
+  participant: ParticipantLabel;
   /** Re-read every second by `useNow`, so the running times move on their own. */
   now: Timestamp;
   onAdd: (count: number) => void;
@@ -114,6 +117,7 @@ export function TablePanel({
               key={slot.table.id}
               slot={slot}
               groups={byId}
+              participant={participant}
               now={now}
               isFirst={index === 0}
               isLast={index === board.length - 1}
@@ -132,6 +136,7 @@ export function TablePanel({
           slot={pending.slot}
           intent={pending.intent}
           groups={byId}
+          participant={participant}
           freeTables={freeTables}
           onAnswer={answer}
           onCancel={() => setPending(null)}

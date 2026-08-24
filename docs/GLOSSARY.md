@@ -9,6 +9,8 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | --- | --- | --- |
 | Tournament | Turnier | |
 | Group | Gruppe | Participant unit; label configurable (Gruppe / Team / Spieler) |
+| Team | Team | The `TEAM` participant label; plural `Teams` |
+| Player | Spieler | The `PLAYER` participant label; plural is the same word |
 | Group number | Gruppennummer | Identity until the naming phase |
 | Table | Tisch | |
 | Match | Partie | "Spiel" is also acceptable in UI copy |
@@ -63,6 +65,7 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Bracket node | Turnierbaum-Knoten |
 | Repechage draw | Auslosung der Hoffnungsrunde |
 | Participant label | Teilnehmer-Bezeichnung |
+| Group overview (beamer scene) | Gruppen / Teams / Spieler | Headed by the participant label itself |
 
 ## Files
 

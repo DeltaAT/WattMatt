@@ -344,6 +344,7 @@ function exampleFile(): RawTournamentFile {
     ],
     nextTableNumber: 2,
     groups: [{ id: 'grp_1', number: 1, name: null, status: 'ACTIVE' }],
+    nextGroupNumber: 2,
     rounds: [
       {
         id: 'rnd_1',

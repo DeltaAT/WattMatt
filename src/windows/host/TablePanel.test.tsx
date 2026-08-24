@@ -53,6 +53,7 @@ function setup(now: Timestamp = FIXED_NOW, tournament = RUNNING) {
         tournament.rounds.flatMap((r) => r.matches),
       )}
       groups={tournament.groups}
+      participant={tournament.settings.participantLabel}
       now={now}
       {...spies}
     />,
@@ -96,7 +97,9 @@ describe('the table panel', () => {
     setup('2026-08-23T10:12:31+02:00' as Timestamp);
 
     const busy = row(tableId(1)).textContent ?? '';
-    expect(busy).toContain(`${de.group.numbered({ n: 1 })} ${de.match.versus} Die Schnellen`);
+    expect(busy).toContain(
+      `${de.participant.GROUP.numbered({ n: 1 })} ${de.match.versus} Die Schnellen`,
+    );
     expect(busy).toContain(de.table.runningFor({ duration: '12:31' }));
   });
 
@@ -222,7 +225,9 @@ describe('the table panel', () => {
   });
 
   it('says so when there is no table at all', () => {
-    render(<TablePanel board={[]} groups={[]} now={FIXED_NOW} {...handlers()} />);
+    render(
+      <TablePanel board={[]} groups={[]} participant="GROUP" now={FIXED_NOW} {...handlers()} />,
+    );
 
     expect(screen.getByText(de.table.empty)).toBeTruthy();
   });
@@ -250,7 +255,7 @@ describe('a table with a match on it', () => {
       de.table.occupiedDialog.removeBody({ label: 'Table 1' }),
     );
     expect(dialog().querySelector('[data-dialog-pairing]')?.textContent).toContain(
-      de.group.numbered({ n: 1 }),
+      de.participant.GROUP.numbered({ n: 1 }),
     );
     expect(spies.onRemove).not.toHaveBeenCalled();
   });

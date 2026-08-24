@@ -48,6 +48,7 @@ function fullHouse(): TournamentSnapshot {
       name: `Mannschaft ${index + 1}`,
       status: 'ACTIVE' as const,
     })),
+    participantLabel: 'GROUP' as const,
     tables: matches.map((match, index) => ({
       id: tableIdSchema.parse(`table-${index + 1}`),
       label: `Tisch ${index + 1}`,
@@ -80,6 +81,7 @@ describe('snapshot round-trip performance', () => {
       // channel and measure the wrong thing entirely.
       const payload: TournamentSnapshot = {
         groups: [...tournament.groups],
+        participantLabel: tournament.participantLabel,
         tables: [...tournament.tables],
         matches: [...tournament.matches],
       };

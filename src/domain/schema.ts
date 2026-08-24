@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v2)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v3)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -20,8 +20,15 @@ import { tournamentSchema } from '@/domain/types';
  * v2 added `occupiedSince` to a table and made the three occupancy fields a
  * checked invariant (issue #13). A v1 table has neither, so a v1 file cannot
  * satisfy this schema — which is what a bump means.
+ *
+ * v3 added `nextGroupNumber`, the group-number counter that makes "numbers are
+ * never reused" true after a group is deleted (issue #14,
+ * docs/TOURNAMENT-RULES.md §2). A v2 file has no such field, and it is required
+ * rather than optional for the same reason `nextTableNumber` is: a counter that
+ * may be absent is one every caller has to guess a default for, and the guess
+ * is exactly the `max + 1` the counter exists to avoid.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -31,7 +38,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v2)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v3)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *

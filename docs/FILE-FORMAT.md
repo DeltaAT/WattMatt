@@ -29,11 +29,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v2)
+## Schema (v3)
 
 ```jsonc
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -74,6 +74,12 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
     // name is null until the naming phase. status: ACTIVE | ELIMINATED
     { "id": "grp_1", "number": 1, "name": null, "status": "ACTIVE" }
   ],
+
+  // The number the next group gets, and the same kind of counter as
+  // nextTableNumber above: a group number is stable for the whole tournament
+  // and is never reused, even after the group is removed
+  // (docs/TOURNAMENT-RULES.md §2, docs/OPEN-QUESTIONS.md #22).
+  "nextGroupNumber": 2,
 
   "rounds": [
     {
@@ -127,7 +133,8 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 All seven rules are live. #9 landed the atomic write and the "open a backup instead" answer;
 #10 landed the rotation, the debounced autosave and the crash recovery; #11 landed the writer
 behind the action log; #12 landed the migration framework, the refusal of a newer file and the
-preservation of unknown fields; #13 landed the first real migration, v1 → v2.
+preservation of unknown fields; #13 landed the first real migration, v1 → v2, and #14 the
+second, v2 → v3.
 
 1. **Validate on read.** Parse with Zod. A file that fails validation is never partially
    loaded — the host gets a clear German error and the option to open a backup.

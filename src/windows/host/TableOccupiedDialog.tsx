@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { GroupId, TableId } from '@/domain/ids';
 import { REQUEUE, type MatchDisposition, type TableSlot } from '@/domain/tables';
-import type { Group, Table } from '@/domain/types';
+import type { Group, ParticipantLabel, Table } from '@/domain/types';
 import { de } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 
@@ -23,6 +23,7 @@ export function TableOccupiedDialog({
   slot,
   intent,
   groups,
+  participant,
   freeTables,
   onAnswer,
   onCancel,
@@ -30,6 +31,8 @@ export function TableOccupiedDialog({
   slot: TableSlot;
   intent: 'remove' | 'disable';
   groups: ReadonlyMap<GroupId, Group>;
+  /** The wording this tournament uses, for the pairing named in the question. */
+  participant: ParticipantLabel;
   /** The tables the match could go to instead. Empty is a normal case. */
   freeTables: readonly Table[];
   onAnswer: (disposition: MatchDisposition) => void;
@@ -41,7 +44,7 @@ export function TableOccupiedDialog({
   const pairing =
     match === null
       ? de.table.unknownMatch
-      : `${groupLabel(match.a, groups).text} ${de.match.versus} ${groupLabel(match.b, groups).text}`;
+      : `${groupLabel(match.a, groups, participant).text} ${de.match.versus} ${groupLabel(match.b, groups, participant).text}`;
 
   return (
     <div

@@ -207,6 +207,8 @@ src/
     fileName.ts        tournament name -> a file name Windows accepts
     lookup.ts          index entities by ID; nothing reaches an entity by position
     snapshot.ts        what the beamer is sent, and the one place that projects it
+    groups.ts          the group lifecycle: create, number, remove — numbers are never reused
+    settings.ts        the tournament's own settings (participant wording)
     tables.ts          the table lifecycle: create, rename, reorder, block, occupy, free
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
     draw.ts            pairing, byes, table assignment
