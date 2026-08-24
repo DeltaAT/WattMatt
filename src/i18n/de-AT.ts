@@ -673,6 +673,15 @@ export const deAT = {
       tableDisabled: 'Gesperrt',
       /** Before anything has been drawn into this round. */
       empty: 'Es ist keine Partie angesetzt.',
+      /**
+       * When more matches are waiting than fit on the wall.
+       *
+       * Said out loud rather than letting the surplus fall off the bottom: the
+       * beamer never scrolls (docs/STYLEGUIDE.md §3), so without this line the
+       * cards would simply be clipped and the room would have no way to tell
+       * that the list it is reading is incomplete.
+       */
+      more: (params: { n: number }) => `… und ${params.n} weitere`,
     },
 
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */

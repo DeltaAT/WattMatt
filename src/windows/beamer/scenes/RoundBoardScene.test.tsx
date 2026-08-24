@@ -139,14 +139,41 @@ describe('the round board', () => {
       expect(plain).toContain(de.beamer.roundBoard.loser);
     });
 
-    /* The three signals must not drift apart: a card cannot be green without
-     * the word, nor carry SIEGER without the tick. */
-    it('carries all three signals for every decided side', () => {
+    /*
+     * The three signals must not drift apart, and they have to be checked
+     * *together*. Counting ticks and `SIEGER`s across the whole document
+     * passes just as happily when the loser is the one wearing the tick —
+     * which is why this reads each side as a unit.
+     */
+    it('binds the icon and the word to the outcome on the same side', () => {
       const markup = scene(board({ pairs: 3, decided: 3 }));
+      const sides = readSides(markup);
 
-      expect(markup.match(/data-outcome="WINNER"/g)).toHaveLength(3);
-      expect(markup.match(/✓/g)).toHaveLength(3);
-      expect(markup.match(new RegExp(de.beamer.roundBoard.winner, 'g'))).toHaveLength(3);
+      expect(sides).toHaveLength(6);
+      for (const side of sides) {
+        if (side.outcome === 'WINNER') {
+          expect(side.icon, 'winner icon').toBe('✓');
+          expect(side.label, 'winner word').toBe(de.beamer.roundBoard.winner);
+        } else {
+          expect(side.icon, 'loser icon').toBe('✗');
+          expect(side.label, 'loser word').toBe(de.beamer.roundBoard.loser);
+        }
+      }
+    });
+
+    /*
+     * The third signal is the one that has to survive the colour being gone,
+     * so its size is not cosmetic. `wm-label` cannot be used here: it hardcodes
+     * 12 px and Tailwind emits it after the beamer type utilities at equal
+     * specificity, so it silently wins and drags the word below the 32 px floor
+     * (docs/STYLEGUIDE.md §2). Class-name greps cannot see that, so this asserts
+     * the host utility is simply absent from the scene.
+     */
+    it('never labels a result with the host-sized utility', () => {
+      const markup = scene(board({ pairs: 2, decided: 1 }));
+
+      expect(markup).not.toMatch(/class="[^"]*wm-label[ "]/);
+      expect(markup).toContain('wm-beamer-label');
     });
 
     /*
@@ -207,6 +234,72 @@ describe('the round board', () => {
     }
   });
 
+  /*
+   * The auto-scaling bullet, asserted rather than assumed. Returning one
+   * density for everything, or one column count for every density, used to
+   * pass the whole file — nothing looked at either mapping.
+   */
+  describe('auto-scaling', () => {
+    it('gives a small board room and a large one columns', () => {
+      // 2 matches on 2 tables: shallow and narrow.
+      expect(scene(board({ pairs: 2, tables: 2 }))).toContain('grid-cols-2');
+      // 24 matches on 8 tables: three deep per table, and wide.
+      expect(scene(board({ pairs: 24, tables: 8 }))).toContain('grid-cols-4');
+    });
+
+    /* Depth, not just count: the same sixteen matches on two tables is a much
+     * deeper board than on sixteen, and depth is what falls off the bottom. */
+    it('gets denser when few tables have to hold many matches', () => {
+      const shallow = scene(board({ pairs: 8, tables: 8 }));
+      const deep = scene(board({ pairs: 8, tables: 2 }));
+
+      expect(shallow).not.toBe(deep);
+      expect(deep).toContain('grid-cols-4');
+    });
+
+    /*
+     * The stage is `overflow-hidden`, so anything that does not fit is simply
+     * gone — with nothing to tell the room the list it is reading is partial.
+     * A 64-group round on few tables is exactly that case.
+     */
+    it('counts what will not fit instead of clipping it', () => {
+      const markup = scene(board({ pairs: 32, tables: 2 }));
+
+      expect(markup).toContain('data-section-overflow');
+      expect(markup).toContain('und');
+    });
+
+    it('says nothing about overflow when everything fits', () => {
+      expect(scene(board({ pairs: 4, tables: 4 }))).not.toContain('data-section-overflow');
+    });
+
+    /* The queue is the section that grows without a table to bound it, so it
+     * spans the grid and lays itself out in columns rather than one stack. */
+    it('lets the queue span the board rather than stacking one column', () => {
+      expect(scene(board({ pairs: 12, tables: 2 }))).toContain('col-span-full');
+    });
+  });
+
+  /*
+   * The layout-shift criterion, one level in from the card. Rendering the
+   * result word only once decided re-truncates the participant name at the
+   * exact moment the room is reading it, because the name is `flex-1 truncate`
+   * and a new sibling takes width from it. The slot is therefore always there.
+   */
+  it('reserves the result slot before there is a result', () => {
+    const open = scene(board({ pairs: 1 }));
+
+    expect(open).toContain('data-outcome-slot');
+    expect(open).not.toContain('data-outcome-label');
+  });
+
+  it(`does not change a card inner structure when its result lands`, () => {
+    const before = scene(board({ pairs: 2, tables: 2, decided: 0 }));
+    const after = scene(board({ pairs: 2, tables: 2, decided: 1 }));
+
+    expect(slots(after)).toEqual(slots(before));
+  });
+
   it('says so rather than going blank before anything is drawn', () => {
     expect(scene(toTournamentSnapshot(tournament()))).toContain(de.beamer.roundBoard.empty);
   });
@@ -225,4 +318,31 @@ function order(markup: string): string[] {
 /** The section ids in document order. */
 function sections(markup: string): string[] {
   return [...markup.matchAll(/data-(?:table-id|queue)="([^"]*)"/g)].map((hit) => hit[1] ?? '');
+}
+
+/**
+ * Each result side as `{ outcome, icon, label }`.
+ *
+ * Reading them as units is the point: three independent global counts of
+ * `WINNER`, `✓` and `SIEGER` all pass while the tick sits on the loser.
+ */
+function readSides(markup: string): { outcome: string; icon: string; label: string }[] {
+  return [...markup.matchAll(/data-outcome="(WINNER|LOSER)"[\s\S]*?<\/span><\/span>/g)].map(
+    (hit) => {
+      const block = hit[0];
+      return {
+        outcome: hit[1] ?? '',
+        icon: /data-outcome-icon="">([^<]*)</.exec(block)?.[1] ?? '',
+        label: /data-outcome-label="">([^<]*)</.exec(block)?.[1] ?? '',
+      };
+    },
+  );
+}
+
+/** How many reserved result slots and icons each board renders. */
+function slots(markup: string): { slots: number; icons: number } {
+  return {
+    slots: (markup.match(/data-outcome-slot/g) ?? []).length,
+    icons: (markup.match(/data-outcome-icon/g) ?? []).length,
+  };
 }

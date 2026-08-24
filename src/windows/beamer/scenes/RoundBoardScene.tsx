@@ -39,7 +39,10 @@ export function RoundBoardScene({
 }) {
   const sections = beamerBoard(tournament.tables, tournament.matches);
   const progress = matchesProgress(tournament.matches);
-  const size = density(tournament.matches.length);
+  // Both inputs matter. Sixteen matches spread over sixteen tables is a wide,
+  // shallow board; the same sixteen on two tables is a deep one, and it is
+  // depth that falls off the bottom of a stage that never scrolls.
+  const size = density(sections.length, deepestSection(sections));
 
   const byId: ReadonlyMap<GroupId, Group> = new Map(
     tournament.groups.map((group) => [group.id, group]),
@@ -83,6 +86,7 @@ export function RoundBoardScene({
               groups={byId}
               participant={tournament.participantLabel}
               size={size}
+              columns={SECTION_COLUMNS[size]}
             />
           ))}
         </div>
@@ -96,19 +100,32 @@ function Section({
   groups,
   participant,
   size,
+  columns,
 }: {
   section: BoardSection;
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   size: Density;
+  /** The outer grid's column count, reused by the queue when it spans it. */
+  columns: string;
 }) {
   const { table } = section;
   const isQueue = table === null;
   const isDisabled = table?.status === 'DISABLED';
 
+  // Whatever does not fit is counted rather than clipped. The stage is
+  // `overflow-hidden` (LetterboxStage), so the surplus would otherwise fall off
+  // the bottom with nothing to say it had.
+  const room = MAX_PER_SECTION[size] * (isQueue ? QUEUE_COLUMNS[size] : 1);
+  const shown = section.matches.slice(0, room);
+  const hidden = section.matches.length - shown.length;
+
   return (
     <section
-      className="flex min-w-0 flex-col gap-2"
+      // The queue spans the whole grid and lays its matches out in columns of
+      // its own: it is the one section that grows without a table to bound it,
+      // and a single stacked column of twenty-six cards is what clips.
+      className={`flex min-w-0 flex-col gap-2 ${isQueue ? 'col-span-full' : ''}`}
       data-table-id={table?.id ?? undefined}
       data-queue={isQueue ? '' : undefined}
     >
@@ -121,8 +138,8 @@ function Section({
           {isDisabled ? de.beamer.roundBoard.tableDisabled : de.beamer.roundBoard.tableIdle}
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {section.matches.map((match) => (
+        <ul className={isQueue ? `grid auto-rows-min gap-2 ${columns}` : 'flex flex-col gap-2'}>
+          {shown.map((match) => (
             <MatchCard
               key={match.id}
               match={match}
@@ -133,6 +150,12 @@ function Section({
           ))}
         </ul>
       )}
+
+      {hidden > 0 ? (
+        <p className={`text-wm-text-faint ${LABEL[size]}`} data-section-overflow="">
+          {de.beamer.roundBoard.more({ n: hidden })}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -156,7 +179,7 @@ function MatchCard({
       data-match-id={match.id}
       data-phase={phase}
     >
-      <span className={`wm-label ${RIBBON[size]}`} data-phase-ribbon="">
+      <span className={`wm-beamer-label text-wm-text-muted ${RIBBON[size]}`} data-phase-ribbon="">
         {de.beamer.roundBoard.phase[phase]}
       </span>
 
@@ -212,18 +235,54 @@ function Side({
       }`}
       data-outcome={outcome}
     >
-      <span aria-hidden="true" className={`shrink-0 font-bold ${LABEL[size]}`} data-outcome-icon="">
+      {/*
+       * A fixed box, so `·` → `✓` cannot nudge the name sideways. The three
+       * glyphs have different advance widths, and the acceptance criterion is
+       * that nothing moves when a result lands — inside the card as much as
+       * outside it.
+       */}
+      <span
+        aria-hidden="true"
+        className={`w-[1.2em] shrink-0 text-center font-bold ${LABEL[size]}`}
+        data-outcome-icon=""
+      >
         {OUTCOME_ICON[outcome]}
       </span>
+
       <span className={`min-w-0 flex-1 truncate font-semibold ${TYPE[size]}`}>{label.text}</span>
-      {outcome === 'OPEN' ? null : (
-        <span className={`wm-label shrink-0 ${RIBBON[size]}`} data-outcome-label="">
-          {outcome === 'WINNER' ? de.beamer.roundBoard.winner : de.beamer.roundBoard.loser}
+
+      {/*
+       * The result word always occupies its slot, even before there is a
+       * result. Rendering it only once decided would re-truncate the name at
+       * the exact moment the room is reading it — the same layout shift the
+       * criterion forbids, one level further in.
+       *
+       * The slot is sized by the longest of the two words rather than by a
+       * hardcoded width: an invisible copy sits in the same grid cell and does
+       * the measuring, so the reservation stays correct if the wording changes.
+       */}
+      <span className={`grid shrink-0 ${RIBBON[size]}`} data-outcome-slot="">
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1 wm-beamer-label">
+          {LONGEST_OUTCOME_LABEL}
         </span>
-      )}
+        {outcome === 'OPEN' ? null : (
+          <span
+            className="col-start-1 row-start-1 wm-beamer-label text-right"
+            data-outcome-label=""
+          >
+            {outcome === 'WINNER' ? de.beamer.roundBoard.winner : de.beamer.roundBoard.loser}
+          </span>
+        )}
+      </span>
     </span>
   );
 }
+
+/** Whichever of the two result words is wider, for the reserved slot above. */
+const LONGEST_OUTCOME_LABEL =
+  de.beamer.roundBoard.winner.length >= de.beamer.roundBoard.loser.length
+    ? de.beamer.roundBoard.winner
+    : de.beamer.roundBoard.loser;
 
 type Outcome = 'OPEN' | 'WINNER' | 'LOSER';
 
@@ -263,12 +322,39 @@ const PHASE_CARD: Record<MatchPhase, string> = {
  */
 type Density = 'roomy' | 'normal' | 'dense';
 
-function density(matches: number): Density {
-  if (matches <= 4) {
+function density(sections: number, deepest: number): Density {
+  if (sections <= 4 && deepest <= 2) {
     return 'roomy';
   }
-  return matches <= 12 ? 'normal' : 'dense';
+  return sections <= 9 && deepest <= 4 ? 'normal' : 'dense';
 }
+
+/** The most matches any one section has to hold. */
+function deepestSection(sections: readonly BoardSection[]): number {
+  return sections.reduce((most, section) => Math.max(most, section.matches.length), 0);
+}
+
+/**
+ * How many cards a single column of a section can show before the rest is
+ * counted instead of drawn.
+ *
+ * Deliberately conservative. The exact number that fits depends on the card's
+ * rendered height, which nothing here can measure — so this errs towards saying
+ * "und 3 weitere" a little early rather than towards clipping silently, which
+ * is the failure the room cannot see.
+ */
+const MAX_PER_SECTION: Record<Density, number> = {
+  roomy: 3,
+  normal: 4,
+  dense: 5,
+};
+
+/** The queue spans the grid, so it has this many columns to fill. */
+const QUEUE_COLUMNS: Record<Density, number> = {
+  roomy: 2,
+  normal: 3,
+  dense: 4,
+};
 
 const SECTION_COLUMNS: Record<Density, string> = {
   roomy: 'grid-cols-2',

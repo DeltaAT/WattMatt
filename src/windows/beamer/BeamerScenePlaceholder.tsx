@@ -61,7 +61,19 @@ export function BeamerScenePlaceholder({
   }
 
   if (scene.id === 'ROUND_BOARD') {
-    return <RoundBoardScene tournament={tournament} settled={settled} />;
+    /*
+     * Same guard as `DRAW` below: the descriptor names a round and the snapshot
+     * carries one, and they can disagree for a moment. Drawing whatever arrived
+     * would put the *next* round's pairings under the previous round's heading
+     * — so a mismatch renders the board empty rather than confidently wrong.
+     */
+    const staged = tournament.round?.id === scene.roundId;
+    return (
+      <RoundBoardScene
+        tournament={staged ? tournament : { ...tournament, matches: [], round: null }}
+        settled={settled}
+      />
+    );
   }
 
   if (scene.id === 'DRAW') {

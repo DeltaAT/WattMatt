@@ -255,3 +255,19 @@
     animation: none;
   }
 }
+
+/* The beamer's equivalent of `wm-label` (issue #19).
+ *
+ * `wm-label` cannot be reused here: it hardcodes `--text-host-xs` (12 px), and
+ * Tailwind emits it *after* the `text-beamer-*` utilities at equal specificity,
+ * so it silently wins and drags a label down to 12 px on a 1080p projector.
+ * That is below the 32 px floor of docs/STYLEGUIDE.md §2 — and on this scene it
+ * is the third of the three signals a result must carry (§1), which makes it
+ * the one that has to stay readable when the colour is gone.
+ *
+ * Size is left to the caller, so a scene picks it from the beamer type scale
+ * rather than inheriting a host value. */
+@utility wm-beamer-label {
+  letter-spacing: var(--wm-tracking-label);
+  text-transform: uppercase;
+}
