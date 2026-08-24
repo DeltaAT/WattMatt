@@ -648,6 +648,42 @@ export const deAT = {
       empty: 'Es wurde nichts ausgelost.',
     },
 
+    /**
+     * The `ROUND_BOARD` scene: the live round, green and red (issue #19).
+     *
+     * What the audience looks at for most of the evening. Every result carries
+     * three signals, never colour alone (docs/STYLEGUIDE.md §1) — the colour,
+     * an icon, and one of the words below. Roughly 8 % of men have a red–green
+     * deficiency, and a projector in a bright room flattens the hues anyway.
+     */
+    roundBoard: {
+      /** The ribbon on each card. Short, because it sits above the pairing. */
+      phase: {
+        WAITING: 'WARTET',
+        RUNNING: 'LÄUFT',
+        FINISHED: 'BEENDET',
+      },
+      /** The third signal on a result, beside the colour and the icon. */
+      winner: 'SIEGER',
+      loser: 'AUSGESCHIEDEN',
+      /** The heading over the matches that have no table yet. */
+      queueTitle: 'Warteschlange',
+      /** On a table with nothing on it this round. */
+      tableIdle: 'Frei',
+      tableDisabled: 'Gesperrt',
+      /** Before anything has been drawn into this round. */
+      empty: 'Es ist keine Partie angesetzt.',
+      /**
+       * When more matches are waiting than fit on the wall.
+       *
+       * Said out loud rather than letting the surplus fall off the bottom: the
+       * beamer never scrolls (docs/STYLEGUIDE.md §3), so without this line the
+       * cards would simply be clipped and the room would have no way to tell
+       * that the list it is reading is incomplete.
+       */
+      more: (params: { n: number }) => `… und ${params.n} weitere`,
+    },
+
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */
     tableOverview: {
       title: 'Tische',

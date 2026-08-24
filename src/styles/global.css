@@ -191,3 +191,83 @@
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * The result flip (issue #19, docs/MOTION.md §4.2).
+ *
+ * Both sides run at once — a stagger here would look like hesitation about the
+ * result. Neither keyframe moves the card: the acceptance criterion is that a
+ * result changes colour and nothing shifts, so the loser's `scale(0.98)` is on
+ * the side only and the card's own box is untouched.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-result-win {
+  from {
+    background-color: transparent;
+  }
+  to {
+    background-color: var(--wm-win-bg);
+  }
+}
+
+/* The tick scales 0.9 -> 1 rather than fading: a filled shape arriving is
+ * readable at ten metres in a way an opacity ramp is not. */
+@keyframes wm-result-win-icon {
+  from {
+    transform: scale(0.9);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes wm-result-lose {
+  from {
+    background-color: transparent;
+    opacity: 1;
+    filter: saturate(1);
+  }
+  to {
+    background-color: var(--wm-lose-bg);
+    opacity: 0.6;
+    filter: saturate(0.5);
+  }
+}
+
+@utility wm-result-win {
+  animation: wm-result-win var(--dur-base) var(--ease-out) both;
+}
+
+@utility wm-result-lose {
+  /* 320 ms against the winner's 240 ms, per §4.2: the loser settles a moment
+   * later, which reads as the result landing rather than as two things. */
+  animation: wm-result-lose calc(var(--dur-base) + var(--dur-instant)) var(--ease-out) both;
+}
+
+.wm-result-win [data-outcome-icon] {
+  animation: wm-result-win-icon var(--dur-base) var(--ease-out) both;
+}
+
+/* docs/MOTION.md §6: reduced motion keeps colour and opacity, which carry the
+ * meaning here, and drops the scale. The result still arrives visibly. */
+@media (prefers-reduced-motion: reduce) {
+  .wm-result-win [data-outcome-icon] {
+    animation: none;
+  }
+}
+
+/* The beamer's equivalent of `wm-label` (issue #19).
+ *
+ * `wm-label` cannot be reused here: it hardcodes `--text-host-xs` (12 px), and
+ * Tailwind emits it *after* the `text-beamer-*` utilities at equal specificity,
+ * so it silently wins and drags a label down to 12 px on a 1080p projector.
+ * That is below the 32 px floor of docs/STYLEGUIDE.md §2 — and on this scene it
+ * is the third of the three signals a result must carry (§1), which makes it
+ * the one that has to stay readable when the colour is gone.
+ *
+ * Size is left to the caller, so a scene picks it from the beamer type scale
+ * rather than inheriting a host value. */
+@utility wm-beamer-label {
+  letter-spacing: var(--wm-tracking-label);
+  text-transform: uppercase;
+}

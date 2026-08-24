@@ -1,7 +1,7 @@
 import { queuedMatches, roundOutcome } from '@/domain/draw';
 import type { GroupId } from '@/domain/ids';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
-import type { Match, Round, Tournament } from '@/domain/types';
+import type { Match, Round, Table, Tournament } from '@/domain/types';
 
 /**
  * What the host's round panel reads (issue #17).
@@ -29,8 +29,20 @@ export interface RoundProgress {
 }
 
 export function roundProgress(round: Round): RoundProgress {
-  const decided = round.matches.filter((match) => match.winnerId !== null).length;
-  return { decided, open: round.matches.length - decided, total: round.matches.length };
+  return matchesProgress(round.matches);
+}
+
+/**
+ * The same count over a bare list of matches.
+ *
+ * The beamer has no `Round` — the snapshot carries the round's identity beside
+ * its matches rather than nested inside it — and the projector's progress
+ * counter must be the same arithmetic as the host's, not a second one that
+ * eventually disagrees.
+ */
+export function matchesProgress(matches: readonly Match[]): RoundProgress {
+  const decided = matches.filter((match) => match.winnerId !== null).length;
+  return { decided, open: matches.length - decided, total: matches.length };
 }
 
 /**
@@ -148,4 +160,61 @@ export function roundSummary(round: Round): RoundSummary {
     losers,
     repechage: repechageOutlook(round),
   };
+}
+
+/**
+ * What the beamer's round board draws (issue #19).
+ *
+ * Grouped by table, and grouped by the match's **own** `tableId` rather than by
+ * `table.currentMatchId`. The difference is the whole acceptance criterion "no
+ * layout shift when a result comes in": marking a winner frees the table, so a
+ * board keyed on `currentMatchId` would make the card vanish from its slot at
+ * exactly the moment the audience is looking at it — and the green/red flip
+ * would never be seen. A match keeps its `tableId` once assigned (`setWinner`
+ * changes only the winner and the status), so its card keeps its place for the
+ * rest of the round.
+ *
+ * The queue is a section of its own, with `table: null`. A match moving out of
+ * it does move on screen, but that is the host starting the next pair — a
+ * decision the room should see — and not a result landing.
+ */
+export interface BoardSection {
+  /** The table this group of matches belongs to; null for the queue. */
+  table: Table | null;
+  /** In draw order, which is the order they were assigned in. */
+  matches: readonly Match[];
+}
+
+export function beamerBoard(
+  tables: readonly Table[],
+  matches: readonly Match[],
+): readonly BoardSection[] {
+  const queue = matches.filter((match) => match.tableId === null);
+
+  const sections: BoardSection[] = tables.map((table) => ({
+    table,
+    matches: matches.filter((match) => match.tableId === table.id),
+  }));
+
+  // The queue last: it is what has not started, and the room reads the tables
+  // first. Omitted entirely when nothing is waiting, so a board with enough
+  // tables is not half empty heading.
+  return queue.length === 0 ? sections : [...sections, { table: null, matches: queue }];
+}
+
+/**
+ * The ribbon on a card: `WARTET` · `LÄUFT` · `BEENDET` (issue #19).
+ *
+ * Derived from the match rather than stored, and keyed on the winner for the
+ * finished case: a corrected result goes back through `setWinner`, and a card
+ * that read its state from `status` alone would disagree with the colour it is
+ * painted in.
+ */
+export type MatchPhase = 'WAITING' | 'RUNNING' | 'FINISHED';
+
+export function matchPhase(match: Match): MatchPhase {
+  if (match.winnerId !== null) {
+    return 'FINISHED';
+  }
+  return match.tableId === null ? 'WAITING' : 'RUNNING';
 }

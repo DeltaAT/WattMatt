@@ -42,6 +42,7 @@ function fullHouse(): TournamentSnapshot {
   }));
 
   return {
+    name: 'Sommerturnier',
     groups: Array.from({ length: 64 }, (_, index) => ({
       id: groupIdSchema.parse(`group-${index + 1}`),
       number: index + 1,
@@ -91,6 +92,7 @@ describe('snapshot round-trip performance', () => {
       // A fresh object each run: an identical reference would take the light
       // channel and measure the wrong thing entirely.
       const payload: TournamentSnapshot = {
+        name: tournament.name,
         groups: [...tournament.groups],
         participantLabel: tournament.participantLabel,
         performanceMode: tournament.performanceMode,

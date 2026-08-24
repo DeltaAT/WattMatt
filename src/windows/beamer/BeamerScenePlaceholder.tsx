@@ -2,7 +2,12 @@ import type { BeamerScene } from '@/domain/beamerScene';
 import type { RoundId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { de } from '@/i18n';
-import { DrawScene, GroupOverviewScene, TableOverviewScene } from '@/windows/beamer/scenes';
+import {
+  DrawScene,
+  GroupOverviewScene,
+  RoundBoardScene,
+  TableOverviewScene,
+} from '@/windows/beamer/scenes';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
 import { useSkipKey } from '@/windows/beamer/useSkipKey';
 
@@ -53,6 +58,22 @@ export function BeamerScenePlaceholder({
 
   if (scene.id === 'TABLE_OVERVIEW') {
     return <TableOverviewScene tournament={tournament} settled={settled} />;
+  }
+
+  if (scene.id === 'ROUND_BOARD') {
+    /*
+     * Same guard as `DRAW` below: the descriptor names a round and the snapshot
+     * carries one, and they can disagree for a moment. Drawing whatever arrived
+     * would put the *next* round's pairings under the previous round's heading
+     * — so a mismatch renders the board empty rather than confidently wrong.
+     */
+    const staged = tournament.round?.id === scene.roundId;
+    return (
+      <RoundBoardScene
+        tournament={staged ? tournament : { ...tournament, matches: [], round: null }}
+        settled={settled}
+      />
+    );
   }
 
   if (scene.id === 'DRAW') {
