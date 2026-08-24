@@ -79,6 +79,17 @@ export const deAT = {
       participantLabelSet: (params: { participants: string }) =>
         `Bezeichnung geändert: ${params.participants}`,
 
+      /**
+       * Settings and the start of the tournament (issue #15). The threshold and
+       * the name are read back out of the tournament, so the button says what
+       * the host is about to lose rather than what they typed.
+       */
+      tournamentRenamed: (params: { name: string }) => `Turnier umbenannt: ${params.name}`,
+      namingAtSet: (params: { n: number }) => `Namen ab ${params.n} Teilnehmenden`,
+      performanceModeOn: 'Performance-Modus eingeschaltet',
+      performanceModeOff: 'Performance-Modus ausgeschaltet',
+      tournamentStarted: 'Turnier gestartet',
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -270,6 +281,9 @@ export const deAT = {
       afterDrawBody:
         'Neue Gruppen spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
       afterDrawConfirm: 'Gruppen trotzdem anlegen',
+      /** Announced before the draw, while the host can still add one (issue #15). */
+      byePreview:
+        'Eine Gruppe erhält ein Freilos und kommt ohne Partie weiter. Mit einer weiteren Gruppe entfällt das Freilos.',
     },
 
     TEAM: {
@@ -289,6 +303,9 @@ export const deAT = {
       afterDrawBody:
         'Neue Teams spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
       afterDrawConfirm: 'Teams trotzdem anlegen',
+      /** Announced before the draw, while the host can still add one (issue #15). */
+      byePreview:
+        'Ein Team erhält ein Freilos und kommt ohne Partie weiter. Mit einem weiteren Team entfällt das Freilos.',
     },
 
     PLAYER: {
@@ -309,6 +326,9 @@ export const deAT = {
       afterDrawBody:
         'Neue Spieler spielen in den bereits ausgelosten Partien nicht mit und kommen erst bei der nächsten Auslosung dazu.',
       afterDrawConfirm: 'Spieler trotzdem anlegen',
+      /** Announced before the draw, while the host can still add one (issue #15). */
+      byePreview:
+        'Ein Spieler erhält ein Freilos und kommt ohne Partie weiter. Mit einem weiteren Spieler entfällt das Freilos.',
     },
   },
 
@@ -316,6 +336,65 @@ export const deAT = {
   settings: {
     /** docs/GLOSSARY.md: the German for `participantLabel`. */
     participantLabel: 'Teilnehmer-Bezeichnung',
+
+    /** The panel itself (issue #15). */
+    sectionLabel: 'Turniereinstellungen',
+
+    tournamentName: 'Name des Turniers',
+    /**
+     * Said next to the field, because renaming the event does not rename the
+     * file it is being saved into (docs/OPEN-QUESTIONS.md #26) — and a host who
+     * expects it to would look for the old name in Explorer that evening.
+     */
+    tournamentNameHint:
+      'Der Dateiname bleibt gleich. Über „Speichern unter…“ lässt sich das Turnier unter einem neuen Dateinamen ablegen.',
+
+    namingAt: 'Namen ab Feldgröße',
+    namingAtHint:
+      'Ab so vielen verbliebenen Teilnehmenden werden Namen erfasst. Vorher zählt die Nummer.',
+    /** Why the field is greyed out from the naming phase on. */
+    namingAtLocked:
+      'Die Namenserfassung hat bereits begonnen. Die Feldgröße kann jetzt nicht mehr geändert werden.',
+
+    performanceMode: 'Performance-Modus',
+    performanceModeHint:
+      'Für schwache Grafik oder einen trägen Beamer: Animationen laufen in halber Zeit. Jederzeit umschaltbar.',
+
+    /**
+     * The draw seed, shown and never editable (CLAUDE.md golden rule 7). It is
+     * on screen so a disputed Auslosung can be reproduced afterwards, which is
+     * the whole reason the number is stored at all.
+     */
+    seed: 'Startwert der Auslosung',
+    seedHint: 'Mit diesem Wert lässt sich jede Auslosung später nachvollziehen.',
+  },
+
+  /**
+   * The gate between setup and a running tournament (issue #15).
+   *
+   * Every check says what is missing **and** what to do about it: the host is
+   * reading this with a room filling up behind them, and "zu wenige Gruppen" on
+   * its own is a sentence they have to think about.
+   */
+  start: {
+    sectionLabel: 'Turnier starten',
+    action: 'Turnier starten',
+    /** On the disabled button, so the reason is where the click was aimed. */
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+
+    checksTitle: 'Prüfung vor dem Start',
+    ready: 'Alles bereit. Das Turnier kann gestartet werden.',
+    noUsableTable:
+      'Es ist kein Tisch bespielbar. Legen Sie einen Tisch an oder geben Sie einen gesperrten Tisch frei.',
+    tableShortage: (params: { matches: number; tables: number; queued: number }) =>
+      `Für ${pluralizeDeAT(params.matches, 'Partie', 'Partien')} stehen nur ${pluralizeDeAT(params.tables, 'Tisch', 'Tische')} bereit. Zu Beginn warten ${pluralizeDeAT(params.queued, 'Partie', 'Partien')} auf einen freien Tisch.`,
+
+    previewTitle: 'Erste Runde',
+    previewMatches: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Partie', 'Partien')} in der Qualifikationsrunde`,
+
+    /** After the start, where the button used to be. */
+    running: 'Das Turnier läuft. Die Auslosung der ersten Runde folgt.',
   },
 
   /**

@@ -14,9 +14,21 @@ import { LetterboxStage } from '@/windows/beamer/LetterboxStage';
  */
 export function BeamerSurface({
   placement,
+  performanceMode,
   children,
 }: {
   placement: BeamerPlacement;
+  /**
+   * Whether to run the cheap motion (docs/MOTION.md §6, issue #15).
+   *
+   * It arrives from the host in every snapshot, so flipping it reaches a window
+   * that is already showing something — which is when a host reaches for it,
+   * because the projector is stuttering in front of them right now. The
+   * durations themselves live in `src/styles/global.css`, keyed on the
+   * attribute below, so a scene written later is covered without its author
+   * having to remember.
+   */
+  performanceMode: boolean;
   children: ReactNode;
 }) {
   const isPreview = placement === 'preview';
@@ -34,6 +46,7 @@ export function BeamerSurface({
         isPreview ? 'cursor-auto' : ''
       }`}
       data-placement={placement}
+      data-performance-mode={String(performanceMode)}
     >
       <LetterboxStage>{children}</LetterboxStage>
 

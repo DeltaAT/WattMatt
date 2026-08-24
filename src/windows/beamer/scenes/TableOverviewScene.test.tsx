@@ -80,6 +80,7 @@ describe('the table overview scene', () => {
     const broken: TournamentSnapshot = {
       groups: [group(1)],
       participantLabel: 'GROUP',
+      performanceMode: false,
       tables: [occupiedTable(1, matchId(99))],
       matches: [],
     };

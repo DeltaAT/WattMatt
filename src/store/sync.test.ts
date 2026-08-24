@@ -22,6 +22,7 @@ function groups(count: number): TournamentSnapshot {
       status: 'ACTIVE' as const,
     })),
     participantLabel: 'GROUP',
+    performanceMode: false,
     tables: [],
     matches: [],
   };

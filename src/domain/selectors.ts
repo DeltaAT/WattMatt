@@ -60,3 +60,17 @@ export function currentRound(tournament: Tournament): Round | null {
   }
   return null;
 }
+
+/**
+ * Tables a match could be played on at all — everything not `gesperrt`.
+ *
+ * Wider than `freeTables` and answering a different question. `freeTables` asks
+ * where the next match can go *now*; this asks whether the tournament has any
+ * playing surface, which is what the pre-start check of
+ * docs/TOURNAMENT-RULES.md §2 requires and what the queue estimate divides by.
+ * A table with a match on it is not free, but it is very much usable — it frees
+ * up the moment that match is decided.
+ */
+export function usableTables(tournament: Tournament): readonly Table[] {
+  return tournament.tables.filter((table) => table.status !== 'DISABLED');
+}

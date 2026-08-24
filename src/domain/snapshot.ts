@@ -31,11 +31,12 @@ import {
  * the host has already eliminated.
  *
  * It carries groups and, since issue #13, tables and the matches that are on
- * them — exactly what `TABLE_OVERVIEW` draws — plus, since issue #14, the one
- * setting that decides what the audience calls a participant. The scenes that
- * need whole rounds and the bracket are issues #18, #19, #25 and #27, and each
- * extends this schema with what it actually draws; the envelope around it is
- * final either way (docs/OPEN-QUESTIONS.md #19).
+ * them — exactly what `TABLE_OVERVIEW` draws — plus the two settings the
+ * projector itself needs: what the audience calls a participant (issue #14) and
+ * how expensively it may animate (issue #15). The
+ * scenes that need whole rounds and the bracket are issues #18, #19, #25 and
+ * #27, and each extends this schema with what it actually draws; the envelope
+ * around it is final either way (docs/OPEN-QUESTIONS.md #19).
  */
 export const groupSnapshotSchema = groupSchema;
 
@@ -47,12 +48,23 @@ export const tournamentSnapshotSchema = z.object({
    * Whether the room is playing in `Gruppen`, `Teams` or as `Spieler`
    * (issue #14).
    *
-   * The only piece of `settings` the beamer is sent, because it is the only one
-   * that changes what the audience reads. Sent rather than assumed: the host
-   * screen and the projector calling the same participant two different things
-   * is precisely the disagreement golden rule 4 exists to prevent.
+   * The piece of `settings` that changes what the audience *reads*. Sent rather
+   * than assumed: the host screen and the projector calling the same participant
+   * two different things is precisely the disagreement golden rule 4 exists to
+   * prevent.
    */
   participantLabel: participantLabelSchema,
+  /**
+   * Whether the beamer is to run its motion in the cheap mode (issue #15,
+   * docs/MOTION.md §6).
+   *
+   * Sent rather than read from a preference file, because MOTION.md requires it
+   * to be switchable **mid-event without reloading the beamer window** — and
+   * the snapshot is the one channel that reaches a window already showing
+   * something. A host reaches for this while the projector is visibly
+   * stuttering, so the next picture has to be the cheap one.
+   */
+  performanceMode: z.boolean(),
   /** In the host's configured order, which is the order they stand in the room. */
   tables: z.array(tableSchema),
   /**
@@ -107,6 +119,9 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   // The default of `DEFAULT_SETTINGS`: with no tournament open there is nobody
   // to call anything, and `Gruppe` is what the glossary calls a participant.
   participantLabel: 'GROUP',
+  // The default of `DEFAULT_SETTINGS` as well: an idle beamer animates nothing
+  // worth economising on.
+  performanceMode: false,
   tables: [],
   matches: [],
 };
@@ -125,6 +140,7 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
   return {
     groups: tournament.groups,
     participantLabel: tournament.settings.participantLabel,
+    performanceMode: tournament.settings.performanceMode,
     tables: tournament.tables,
     // Copied out of the readonly projection: the snapshot is a value the sync
     // layer serialises, and Zod's inferred array type is a mutable one.

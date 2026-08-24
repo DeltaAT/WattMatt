@@ -5,7 +5,9 @@ import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
+import { PreStartPanel } from '@/windows/host/PreStartPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
+import { SettingsPanel } from '@/windows/host/SettingsPanel';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TablePanel } from '@/windows/host/TablePanel';
 import { TournamentBar } from '@/windows/host/TournamentBar';
@@ -13,6 +15,8 @@ import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
+import { usePreStart } from '@/windows/host/usePreStart';
+import { useSettings } from '@/windows/host/useSettings';
 import { useTables } from '@/windows/host/useTables';
 import { useTournamentDocument } from '@/windows/host/useTournamentDocument';
 import { useUndo, useUndoShortcuts } from '@/windows/host/useUndo';
@@ -37,6 +41,8 @@ export function HostWindow() {
   const undo = useUndo();
   const groups = useGroups();
   const tables = useTables();
+  const settings = useSettings();
+  const preStart = usePreStart();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
   // open buys nothing.
@@ -108,7 +114,23 @@ export function HostWindow() {
         ) : (
           <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
             {/*
-              Groups first: the host fills the field before the room has tables
+              Settings first, because they decide the words the panels below are
+              written in: a host who runs `Teams` rather than `Gruppen` should
+              not read the wrong noun on their way to changing it (issue #15).
+            */}
+            <SettingsPanel
+              name={settings.name}
+              settings={settings.settings}
+              rngSeed={settings.rngSeed}
+              isNamingAtEditable={settings.isNamingAtEditable}
+              onRename={settings.rename}
+              onParticipantChange={settings.setParticipant}
+              onNamingAtChange={settings.setNamingAt}
+              onPerformanceModeChange={settings.setPerformanceMode}
+            />
+
+            {/*
+              Then groups: the host fills the field before the room has tables
               in it, and the panel order is the order of the evening.
             */}
             <GroupPanel
@@ -134,6 +156,16 @@ export function HostWindow() {
               onEnable={tables.enable}
               onRemove={tables.remove}
               onShowOnBeamer={tables.showOnBeamer}
+            />
+
+            {/*
+              Last, under everything it checks: the host reads the room, then
+              the screen, then presses the one button that ends setup.
+            */}
+            <PreStartPanel
+              report={preStart.report}
+              participant={groups.participant}
+              onStart={preStart.start}
             />
 
             {/* Rounds and the phase navigation land with #17. */}
