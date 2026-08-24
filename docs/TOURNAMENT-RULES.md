@@ -103,12 +103,19 @@ candidate is highlighted; the accept/decline outcome is shown immediately.
 
 **Fallback — pool exhausted while `need > 0`.** The host is offered two options in German:
 
-1. *Freilose vergeben* — the missing slots become byes in the next round (default).
+1. *Freilose vergeben* — the `need` missing slots become byes in the next round (default).
+   All of them, not one: a field of 13 short of 16 owes **three** `Freilose`, and a draw that
+   granted only the single bye an odd count earns would produce 7 winners where the bracket
+   needs 8. The count is `target - |W|` and it is the next draw that hands them out (§5).
 2. *Ausgeschiedene erneut zulassen* — declined groups return to the pool and are drawn again.
+   The pool is shuffled again when they go back in, so being readmitted does not also mean
+   being drawn first.
 
 This situation is logged prominently. It can only occur when a large share of losers decline.
 
-**Invariant after this phase:** `|W|` is a power of two.
+**Invariant after this phase:** the field is a power of two — `|W| + Freilose = target`. The
+`Freilose` term is zero unless fallback 1 was taken, so in the ordinary case this is the
+plainer statement that `|W|` is a power of two.
 
 ## 5. ELIMINATION rounds
 
