@@ -56,6 +56,29 @@
      * visible to the whole room. docs/STYLEGUIDE.md §5. */
     cursor: none;
   }
+
+  /* Performance mode: durations and stagger halved for weak graphics or a laggy
+   * projector — docs/MOTION.md §6, `settings.performanceMode` (issue #15).
+   *
+   * Redefining the tokens rather than switching off individual animations is
+   * what makes it apply to scenes that do not exist yet: every duration in the
+   * beamer window resolves through these, so a scene written for #18 or #25 is
+   * covered without its author remembering. The rest of MOTION.md's list —
+   * particles, blur, glow — is issue #29's, together with reduced motion.
+   *
+   * Driven by an attribute the host sets from the snapshot, so it takes effect
+   * on a window that is already showing something, which is exactly when a host
+   * reaches for it. */
+  .beamer-root[data-performance-mode='true'] {
+    --dur-instant: 50ms;
+    --dur-fast: 80ms;
+    --dur-base: 120ms;
+    --dur-slow: 200ms;
+    --dur-reveal: 300ms;
+    --dur-story: 600ms;
+    --stagger-tight: 0ms;
+    --stagger-wide: 0ms;
+  }
 }
 
 /* The 16:9 area every beamer scene is drawn into. A projector reporting 4:3,

@@ -148,6 +148,13 @@ A host toggle for weak hardware or a laggy projector: durations × 0.5, particle
 blur off, stagger off, glow effects off. It must be switchable **mid-event** without
 reloading the beamer window.
 
+It is `settings.performanceMode`, set in the host's settings panel (issue #15) and carried to
+the projector in every snapshot, which is what makes it reach a window that is already showing
+something. The beamer root carries it as `data-performance-mode`, and `src/styles/global.css`
+redefines the duration and stagger tokens under that attribute — so a scene picks it up without
+reading the flag itself. The rest of the list above (particles, blur, glow) and reduced motion
+are issue #29's.
+
 ### Reduced motion
 
 Respect `prefers-reduced-motion: reduce`: keep opacity and colour transitions (they carry

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_SETTINGS } from '@/domain/factory';
 import { groupIdSchema } from '@/domain/ids';
 import {
   INITIAL_SNAPSHOT,
@@ -29,6 +30,7 @@ describe('the snapshot envelope', () => {
       scene: { id: 'BRACKET' },
       tournament: {
         participantLabel: 'TEAM',
+        performanceMode: true,
         groups: [
           {
             id: groupIdSchema.parse('g1'),
@@ -101,6 +103,19 @@ describe('toTournamentSnapshot', () => {
     expect(projected.matches.map((entry) => entry.id)).toEqual([matchId(1)]);
   });
 
+  /*
+   * docs/MOTION.md §6 requires performance mode to reach a beamer window that is
+   * already showing something, so it travels in the snapshot rather than being
+   * read from a preference file the projector would only see on a reload
+   * (issue #15).
+   */
+  it('tells the beamer how expensively it may animate', () => {
+    const cheap = tournament({ settings: { ...DEFAULT_SETTINGS, performanceMode: true } });
+
+    expect(toTournamentSnapshot(cheap).performanceMode).toBe(true);
+    expect(toTournamentSnapshot(tournament()).performanceMode).toBe(false);
+  });
+
   /**
    * The projection is what the beamer renders, and it carries only what a scene
    * draws today (docs/OPEN-QUESTIONS.md #19). Sending the whole tournament would
@@ -116,6 +131,7 @@ describe('toTournamentSnapshot', () => {
       'groups',
       'matches',
       'participantLabel',
+      'performanceMode',
       'tables',
     ]);
     expect(snapshotSchema.safeParse(snapshot({ tournament: projected })).success).toBe(true);
@@ -125,6 +141,7 @@ describe('toTournamentSnapshot', () => {
     expect(toTournamentSnapshot(tournament())).toEqual({
       groups: [],
       participantLabel: 'GROUP',
+      performanceMode: false,
       tables: [],
       matches: [],
     });

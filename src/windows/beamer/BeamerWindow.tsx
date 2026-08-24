@@ -15,7 +15,10 @@ export function BeamerWindow() {
   const view = useBeamerView();
 
   return (
-    <BeamerSurface placement={status.placement}>
+    <BeamerSurface
+      placement={status.placement}
+      performanceMode={view.snapshot.tournament.performanceMode}
+    >
       <BeamerScenePlaceholder
         scene={view.snapshot.scene}
         tournament={view.snapshot.tournament}

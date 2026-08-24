@@ -51,8 +51,31 @@ export {
   type AppStamp,
   type TournamentFile,
 } from '@/domain/schema';
-export { activeGroups, currentRound, freeTables, undecidedMatches } from '@/domain/selectors';
-export { setParticipantLabel } from '@/domain/settings';
+export {
+  activeGroups,
+  currentRound,
+  freeTables,
+  undecidedMatches,
+  usableTables,
+} from '@/domain/selectors';
+export {
+  isNamingAtEditable,
+  isValidNamingAt,
+  MINIMUM_NAMING_AT,
+  setNamingAt,
+  setParticipantLabel,
+  setPerformanceMode,
+  setTournamentName,
+} from '@/domain/settings';
+export {
+  preStartReport,
+  previewFirstRound,
+  startTournament,
+  type FirstRoundPreview,
+  type PreStartBlocker,
+  type PreStartReport,
+  type PreStartWarning,
+} from '@/domain/start';
 export {
   addTables,
   disableTable,

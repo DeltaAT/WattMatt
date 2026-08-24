@@ -43,7 +43,13 @@ SETUP → QUALIFYING → REPECHAGE? → ELIMINATION* → NAMING → BRACKET → 
   the tournament by losing, by declining (§4), or by the host undoing back past the draw.
 - The German word for a participant is the host's choice — `Gruppe`, `Team` or `Spieler`
   (`settings.participantLabel`). It changes UI copy only; the model is `Group` throughout.
-- The tournament cannot start unless: `groups >= 2` and `tables >= 1`.
+- The tournament cannot start unless: `groups >= 2` and at least one table is **usable**, that
+  is not `DISABLED` — a room whose only table has a wobbly leg is a room that cannot play. Both
+  are checked before the host presses *Turnier starten*, with the reason stated in German
+  (issue #15). Fewer tables than matches is **not** a blocker: matches queue (§3), and the host
+  is warned with the estimated queue length rather than refused.
+- Starting moves the phase `SETUP → QUALIFYING` and does nothing else. The draw of round 1 is a
+  separate, explicit host action (issue #16, docs/OPEN-QUESTIONS.md #45).
 
 ## 3. QUALIFYING (round 1)
 
@@ -121,6 +127,11 @@ small tournament may legitimately enter the final phase at 8, 4 or 2.
 
 - The host enters a name for every remaining group. The group number stays visible as a badge
   next to the name for the rest of the event.
+- *When* this phase is reached is `settings.namingAt` — the field size at which names become
+  required, 16 by default (docs/OPEN-QUESTIONS.md #8). The host may move it up to ask for names
+  from the start, or down; from this phase on it is **locked**, because moving the line after
+  names have been asked for would either demand names nobody was asked for or leave a bracket
+  half-named (issue #15, docs/OPEN-QUESTIONS.md #46).
 - Validation: names must be non-empty, trimmed, max 40 characters; duplicates produce a
   warning but are allowed (two teams may genuinely share a name).
 - The bracket cannot be drawn until every remaining group has a name.

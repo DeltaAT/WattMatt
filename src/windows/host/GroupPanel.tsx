@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 
 import { MINIMUM_GROUPS } from '@/domain/groups';
 import type { GroupId } from '@/domain/ids';
-import { participantLabelSchema, type Group, type ParticipantLabel } from '@/domain/types';
+import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
-import { GroupChip } from '@/ui';
+import { GroupChip, ParticipantChoice } from '@/ui';
 
 /**
  * Group management: the `+`, the bulk add, and the grid of everyone who is
@@ -204,36 +204,6 @@ function AddControls({
         {words.bulkAdd}
       </button>
     </form>
-  );
-}
-
-/** `Gruppe` / `Team` / `Spieler` — German wording only (issue #14). */
-function ParticipantChoice({
-  participant,
-  onChange,
-}: {
-  participant: ParticipantLabel;
-  onChange: (label: ParticipantLabel) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2">
-      <span className="wm-label">{de.settings.participantLabel}</span>
-      <select
-        className="h-8 rounded-wm-sm border border-wm-border-strong bg-wm-bg px-2 text-host-xs text-wm-text"
-        value={participant}
-        // Parsed rather than cast: a `<select>` value is a string, and the one
-        // place a string becomes a `ParticipantLabel` should be the schema that
-        // defines what one is.
-        onChange={(event) => onChange(participantLabelSchema.parse(event.target.value))}
-        data-group-input="participant"
-      >
-        {participantLabelSchema.options.map((option) => (
-          <option key={option} value={option}>
-            {de.participant[option].many}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 

@@ -49,6 +49,7 @@ function fullHouse(): TournamentSnapshot {
       status: 'ACTIVE' as const,
     })),
     participantLabel: 'GROUP' as const,
+    performanceMode: false,
     tables: matches.map((match, index) => ({
       id: tableIdSchema.parse(`table-${index + 1}`),
       label: `Tisch ${index + 1}`,
@@ -82,6 +83,7 @@ describe('snapshot round-trip performance', () => {
       const payload: TournamentSnapshot = {
         groups: [...tournament.groups],
         participantLabel: tournament.participantLabel,
+        performanceMode: tournament.performanceMode,
         tables: [...tournament.tables],
         matches: [...tournament.matches],
       };

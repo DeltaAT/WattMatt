@@ -65,6 +65,11 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Bracket node | Turnierbaum-Knoten |
 | Repechage draw | Auslosung der Hoffnungsrunde |
 | Participant label | Teilnehmer-Bezeichnung |
+| Tournament settings | Turniereinstellungen |
+| To start the tournament | Turnier starten |
+| Pre-start check | Prüfung vor dem Start |
+| Naming threshold (`settings.namingAt`) | Namen ab Feldgröße |
+| RNG seed | Startwert der Auslosung |
 | Group overview (beamer scene) | Gruppen / Teams / Spieler | Headed by the participant label itself |
 
 ## Files

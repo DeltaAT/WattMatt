@@ -13,9 +13,9 @@ import { BeamerSurface } from '@/windows/beamer/BeamerSurface';
  * Static rendering is enough: nothing below depends on an effect, and the
  * context-menu listeners the surface installs are the only part that does.
  */
-function render(placement: BeamerPlacement): string {
+function render(placement: BeamerPlacement, performanceMode = false): string {
   return renderToStaticMarkup(
-    <BeamerSurface placement={placement}>
+    <BeamerSurface placement={placement} performanceMode={performanceMode}>
       <p>scene</p>
     </BeamerSurface>,
   );
@@ -25,6 +25,16 @@ const projected = render('projected');
 const preview = render('preview');
 
 describe('the beamer surface', () => {
+  /*
+   * docs/MOTION.md §6: the cheap motion is a host toggle that has to reach a
+   * window already showing something, so it rides in on the snapshot and lands
+   * on the root as an attribute the stylesheet keys on (issue #15).
+   */
+  it('carries the performance mode the host set', () => {
+    expect(render('projected', true)).toContain('data-performance-mode="true"');
+    expect(projected).toContain('data-performance-mode="false"');
+  });
+
   it('renders the scene it is given', () => {
     expect(projected).toContain('<p>scene</p>');
   });
