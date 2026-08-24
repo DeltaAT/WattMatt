@@ -2,7 +2,12 @@ import type { BeamerScene } from '@/domain/beamerScene';
 import type { RoundId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { de } from '@/i18n';
-import { DrawScene, GroupOverviewScene, TableOverviewScene } from '@/windows/beamer/scenes';
+import {
+  DrawScene,
+  GroupOverviewScene,
+  RoundBoardScene,
+  TableOverviewScene,
+} from '@/windows/beamer/scenes';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
 import { useSkipKey } from '@/windows/beamer/useSkipKey';
 
@@ -53,6 +58,10 @@ export function BeamerScenePlaceholder({
 
   if (scene.id === 'TABLE_OVERVIEW') {
     return <TableOverviewScene tournament={tournament} settled={settled} />;
+  }
+
+  if (scene.id === 'ROUND_BOARD') {
+    return <RoundBoardScene tournament={tournament} settled={settled} />;
   }
 
   if (scene.id === 'DRAW') {

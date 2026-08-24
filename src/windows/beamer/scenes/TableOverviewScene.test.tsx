@@ -78,6 +78,7 @@ describe('the table overview scene', () => {
    */
   it('reports a table whose match cannot be found', () => {
     const broken: TournamentSnapshot = {
+      name: 'Sommerturnier',
       groups: [group(1)],
       participantLabel: 'GROUP',
       performanceMode: false,

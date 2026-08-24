@@ -15,6 +15,7 @@ const round = (value: string) => roundIdSchema.parse(value);
 
 function groups(count: number): TournamentSnapshot {
   return {
+    name: 'Sommerturnier',
     groups: Array.from({ length: count }, (_, index) => ({
       id: groupIdSchema.parse(`g${index + 1}`),
       number: index + 1,

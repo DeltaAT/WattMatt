@@ -289,7 +289,10 @@ describe('createTournamentDocument', () => {
 
     await createTournamentDocument(store, deps(files), { name: 'T' });
 
-    expect(store.getState().tournament).toEqual(EMPTY_TOURNAMENT);
+    // Empty in every respect but its name, which the beamer carries from the
+    // moment the tournament exists — the round board puts it on the wall as
+    // persistent chrome (issue #19).
+    expect(store.getState().tournament).toEqual({ ...EMPTY_TOURNAMENT, name: 'T' });
     expect(store.getState().scene).toEqual(IDLE_SCENE);
   });
 });

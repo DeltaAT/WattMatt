@@ -30,6 +30,7 @@ describe('the snapshot envelope', () => {
       revision: 7,
       scene: { id: 'BRACKET' },
       tournament: {
+        name: 'Sommerturnier',
         participantLabel: 'TEAM',
         performanceMode: true,
         groups: [
@@ -169,6 +170,7 @@ describe('toTournamentSnapshot', () => {
     expect(Object.keys(projected).sort()).toEqual([
       'groups',
       'matches',
+      'name',
       'participantLabel',
       'performanceMode',
       'round',
@@ -179,6 +181,7 @@ describe('toTournamentSnapshot', () => {
 
   it('projects an empty tournament as an empty picture', () => {
     expect(toTournamentSnapshot(tournament())).toEqual({
+      name: 'Test Tournament',
       groups: [],
       participantLabel: 'GROUP',
       performanceMode: false,

@@ -56,6 +56,14 @@ export const roundSnapshotSchema = roundSchema.omit({ matches: true });
 export type RoundSnapshot = z.infer<typeof roundSnapshotSchema>;
 
 export const tournamentSnapshotSchema = z.object({
+  /**
+   * What the tournament is called (issue #19).
+   *
+   * The round board carries persistent chrome — the tournament, the round, the
+   * progress — so the audience can read what they are looking at from the back
+   * of the room without having been there when it started.
+   */
+  name: z.string(),
   groups: z.array(groupSnapshotSchema),
   /**
    * Whether the room is playing in `Gruppen`, `Teams` or as `Spieler`
@@ -139,6 +147,8 @@ export const snapshotSchema = z.object({
 export type Snapshot = z.infer<typeof snapshotSchema>;
 
 export const EMPTY_TOURNAMENT: TournamentSnapshot = {
+  // No tournament open, so nothing to name.
+  name: '',
   groups: [],
   // The default of `DEFAULT_SETTINGS`: with no tournament open there is nobody
   // to call anything, and `Gruppe` is what the glossary calls a participant.
@@ -166,6 +176,7 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
   const round = currentRound(tournament);
 
   return {
+    name: tournament.name,
     groups: tournament.groups,
     participantLabel: tournament.settings.participantLabel,
     performanceMode: tournament.settings.performanceMode,
