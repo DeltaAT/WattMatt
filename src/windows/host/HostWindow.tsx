@@ -4,9 +4,11 @@ import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
+import { PhasePanel } from '@/windows/host/PhasePanel';
 import { PreStartPanel } from '@/windows/host/PreStartPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { RepechagePanel } from '@/windows/host/RepechagePanel';
+import { RoundHistoryPanel } from '@/windows/host/RoundHistoryPanel';
 import { RoundPanel } from '@/windows/host/RoundPanel';
 import { SettingsPanel } from '@/windows/host/SettingsPanel';
 import { StartScreen } from '@/windows/host/StartScreen';
@@ -16,6 +18,7 @@ import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
+import { usePhase } from '@/windows/host/usePhase';
 import { usePreStart } from '@/windows/host/usePreStart';
 import { useRepechage } from '@/windows/host/useRepechage';
 import { useRound } from '@/windows/host/useRound';
@@ -48,6 +51,7 @@ export function HostWindow() {
   const preStart = usePreStart();
   const round = useRound();
   const repechage = useRepechage();
+  const phase = usePhase();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
   // open buys nothing.
@@ -119,6 +123,15 @@ export function HostWindow() {
         ) : (
           <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-4">
             {/*
+              Above the round, because it answers the question the host is asked
+              between rounds — what happens next — and the answer has to be
+              readable before the decision rather than after it (issue #22).
+            */}
+            {phase.isActive ? (
+              <PhasePanel phase={phase.phase} step={phase.step} onAdvance={phase.advance} />
+            ) : null}
+
+            {/*
               First once the tournament is under way, and absent before it: from
               the draw on, the round is the only thing the host is working in,
               and it must not be below sixty-four group chips when a table comes
@@ -166,6 +179,20 @@ export function HostWindow() {
                 onDecline={repechage.decline}
                 onFallback={repechage.useFallback}
                 onShowOnBeamer={repechage.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              Under the two panels it is the record of: the host reads it to
+              answer a question from the room, and reaches for it far less often
+              than for the round in front of them (issue #22).
+            */}
+            {phase.isActive ? (
+              <RoundHistoryPanel
+                history={phase.history}
+                groups={phase.groups}
+                participant={phase.participant}
+                onShowOnBeamer={phase.showRoundOnBeamer}
               />
             ) : null}
 
@@ -223,8 +250,6 @@ export function HostWindow() {
               participant={groups.participant}
               onStart={preStart.start}
             />
-
-            {/* The phase navigation lands with #22. */}
           </main>
         )}
       </div>

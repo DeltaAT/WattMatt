@@ -28,6 +28,7 @@ function groups(count: number): TournamentSnapshot {
     matches: [],
     round: null,
     repechage: null,
+    history: [],
   };
 }
 

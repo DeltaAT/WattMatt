@@ -48,6 +48,7 @@ describe('the snapshot envelope', () => {
         matches: [match(4, { tableId: table(1).id, status: 'RUNNING' })],
         round: null,
         repechage: null,
+        history: [],
       },
       delivery: 'live',
     });
@@ -137,6 +138,31 @@ describe('toTournamentSnapshot', () => {
     expect(projected.matches.map((entry) => entry.id)).toEqual([matchId(1)]);
   });
 
+  /*
+   * Issue #22: the host browses the evening back and puts any round of it on
+   * the wall, so the closed rounds travel too — with their matches, because a
+   * board with no pairings on it is not a board.
+   */
+  it('sends the closed rounds so a past one can be put on the wall', () => {
+    const projected = toTournamentSnapshot(midTournament());
+
+    expect(projected.history.map((entry) => entry.id)).toEqual([roundId(1)]);
+    expect(projected.history[0]?.matches.map((entry) => entry.id)).toEqual([matchId(2)]);
+  });
+
+  /*
+   * No match travels twice. The open round is `round` plus `matches`; the
+   * history is everything that is over, and a snapshot carrying the same
+   * pairing in both lists is one that can come to disagree with itself.
+   */
+  it('keeps the open round out of the history', () => {
+    const projected = toTournamentSnapshot(midTournament());
+    const historyMatches = projected.history.flatMap((entry) => entry.matches);
+
+    expect(projected.history.map((entry) => entry.id)).not.toContain(roundId(2));
+    expect(historyMatches.map((entry) => entry.id)).not.toContain(matchId(1));
+  });
+
   /* The round travels without its matches — one list, so the two halves of a
    * snapshot cannot disagree about which pairing is on which table. */
   it('sends the round without duplicating its matches', () => {
@@ -170,6 +196,7 @@ describe('toTournamentSnapshot', () => {
 
     expect(Object.keys(projected).sort()).toEqual([
       'groups',
+      'history',
       'matches',
       'name',
       'participantLabel',
@@ -191,6 +218,7 @@ describe('toTournamentSnapshot', () => {
       matches: [],
       round: null,
       repechage: null,
+      history: [],
     });
   });
 });

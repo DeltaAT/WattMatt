@@ -78,6 +78,28 @@ const ROUND_KIND_BY_PHASE: Partial<Record<Phase, RoundKind>> = {
   ELIMINATION: 'ELIMINATION',
 };
 
+/**
+ * The field size at or below which the final phase begins
+ * (docs/TOURNAMENT-RULES.md §5).
+ *
+ * The elimination rounds are a `while |W| > 16` loop, so this is both the
+ * condition that keeps them going and the largest bracket the app builds. It
+ * lives here rather than in `@/domain/progression` because the draw engine is what
+ * has to refuse the round that would take the field below it — the phase module
+ * describes the transition, this one declines to deal another hand.
+ */
+export const FINAL_PHASE_SIZE = 16;
+
+/**
+ * The smallest bracket there is: a `Finale` and nothing else
+ * (docs/TOURNAMENT-RULES.md §7, §9 case 10).
+ *
+ * Two participants are already the final phase. Pairing them in a qualifying
+ * round would leave one group standing, and a bracket of one is not a picture
+ * the app can draw (§9 case 5, docs/OPEN-QUESTIONS.md #62).
+ */
+export const MINIMUM_BRACKET_SIZE = 2;
+
 // ---------------------------------------------------------------------------
 // Drawing a round
 // ---------------------------------------------------------------------------
@@ -91,7 +113,12 @@ export type DrawBlocker =
   /** Fewer than two groups left in (docs/TOURNAMENT-RULES.md §2, §9 case 4). */
   | 'TOO_FEW_GROUPS'
   /** The qualifying round is round 1 and there is only one of it (§3). */
-  | 'QUALIFYING_ALREADY_DRAWN';
+  | 'QUALIFYING_ALREADY_DRAWN'
+  /**
+   * The field is already the one the bracket is built on, so another round
+   * would take it below a bracket (docs/TOURNAMENT-RULES.md §5, issue #22).
+   */
+  | 'FINAL_PHASE_REACHED';
 
 /**
  * Everything standing between the host and the next draw, all of it at once.
@@ -123,8 +150,66 @@ export function drawBlockers(tournament: Tournament): readonly DrawBlocker[] {
   ) {
     blockers.push('QUALIFYING_ALREADY_DRAWN');
   }
+  // The `while |W| > 16` of docs/TOURNAMENT-RULES.md §5, as a refusal rather
+  // than as a loop: an elimination round dealt at 16 would take the field to 8
+  // and the `Achtelfinale` the room was promised would never be played. The
+  // qualifying round is measured against the smallest bracket instead, because
+  // §3 plays it at every size — except at two, where the one match there is to
+  // play is the `Finale` itself (§9 case 5).
+  const floor = tournament.phase === 'ELIMINATION' ? FINAL_PHASE_SIZE : MINIMUM_BRACKET_SIZE;
+  if (ROUND_KIND_BY_PHASE[tournament.phase] !== undefined && fieldSize(tournament) <= floor) {
+    blockers.push('FINAL_PHASE_REACHED');
+  }
 
   return blockers;
+}
+
+/**
+ * The field the next draw would deal: the groups still in, plus the `Freilose`
+ * the repechage fallback still owes (docs/TOURNAMENT-RULES.md §4, §5).
+ *
+ * Not `activeGroups().length` on its own, because a field of 20 that owes 12
+ * `Freilose` is a field of 32 as far as every count in the tournament is
+ * concerned — that is the whole point of fallback 1.
+ */
+export function fieldSize(tournament: Tournament): number {
+  return activeGroups(tournament).length + byesOwed(tournament);
+}
+
+/**
+ * How many `Freilose` the §4 fallback still owes the next draw
+ * (docs/TOURNAMENT-RULES.md §4, fallback 1).
+ *
+ * *Freilose vergeben* does not hand the places out where it is taken: it
+ * records a debt, and §5 says it is the next draw that settles it. A field of
+ * 13 short of 16 owes **three**, so the round drawn from it deals three byes
+ * and five pairs, and the 8 winners the bracket needs come out of it.
+ *
+ * Owed only until that draw happens, which is what the elimination-round check
+ * says: the debt is settled by the first elimination round, and asking again
+ * afterwards would deal the same three byes a second time. When the target is
+ * already at or below the final phase there is no elimination round to settle
+ * it — the debt then belongs to the bracket, and issue #24 reads it off the
+ * repechage record rather than from here.
+ *
+ * The field is read off the qualifying round and the accepted draws rather than
+ * off `activeGroups`, for the reason `repechageState` gives: a participant who
+ * turned up late and was added mid-tournament (§2) is active without ever
+ * having been in this arithmetic.
+ */
+export function byesOwed(tournament: Tournament): number {
+  const repechage = tournament.repechage;
+  if (repechage === null || repechage.fallbackUsed !== 'BYES') {
+    return 0;
+  }
+  if (tournament.rounds.some((round) => round.kind === 'ELIMINATION')) {
+    return 0;
+  }
+
+  const qualifying = tournament.rounds.find((round) => round.kind === 'QUALIFYING');
+  const winners = qualifying === undefined ? 0 : roundOutcome(qualifying).winners.length;
+  const accepted = repechage.draws.filter((draw) => draw.accepted === true).length;
+  return Math.max(0, repechage.target - winners - accepted);
 }
 
 /** Whether `drawRound` would produce a round. */
@@ -189,7 +274,11 @@ export function drawRound(
   }
 
   const drawn = rng.shuffle(activeGroups(tournament));
-  const matches = pair(drawn, nextMatchNumber(tournament));
+  // The `Freilose` §4 owes are settled here and only here, so the count comes
+  // off the tournament rather than off the caller: an action that forgot to
+  // pass it would deal 20 groups into 10 pairs where the bracket is waiting for
+  // a field of 32 (docs/TOURNAMENT-RULES.md §4 fallback 1, issue #22).
+  const matches = pair(drawn, nextMatchNumber(tournament), byesOwed(tournament));
 
   const index = tournament.rounds.length + 1;
   const round: Round = {
@@ -214,15 +303,30 @@ export function drawRound(
 }
 
 /**
- * Pairs a shuffled field, appending a bye for the group left over.
+ * Pairs a shuffled field, appending a bye for every group left over.
  *
  * Sequential and nothing cleverer: the shuffle is where the fairness lives, so
  * pairing neighbours is exactly as random as any other rule, and it is the one
- * a host can explain to a participant standing in front of them.
+ * a host can explain to a participant standing in front of them. The byes go to
+ * the back of the shuffle for the same reason — it is where §3 already puts the
+ * one an odd count earns, and "the last ones drawn sit this round out" is a
+ * sentence the host can say out loud.
+ *
+ * `owed` is the §4 fallback's debt and is usually zero, in which case this is
+ * exactly the rule §3 states. On top of it an odd remainder still earns the one
+ * bye §3 gives it, so a field of 13 owing two `Freilose` deals three: the two
+ * that were promised and the one the count leaves over.
  */
-function pair(drawn: readonly Group[], firstNumber: number): Match[] {
+function pair(drawn: readonly Group[], firstNumber: number, owed: number): Match[] {
   const matches: Match[] = [];
   let number = firstNumber;
+
+  // Clamped rather than trusted: a file repaired by hand can name a target the
+  // field cannot reach, and a negative pair count would drop groups out of a
+  // round in front of the room.
+  const promised = Math.min(Math.max(owed, 0), drawn.length);
+  const byes = promised + ((drawn.length - promised) % 2);
+  const paired = drawn.length - byes;
 
   const newMatch = (a: GroupId, b: GroupId | null): Match => {
     const match: Match = {
@@ -239,15 +343,15 @@ function pair(drawn: readonly Group[], firstNumber: number): Match[] {
     return match;
   };
 
-  for (let index = 0; index + 1 < drawn.length; index += 2) {
+  for (let index = 0; index + 1 < paired; index += 2) {
     // Both in range by construction; `noUncheckedIndexedAccess` cannot see it.
     const a = drawn[index] as Group;
     const b = drawn[index + 1] as Group;
     matches.push(newMatch(a.id, b.id));
   }
 
-  if (drawn.length % 2 === 1) {
-    const leftover = drawn[drawn.length - 1] as Group;
+  for (let index = paired; index < drawn.length; index += 1) {
+    const leftover = drawn[index] as Group;
     matches.push(newMatch(leftover.id, null));
   }
 

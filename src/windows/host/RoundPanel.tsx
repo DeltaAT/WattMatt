@@ -417,6 +417,8 @@ function drawBlockerText(blocker: DrawBlocker, participant: ParticipantLabel): s
       return de.participant[participant].tooFew;
     case 'QUALIFYING_ALREADY_DRAWN':
       return de.draw.qualifyingAlreadyDrawn;
+    case 'FINAL_PHASE_REACHED':
+      return de.draw.finalPhaseReached;
   }
 }
 

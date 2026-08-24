@@ -72,6 +72,21 @@ function fullHouse(): TournamentSnapshot {
     // A field of 64 leaves 32 winners standing, which is already a power of two
     // — docs/TOURNAMENT-RULES.md §4 skips the phase outright for it (issue #21).
     repechage: null,
+    // Issue #22 put the closed rounds on the wire too, so the host can point
+    // the projector back at one. The heaviest moment of a 64-group event is the
+    // elimination round running with the qualifying round already behind it, so
+    // the measured payload carries a full round of history as well as the live
+    // one.
+    history: [
+      {
+        id: roundIdSchema.parse('round-0'),
+        index: 1,
+        kind: 'QUALIFYING' as const,
+        label: 'Runde 1',
+        state: 'CLOSED' as const,
+        matches: matches.map((match) => ({ ...match, winnerId: match.a, status: 'DONE' as const })),
+      },
+    ],
   };
 }
 
@@ -103,6 +118,7 @@ describe('snapshot round-trip performance', () => {
         matches: [...tournament.matches],
         round: tournament.round,
         repechage: tournament.repechage,
+        history: [...tournament.history],
       };
 
       const started = performance.now();

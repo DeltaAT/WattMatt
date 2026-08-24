@@ -86,6 +86,7 @@ describe('the table overview scene', () => {
       matches: [],
       round: null,
       repechage: null,
+      history: [],
     };
 
     expect(scene(broken)).toContain(de.table.unknownMatch);

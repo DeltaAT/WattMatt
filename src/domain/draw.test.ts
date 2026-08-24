@@ -3,19 +3,27 @@ import { describe, expect, it } from 'vitest';
 import {
   assignMatch,
   assignNextQueuedMatch,
+  byesOwed,
   canCloseRound,
   canDrawRound,
   closeRound,
   closeRoundBlockers,
   drawBlockers,
   drawRound,
+  fieldSize,
   nextQueuedMatch,
   queuedMatches,
   roundOutcome,
   setWinner,
 } from '@/domain/draw';
 import { addGroups } from '@/domain/groups';
-import { matchIdSchema, type GroupId, type MatchId, type TableId } from '@/domain/ids';
+import {
+  matchIdSchema,
+  roundIdSchema,
+  type GroupId,
+  type MatchId,
+  type TableId,
+} from '@/domain/ids';
 import { indexTournament } from '@/domain/lookup';
 import { createRng } from '@/domain/rng';
 import { activeGroups, currentRound, freeTables } from '@/domain/selectors';
@@ -176,7 +184,7 @@ describe('drawing a round', () => {
     expect(round.matches.slice(0, -1).every((match) => match.b !== null)).toBe(true);
   });
 
-  it.each([2, 3, 5, 13, 40, 64])('keeps every one of %i groups exactly once', (count) => {
+  it.each([3, 5, 13, 40, 64])('keeps every one of %i groups exactly once', (count) => {
     const before = ready(count, 4);
     const round = expectSoundDraw(before, drawRound(before, draw));
 
@@ -570,7 +578,10 @@ describe('when a round may be drawn', () => {
   });
 
   it('draws an elimination round from the winners once the phase moves on', () => {
-    const closed = closeRound(decideEverything(drawRound(ready(8, 4), draw)));
+    // 64 leaves 32 standing, which is the smallest field docs/TOURNAMENT-RULES
+    // §5 still runs an elimination round on: at 16 or below the final phase has
+    // been reached and another round would take it below the bracket.
+    const closed = closeRound(decideEverything(drawRound(ready(64, 4), draw)));
     // Issue #22 owns the phase change; here it stands in for it.
     const eliminating: Tournament = { ...closed, phase: 'ELIMINATION' };
     const second = drawRound(eliminating, draw);
@@ -580,7 +591,7 @@ describe('when a round may be drawn', () => {
     expect(round.kind).toBe('ELIMINATION');
     expect(round.index).toBe(2);
     expect(round.label).toBe('Runde 2');
-    expect(round.matches).toHaveLength(2);
+    expect(round.matches).toHaveLength(16);
     expect(sorted(drawnGroups(round))).toEqual(sorted(roundOutcome(first ?? round).winners));
     // Ids never collide with the round that has already been played.
     expect(() => indexTournament(second)).not.toThrow();
@@ -592,6 +603,121 @@ describe('when a round may be drawn', () => {
 
     expect(drawBlockers(single)).toContain('TOO_FEW_GROUPS');
     expect(drawRound(single, draw)).toBe(single);
+  });
+
+  /*
+   * docs/TOURNAMENT-RULES.md §9 case 5: two participants play one match, and
+   * that match is the `Finale`. Drawing a qualifying round for them would leave
+   * a single group standing and a bracket of one — issue #22 routes them
+   * straight to the naming phase instead (docs/OPEN-QUESTIONS.md #62).
+   */
+  it('refuses a qualifying round for a field of exactly two', () => {
+    const pair = ready(2, 2);
+
+    expect(drawBlockers(pair)).toEqual(['FINAL_PHASE_REACHED']);
+    expect(drawRound(pair, draw)).toBe(pair);
+  });
+
+  /*
+   * The `while |W| > 16` of §5, as a refusal: a round dealt at sixteen would
+   * take the field to eight and the `Achtelfinale` the room was promised would
+   * never be played.
+   */
+  it('refuses another elimination round once the final phase size is reached', () => {
+    const closed = closeRound(decideEverything(drawRound(ready(32, 4), draw)));
+    const eliminating: Tournament = { ...closed, phase: 'ELIMINATION' };
+
+    expect(activeGroups(eliminating)).toHaveLength(16);
+    expect(drawBlockers(eliminating)).toEqual(['FINAL_PHASE_REACHED']);
+    expect(drawRound(eliminating, draw)).toBe(eliminating);
+  });
+});
+
+/*
+ * docs/TOURNAMENT-RULES.md §4 fallback 1: *Freilose vergeben* records a debt,
+ * and §5 says the **next draw** settles it. The arithmetic is worth its own
+ * cases because getting it wrong is invisible until the bracket is built: a
+ * field of 13 short of 16 owes three `Freilose`, and a draw that handed out
+ * only the one an odd count earns would produce 7 winners where the bracket
+ * needs 8.
+ */
+describe('Freilose owed by the repechage fallback', () => {
+  /** A tournament in `ELIMINATION` with `active` groups and `owed` byes due. */
+  function owing(active: number, target: number): Tournament {
+    const base = ready(active, 4, { phase: 'ELIMINATION' });
+    return {
+      ...base,
+      // A qualifying round of `active` matches, closed: that is the `|W|` the
+      // repechage worked from, and nobody accepted a place.
+      rounds: [
+        {
+          id: roundIdSchema.parse('rnd_1'),
+          index: 1,
+          kind: 'QUALIFYING',
+          label: 'Runde 1',
+          state: 'CLOSED',
+          matches: base.groups.map((entry, index) => ({
+            id: matchIdSchema.parse(`mt_${String(index + 1)}`),
+            tableId: null,
+            a: entry.id,
+            b: null,
+            winnerId: entry.id,
+            status: 'DONE' as const,
+          })),
+        },
+      ],
+      repechage: { target, pool: [], draws: [], fallbackUsed: 'BYES' },
+    };
+  }
+
+  it('counts what the fallback still owes the next draw', () => {
+    expect(byesOwed(owing(20, 32))).toBe(12);
+    expect(fieldSize(owing(20, 32))).toBe(32);
+  });
+
+  it('deals every owed Freilos in the round that settles the debt', () => {
+    // Twenty standing short of thirty-two: twelve places became `Freilose`.
+    const round = openRound(drawRound(owing(20, 32), draw));
+
+    // 32 places: four real pairs and twelve byes.
+    expect(round.matches).toHaveLength(16);
+    expect(round.matches.filter((entry) => entry.b === null)).toHaveLength(12);
+    // The byes are the back of the shuffle, where §3 already puts the one an
+    // odd count earns.
+    expect(round.matches.slice(0, 4).every((entry) => entry.b !== null)).toBe(true);
+  });
+
+  /*
+   * A target that is a power of two always leaves an even remainder, so this
+   * branch is only reachable from a file repaired by hand (docs/FILE-FORMAT.md
+   * §Encoding invites exactly that). What matters is that the round is still
+   * sound: everybody in it once, nobody dropped, which is what §3's own
+   * odd-count rule guarantees on top of the debt.
+   */
+  it('still deals a sound round when a repaired file names an impossible target', () => {
+    const before = owing(21, 31);
+    const round = openRound(drawRound(before, draw));
+
+    expect(round.matches).toHaveLength(16);
+    // Ten owed plus the one the odd remainder earns.
+    expect(round.matches.filter((entry) => entry.b === null)).toHaveLength(11);
+    expect(sorted(drawnGroups(round))).toEqual(sorted(before.groups.map((entry) => entry.id)));
+  });
+
+  it('never hands the same Freilos out twice', () => {
+    const settled = drawRound(owing(20, 32), draw);
+
+    expect(byesOwed(settled)).toBe(0);
+  });
+
+  it('owes nothing when the host did not take that fallback', () => {
+    const reopened: Tournament = {
+      ...owing(20, 32),
+      repechage: { target: 32, pool: [], draws: [], fallbackUsed: null },
+    };
+
+    expect(byesOwed(reopened)).toBe(0);
+    expect(byesOwed(ready(8, 2))).toBe(0);
   });
 });
 

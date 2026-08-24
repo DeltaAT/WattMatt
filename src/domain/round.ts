@@ -1,5 +1,5 @@
 import { queuedMatches, roundOutcome } from '@/domain/draw';
-import type { GroupId } from '@/domain/ids';
+import type { GroupId, RoundId } from '@/domain/ids';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Match, Round, Table, Tournament } from '@/domain/types';
 
@@ -160,6 +160,46 @@ export function roundSummary(round: Round): RoundSummary {
     losers,
     repechage: repechageOutlook(round),
   };
+}
+
+/**
+ * One round of the history the host browses (issue #22).
+ *
+ * The round itself plus what it produced, so the panel does not have to know
+ * that winners are read off the matches rather than off `group.status` — which
+ * matters exactly here, because the repechage puts losers back to `ACTIVE` and
+ * a history that asked the groups would show a round nobody lost.
+ */
+export interface RoundRecord {
+  round: Round;
+  summary: RoundSummary;
+}
+
+/**
+ * Every round that has been drawn, oldest first (issue #22).
+ *
+ * Chronological, which is the order they were played and the order the file
+ * stores them in; a panel that wants the newest at the top reverses it, because
+ * that is a decision about a screen rather than about the tournament.
+ *
+ * The open round is included. The host browsing back through the evening is
+ * looking for "what happened in Runde 2", and a list that dropped the round
+ * they are in would be a list with a hole at the end of it.
+ */
+export function roundHistory(tournament: Tournament): readonly RoundRecord[] {
+  return tournament.rounds.map((round) => ({ round, summary: roundSummary(round) }));
+}
+
+/**
+ * One round of the history by id, for a beamer scene pointed at a past round.
+ *
+ * Null rather than a throw for an id that names nothing: the scene descriptor
+ * lives in the store and the rounds live in the file, and an undo can take a
+ * round away while the projector is still pointed at it. The scene draws an
+ * empty board then, which is honest — that round no longer exists.
+ */
+export function roundById(tournament: Tournament, roundId: RoundId): Round | null {
+  return tournament.rounds.find((round) => round.id === roundId) ?? null;
 }
 
 /**
