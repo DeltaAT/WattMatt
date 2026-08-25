@@ -9,6 +9,7 @@ import {
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, type NameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
@@ -253,7 +254,16 @@ function Side({
         {OUTCOME_ICON[outcome]}
       </span>
 
-      <span className={`min-w-0 flex-1 truncate font-semibold ${TYPE[size]}`}>{label.text}</span>
+      {/*
+       * Stepped down towards the 32 px floor for a long name before the
+       * `truncate` beside it resorts to an ellipsis (issue #23, `@/ui/nameFit`):
+       * a forty-character team is read rather than cut off mid-word.
+       */}
+      <span
+        className={`min-w-0 flex-1 truncate font-semibold ${fitNameType(label.text, TYPE[size])}`}
+      >
+        {label.text}
+      </span>
 
       {/*
        * The result word always occupies its slot, even before there is a
@@ -360,7 +370,7 @@ function deepestSection(sections: readonly BoardSection[]): number {
   return sections.reduce((most, section) => Math.max(most, section.matches.length), 0);
 }
 
-const TYPE: Record<Density, string> = {
+const TYPE: Record<Density, NameType> = {
   roomy: 'text-beamer-h2',
   normal: 'text-beamer-h3',
   dense: 'text-beamer-body',

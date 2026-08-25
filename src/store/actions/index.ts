@@ -5,6 +5,7 @@ export {
   setOpenedDocument,
 } from '@/store/actions/document';
 export { addGroups, removeGroup, setParticipantLabel } from '@/store/actions/groups';
+export { setGroupName } from '@/store/actions/naming';
 export { advancePhase } from '@/store/actions/progression';
 export {
   acceptRepechageCandidate,

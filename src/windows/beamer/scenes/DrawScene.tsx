@@ -5,6 +5,7 @@ import type { GroupId, TableId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel, Table } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, type NameType } from '@/ui/nameFit';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -214,6 +215,7 @@ function PairingCard({
   const a = groupLabel(match.a, groups, participant);
   const b = groupLabel(match.b, groups, participant);
   const isBye = match.b === null;
+  const pairing = isBye ? a.text : `${a.text} ${de.match.versus} ${b.text}`;
   const table = match.tableId === null ? null : (tables.get(match.tableId) ?? null);
 
   return (
@@ -229,8 +231,14 @@ function PairingCard({
       data-bye={isBye}
       data-newest={isNewest}
     >
-      <span className={`font-bold ${TYPE[size]}`}>
-        {isBye ? a.text : `${a.text} ${de.match.versus} ${b.text}`}
+      {/*
+       * The whole line is measured, not the longer of the two names: a pairing
+       * is two names and the word between them, and stepping down for one of
+       * them alone would still overflow the card (issue #23, `@/ui/nameFit`).
+       * `truncate` picks up whatever is still too long for the 32 px floor.
+       */}
+      <span className={`min-w-0 truncate font-bold ${fitNameType(pairing, TYPE[size])}`}>
+        {pairing}
       </span>
 
       <span className="text-beamer-body font-semibold text-wm-text-muted" data-pairing-where="">
@@ -283,7 +291,7 @@ const PAIRING_COLUMNS: Record<Density, string> = {
   dense: 'grid-cols-3',
 };
 
-const TYPE: Record<Density, string> = {
+const TYPE: Record<Density, NameType> = {
   roomy: 'text-beamer-h2',
   normal: 'text-beamer-h3',
   dense: 'text-beamer-body',

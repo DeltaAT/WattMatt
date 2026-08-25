@@ -104,6 +104,13 @@ all. Anything that goes below 32 px is a scene showing more than it was designed
 the host's call to make; it is never the app quietly deciding what the room does not need to
 see.
 
+**A long name steps down before it is cut.** A participant's name is drawn at the step its card
+offers, dropped one or two steps towards the 32 px floor when the line cannot hold it, and only
+then truncated with an ellipsis (`fitNameType` in `@/ui/nameFit`, issue #23). The 40-character
+limit on a name is chosen to be exactly what one card line holds at the floor, so a name a host
+can type is always read whole; the ellipsis is there for the longer one a hand-repaired file can
+carry. This is per *name* and composes with the per-*scene* scaling above.
+
 ### Host type scale
 
 `12 / 14 / 16 / 20 / 24 / 32 px`. Body is 14 px, labels 12 px uppercase with `.04em` tracking.

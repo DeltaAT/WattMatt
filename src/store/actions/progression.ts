@@ -80,6 +80,27 @@ function describe(step: phase.PhaseStep, after: Tournament): CommitOptions {
   };
 }
 
+/**
+ * The picture the step puts on the projector, for the two phases that have one
+ * the moment they begin.
+ *
+ * The `Hoffnungsrunde` because the phase change *is* the pot being shuffled and
+ * the two must never be observable apart (docs/OPEN-QUESTIONS.md #54).
+ * `NAMING` for the opposite reason: nothing is about to happen out there for
+ * several minutes, and whatever was on the wall — the round board of a round
+ * that is over, the field of participants the host is now half-renaming — would
+ * either go stale or show the room a list filling up one name at a time
+ * (issue #23, docs/TOURNAMENT-RULES.md §6). The holding scene says what is
+ * happening instead.
+ *
+ * Every other step leaves the projector where the host put it. A scene staged
+ * by hand is the host's decision and outranks the phase (golden rule 3) — and
+ * these two are staged *by* the step rather than against it, so an undo takes
+ * the picture back with the phase.
+ */
 function picture(after: Tournament): { scene?: BeamerScene } {
-  return after.phase === 'REPECHAGE' ? { scene: { id: 'REPECHAGE' } } : {};
+  if (after.phase === 'REPECHAGE') {
+    return { scene: { id: 'REPECHAGE' } };
+  }
+  return after.phase === 'NAMING' ? { scene: { id: 'NAMING' } } : {};
 }

@@ -192,6 +192,26 @@ describe('the beamer scene surface', () => {
     });
   });
 
+  /*
+   * The holding picture of issue #23. Staged whenever the host is entering
+   * names, and it is the projector's protection against a list filling up one
+   * name at a time in front of the room.
+   */
+  it('draws the naming holding picture rather than a placeholder', () => {
+    const markup = renderToStaticMarkup(
+      <BeamerScenePlaceholder
+        scene={{ id: 'NAMING' }}
+        tournament={EMPTY_TOURNAMENT}
+        settled
+        delivery="catchUp"
+      />,
+    );
+
+    expect(markup).toContain('data-scene="NAMING"');
+    expect(markup).not.toContain(de.beamer.scenePending);
+    expect(markup).toContain(de.beamer.naming.title);
+  });
+
   it('marks a caught-up scene as settled so it is not animated in', () => {
     const settled = renderToStaticMarkup(
       <BeamerScenePlaceholder

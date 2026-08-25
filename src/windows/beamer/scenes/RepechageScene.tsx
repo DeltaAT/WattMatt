@@ -3,6 +3,7 @@ import type { PotStatus } from '@/domain/repechage';
 import type { RepechageSnapshot, TournamentSnapshot } from '@/domain/snapshot';
 import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
@@ -193,7 +194,12 @@ function PotCard({
       <span className="wm-beamer-label text-beamer-body text-wm-text-muted" data-pot-label="">
         {de.beamer.repechage.status[status]}
       </span>
-      <span className="truncate text-beamer-h3 font-bold">{name}</span>
+      {/*
+       * Stepped down to the 32 px floor for a long name before the ellipsis
+       * (issue #23, `@/ui/nameFit`). This is the card the room is reading out
+       * loud, so it is the last place a name should end mid-word.
+       */}
+      <span className={`truncate font-bold ${fitNameType(name, 'text-beamer-h3')}`}>{name}</span>
     </li>
   );
 }
