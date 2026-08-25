@@ -4,6 +4,7 @@ import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
+import { NamingPanel } from '@/windows/host/NamingPanel';
 import { PhasePanel } from '@/windows/host/PhasePanel';
 import { PreStartPanel } from '@/windows/host/PreStartPanel';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
@@ -18,6 +19,7 @@ import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
+import { useNaming } from '@/windows/host/useNaming';
 import { usePhase } from '@/windows/host/usePhase';
 import { usePreStart } from '@/windows/host/usePreStart';
 import { useRepechage } from '@/windows/host/useRepechage';
@@ -51,6 +53,7 @@ export function HostWindow() {
   const preStart = usePreStart();
   const round = useRound();
   const repechage = useRepechage();
+  const naming = useNaming();
   const phase = usePhase();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
@@ -179,6 +182,22 @@ export function HostWindow() {
                 onDecline={repechage.decline}
                 onFallback={repechage.useFallback}
                 onShowOnBeamer={repechage.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              Under the round and the `Hoffnungsrunde`, because it is what
+              follows them in the evening, and above the history because the
+              host is typing into it right now (issue #23). Absent until the
+              field has fallen to `settings.namingAt`, which is most of the
+              tournament (docs/OPEN-QUESTIONS.md #63).
+            */}
+            {naming.isActive ? (
+              <NamingPanel
+                state={naming.state}
+                participant={naming.participant}
+                onRename={naming.rename}
+                onShowOnBeamer={naming.showOnBeamer}
               />
             ) : null}
 

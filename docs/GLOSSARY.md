@@ -31,6 +31,8 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Elimination rounds (the phase) | Ausscheidungsrunden | Plural where the host reads their current position (issue #22) |
 | Phase panel | Turnierverlauf | Where the tournament stands, and the one control that moves it on |
 | Round history | Rundenverlauf | Every round of the evening, browsable and projectable |
+| Naming panel | Namenserfassung | Where the host types a name for every remaining participant (issue #23) |
+| Participant name | Name | Entered from the naming phase on; the number stays beside it (rules §0, §6) |
 | Round of 16 | Achtelfinale |
 | Quarter-final | Viertelfinale |
 | Semi-final | Halbfinale |

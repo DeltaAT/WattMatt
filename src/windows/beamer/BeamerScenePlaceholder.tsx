@@ -5,6 +5,7 @@ import { de } from '@/i18n';
 import {
   DrawScene,
   GroupOverviewScene,
+  NamingScene,
   RepechageScene,
   RoundBoardScene,
   TableOverviewScene,
@@ -17,9 +18,9 @@ import { useSkipKey } from '@/windows/beamer/useSkipKey';
  * Draws whichever scene the host has staged.
  *
  * Issue #5 owns the channel, not the pictures. `TABLE_OVERVIEW` (#13),
- * `GROUP_OVERVIEW` (#14), `DRAW` (#18), `ROUND_BOARD` (#19) and `REPECHAGE`
- * (#21) are drawn for real; `BRACKET` and `CEREMONY` land with issues #25 and
- * #27, and until then render a placeholder — deliberately a real render of the
+ * `GROUP_OVERVIEW` (#14), `DRAW` (#18), `ROUND_BOARD` (#19), `REPECHAGE` (#21)
+ * and `NAMING` (#23) are drawn for real; `BRACKET` and `CEREMONY` land with
+ * issues #25 and #27, and until then render a placeholder — deliberately a real render of the
  * *current* scene rather than a blank, so the channel is visibly working end to
  * end.
  *
@@ -73,6 +74,16 @@ export function BeamerScenePlaceholder({
 
   if (scene.id === 'TABLE_OVERVIEW') {
     return <TableOverviewScene tournament={tournament} settled={settled} />;
+  }
+
+  if (scene.id === 'NAMING') {
+    /*
+     * The holding picture of issue #23. It draws from the snapshot like every
+     * other scene, and needs no guard against it: what it shows is the
+     * tournament's name and how many are through, and neither can disagree with
+     * a descriptor that names nothing.
+     */
+    return <NamingScene tournament={tournament} settled={settled} />;
   }
 
   if (scene.id === 'ROUND_BOARD') {

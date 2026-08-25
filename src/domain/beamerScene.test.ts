@@ -15,6 +15,7 @@ describe('the beamer scene contract', () => {
       { id: 'DRAW', roundId: round('r1') },
       { id: 'ROUND_BOARD', roundId: round('r1') },
       { id: 'REPECHAGE' },
+      { id: 'NAMING' },
       { id: 'BRACKET' },
       { id: 'CEREMONY' },
     ];

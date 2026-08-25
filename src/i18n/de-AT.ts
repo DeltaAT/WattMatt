@@ -123,6 +123,16 @@ export const deAT = {
        */
       phaseAdvanced: (params: { phase: string }) => `Phase gewechselt: ${params.phase}`,
 
+      /**
+       * The naming phase (issue #23). Both name the participant by number,
+       * because the number is what the host is looking at while they type and
+       * the name on the button may be the very one that is about to disappear.
+       */
+      groupNamed: (params: { participant: string; name: string }) =>
+        `Name erfasst: ${params.participant} — ${params.name}`,
+      groupRenamed: (params: { participant: string; name: string }) =>
+        `Name geändert: ${params.participant} — ${params.name}`,
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',
@@ -315,6 +325,60 @@ export const deAT = {
       `${params.winner} schlägt ${params.loser}`,
     byePairing: (params: { participant: string }) => `${params.participant} — Freilos`,
     undecided: (params: { a: string; b: string }) => `${params.a} gegen ${params.b} — offen`,
+  },
+
+  /**
+   * The naming phase (issue #23, docs/TOURNAMENT-RULES.md §6).
+   *
+   * The host types sixteen names with a room waiting, so the copy is built for
+   * somebody who is looking at their keyboard: the labels are short, the
+   * progress line is a single sentence they can catch out of the corner of an
+   * eye, and every warning says whether it is a warning or a refusal — a
+   * duplicate name is allowed, an empty one is not, and the difference has to be
+   * readable at a glance.
+   */
+  naming: {
+    label: 'Namen',
+    sectionLabel: 'Namenserfassung',
+
+    /**
+     * What the phase is for, above the list. Said once, because the host reads
+     * it the first time and never again.
+     */
+    intro:
+      'Ab jetzt treten die Verbliebenen unter ihrem Namen an. Die Nummer bleibt als Kennung daneben stehen.',
+    /** Under the list: the one thing that makes 16 names bearable. */
+    keyboardHint: 'Mit der Tabulatortaste geht es ins nächste Feld.',
+
+    /** On each row. The number is spelt out, so a screen reader has the row. */
+    nameLabel: (params: { participant: string }) => `Name für ${params.participant}`,
+    placeholder: 'Name eingeben',
+
+    /** The counter the issue asks for, word for word. */
+    progress: (params: { named: number; total: number }) =>
+      `${params.named} von ${params.total} Namen erfasst`,
+    /**
+     * The gate in front of the Turnierbaum, said while the host can still do
+     * something about it rather than as a greyed-out button afterwards (§6).
+     */
+    missing: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Name fehlt', 'Namen fehlen')} noch. Der Turnierbaum kann erst ausgelost werden, wenn alle Namen erfasst sind.`,
+    complete: 'Alle Namen sind erfasst. Der Turnierbaum kann ausgelost werden.',
+
+    /**
+     * Duplicates are allowed and the copy says so in the same breath: two
+     * teams may genuinely share a name, and a host who reads only the first
+     * half of the warning goes looking for a mistake that is not there (§6).
+     */
+    duplicate: 'Dieser Name kommt mehrfach vor. Das ist erlaubt.',
+    duplicateCount: (params: { n: number }) =>
+      `${pluralizeDeAT(params.n, 'Name kommt', 'Namen kommen')} mehrfach vor. Das ist erlaubt.`,
+
+    /** Why a field refused what was typed into it. */
+    tooLong: (params: { n: number }) => `Höchstens ${params.n} Zeichen.`,
+    empty: 'Ein Name darf nicht leer sein.',
+
+    showOnBeamer: 'Wartebild auf den Beamer',
   },
 
   bracket: {
@@ -881,6 +945,23 @@ export const deAT = {
         `${pluralizeDeAT(params.n, 'Freilos', 'Freilose')} in der nächsten Runde`,
       /** Nobody lost, so there is nobody to draw — a field that should skip. */
       empty: 'Es steht niemand im Topf.',
+    },
+
+    /**
+     * The `NAMING` scene: a holding picture while the host types (issue #23).
+     *
+     * Deliberately says nothing about the names. The host is entering sixteen of
+     * them one at a time, and a wall that filled up as they typed would show the
+     * room a half-finished list, every typo on the way to being corrected, and
+     * the order the host happened to work in. So the projector says what is
+     * happening and how long it is — one idea per screen (docs/STYLEGUIDE.md §3)
+     * — and the field of participants returns for the `Turnierbaum`.
+     */
+    naming: {
+      title: 'Gleich geht es weiter',
+      notice: 'Die Finalphase wird vorbereitet.',
+      /** How many are through, which is the one number the room can be told. */
+      field: (params: { participants: string }) => `${params.participants} in der Finalphase`,
     },
 
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */

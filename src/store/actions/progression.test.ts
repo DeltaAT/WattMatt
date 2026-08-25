@@ -116,6 +116,32 @@ describe('advancePhase', () => {
     expect(open(store).log.at(-1)?.payload).toMatchObject({ to: 'REPECHAGE' });
   });
 
+  /*
+   * The opposite reason to the `Hoffnungsrunde`'s: nothing is about to happen
+   * out there for several minutes, and whatever was on the wall would either go
+   * stale or — for the field of participants — fill up one name at a time while
+   * the host types (issue #23, docs/TOURNAMENT-RULES.md §6).
+   */
+  it('stages the holding picture with the step into the naming phase', () => {
+    // 16 leaves 8 standing, a power of two, so the final phase is next.
+    const store = ready(qualified(16));
+
+    advancePhase(store);
+
+    expect(open(store).phase).toBe('NAMING');
+    expect(store.getState().scene).toEqual({ id: 'NAMING' });
+  });
+
+  it('takes the holding picture back off with an undo of the step', () => {
+    const store = ready(qualified(16));
+
+    advancePhase(store);
+    expect(store.undo()).toBe(true);
+
+    expect(open(store).phase).toBe('QUALIFYING');
+    expect(store.getState().scene).toEqual(INITIAL_TOURNAMENT_STATE.scene);
+  });
+
   it('leaves the projector alone for every other step', () => {
     const store = ready(qualified(64));
 

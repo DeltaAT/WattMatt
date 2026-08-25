@@ -186,12 +186,18 @@ type BeamerScene =
   | { id: 'DRAW'; roundId: RoundId }
   | { id: 'ROUND_BOARD'; roundId: RoundId }
   | { id: 'REPECHAGE' }
+  | { id: 'NAMING' }
   | { id: 'BRACKET' }
   | { id: 'CEREMONY' };
 ```
 
 `REPECHAGE` deliberately carries no round: the phase is not one, and everything it shows lives
 in `tournament.repechage` (docs/OPEN-QUESTIONS.md #59).
+
+`NAMING` is a holding picture and shows **no names** — the host is entering them one field at a
+time behind it, and a wall that followed along would put a half-filled field in front of the
+audience (issue #23, docs/TOURNAMENT-RULES.md §6). It is staged by the step into the naming
+phase, so the projector is protected without the host having to think about it.
 
 `autoFollow` (default on) makes the scene follow the tournament phase. The host can turn it
 off and drive the beamer manually at any moment — see issue *Beamer control center*. Staging a

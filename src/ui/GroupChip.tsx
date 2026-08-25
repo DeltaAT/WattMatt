@@ -1,5 +1,6 @@
 import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, type NameType } from '@/ui/nameFit';
 
 import type { ReactNode } from 'react';
 
@@ -56,7 +57,9 @@ export function GroupChip({
       </span>
 
       {group.name === null ? null : (
-        <span className={`min-w-0 flex-1 truncate ${NAME_TYPE[scale]}`}>{group.name}</span>
+        <span className={`min-w-0 flex-1 truncate ${nameType(group.name, scale)}`}>
+          {group.name}
+        </span>
       )}
 
       {isEliminated ? (
@@ -101,3 +104,23 @@ const NAME_TYPE: Record<ChipScale, string> = {
   beamerNormal: 'text-beamer-body',
   beamerDense: 'text-beamer-body',
 };
+
+/**
+ * The step a name on a *beamer* chip is drawn at, before the ellipsis
+ * (`@/ui/nameFit`).
+ *
+ * Separate from `NAME_TYPE` above, which is also the eliminated word's step and
+ * is a plain class either way. The host chip is left out of the strategy: its
+ * scale is not a beamer step, it is 12 px whatever the name says, and the host
+ * grid scrolls where a scene cannot.
+ */
+const BEAMER_NAME_TYPE: Record<Exclude<ChipScale, 'host'>, NameType> = {
+  beamerRoomy: 'text-beamer-h3',
+  beamerNormal: 'text-beamer-body',
+  beamerDense: 'text-beamer-body',
+};
+
+/** The class the name itself gets: stepped down on the projector, plain on the host. */
+function nameType(name: string, scale: ChipScale): string {
+  return scale === 'host' ? NAME_TYPE.host : fitNameType(name, BEAMER_NAME_TYPE[scale]);
+}

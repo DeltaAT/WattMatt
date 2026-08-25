@@ -67,6 +67,17 @@ export {
 } from '@/domain/ids';
 export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
 export {
+  isNamingComplete,
+  isNamingOpen,
+  isValidGroupName,
+  MAX_GROUP_NAME_LENGTH,
+  namingState,
+  normalizeGroupName,
+  setGroupName,
+  type NamingEntry,
+  type NamingState,
+} from '@/domain/naming';
+export {
   advancePhase,
   canAdvancePhase,
   carriedField,

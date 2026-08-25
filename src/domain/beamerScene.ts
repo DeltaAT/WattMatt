@@ -28,6 +28,18 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
    * guard the other two use could never match.
    */
   z.object({ id: z.literal('REPECHAGE') }),
+  /*
+   * The holding picture the room is shown while the host enters names
+   * (issue #23, docs/TOURNAMENT-RULES.md §6).
+   *
+   * A scene of its own rather than `IDLE`, because it is not idleness: the
+   * evening is between two things the audience has been watching, and the wall
+   * has to say so. It carries nothing — what it draws is the tournament's name
+   * and how many are through, both of which the snapshot already holds — and
+   * deliberately not the names themselves, which are half-entered for the whole
+   * of this phase.
+   */
+  z.object({ id: z.literal('NAMING') }),
   z.object({ id: z.literal('BRACKET') }),
   z.object({ id: z.literal('CEREMONY') }),
 ]);

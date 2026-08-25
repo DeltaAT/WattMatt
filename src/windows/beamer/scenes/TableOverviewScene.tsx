@@ -3,6 +3,7 @@ import type { TournamentSnapshot } from '@/domain/snapshot';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, type NameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
@@ -89,6 +90,7 @@ function TableCard({
   size: Density;
 }) {
   const { table } = slot;
+  const pairing = pairingText(slot, groups, participant);
 
   return (
     <li
@@ -99,8 +101,13 @@ function TableCard({
       data-table-status={table.status}
     >
       <span className={`wm-display shrink-0 font-bold ${TYPE[size]}`}>{table.label}</span>
-      <span className={`min-w-0 flex-1 truncate font-semibold ${TYPE[size]}`}>
-        {pairingText(slot, groups, participant)}
+      {/*
+       * The pairing steps down for a long name before the `truncate` cuts it
+       * (issue #23, `@/ui/nameFit`). The table's own label does not: it is
+       * short by construction and is what somebody scans the wall for.
+       */}
+      <span className={`min-w-0 flex-1 truncate font-semibold ${fitNameType(pairing, TYPE[size])}`}>
+        {pairing}
       </span>
     </li>
   );
@@ -132,7 +139,7 @@ function density(count: number): Density {
   return count <= 16 ? 'normal' : 'dense';
 }
 
-const TYPE: Record<Density, string> = {
+const TYPE: Record<Density, NameType> = {
   roomy: 'text-beamer-h2',
   normal: 'text-beamer-h3',
   dense: 'text-beamer-body',
