@@ -133,6 +133,14 @@ export const deAT = {
       groupRenamed: (params: { participant: string; name: string }) =>
         `Name geändert: ${params.participant} — ${params.name}`,
 
+      /**
+       * The `Turnierbaum` (issue #24). Only the draw needs a label of its own:
+       * a result in the bracket is a result like any other and reads back to
+       * the host as `matchWinnerSet`, in the same words it does in every round
+       * before it.
+       */
+      bracketDrawn: 'Turnierbaum ausgelost',
+
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
       autoFollowOff: 'Beamer wird von Hand gesteuert',

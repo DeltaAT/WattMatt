@@ -317,7 +317,8 @@ Both halves are wired: issue #9 calls `generateSeed()` when a tournament is crea
 `drawRound` in `src/domain/draw.ts` (issue #16) writes `rng.cursor` back into `rngCursor` in
 the same object that carries the pairings it produced. `startRepechage` and the
 `REOPEN_DECLINED` fallback in `src/domain/repechage.ts` (issue #20) do the same for the shuffle
-that fills the pot. All three *default* their generator to
+that fills the pot, and `drawBracket` in `src/domain/bracket.ts` (issue #24) for the one shuffle
+the whole `Turnierbaum` comes out of. All four *default* their generator to
 `createRng(rngSeed, rngCursor)`, so a caller cannot draw from the wrong position by mistake —
 which is the failure mode docs/OPEN-QUESTIONS.md #23 exists to prevent: a tournament reopened
 after a crash would otherwise restart the stream and re-deal pairings the room has watched.

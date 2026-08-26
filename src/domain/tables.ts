@@ -1,6 +1,6 @@
 import { tableIdSchema, type MatchId, type TableId } from '@/domain/ids';
-import { allMatches } from '@/domain/lookup';
-import type { Match, Table, Timestamp, Tournament } from '@/domain/types';
+import { allMatches, bracketMatches } from '@/domain/lookup';
+import type { BracketNode, Match, Table, Timestamp, Tournament } from '@/domain/types';
 
 /**
  * The table lifecycle (issue #13, docs/TOURNAMENT-RULES.md §0 and §3).
@@ -280,11 +280,12 @@ export function occupyTable(
     currentMatchId: matchId,
     occupiedSince: at,
   }));
-  return mapMatch(withTable, matchId, (match) => ({
+  const withMatch = mapMatch(withTable, matchId, (match) => ({
     ...match,
     tableId,
     status: match.winnerId === null ? 'RUNNING' : match.status,
   }));
+  return seatBracketNode(withMatch, matchId, tableId);
 }
 
 /**
@@ -347,7 +348,13 @@ export function matchesOnTables(tournament: Tournament): readonly Match[] {
       table.currentMatchId === null ? [] : [table.currentMatchId],
     ),
   );
-  return allMatches(tournament).filter((match) => occupied.has(match.id));
+  // The bracket's nodes are matches too — they carry a pairing, a winner and a
+  // table (`@/domain/lookup`, docs/OPEN-QUESTIONS.md #68) — and leaving them
+  // out would empty this board for the whole of the final phase, which is the
+  // half of the evening the room cares about most.
+  return [...allMatches(tournament), ...bracketMatches(tournament)].filter((match) =>
+    occupied.has(match.id),
+  );
 }
 
 /**
@@ -424,6 +431,38 @@ function mapMatch(
 }
 
 /**
+ * The bracket's half of `mapMatch`: where a node is being played.
+ *
+ * A bracket match is a node rather than an entry in `rounds`
+ * (`@/domain/bracket`, docs/OPEN-QUESTIONS.md #68), so every transition that
+ * moves a match on or off a table has to reach both. Written here rather than
+ * in the bracket module for the reason `occupyTable` exists at all: the table
+ * and the thing sitting on it are only ever written in one place, or a table
+ * taken out of service mid-`Halbfinale` would free the table and leave the node
+ * pointing at it.
+ *
+ * Ids from the two prefixes cannot collide, so exactly one of the two ever
+ * matches and calling both is safe.
+ */
+function seatBracketNode(tournament: Tournament, id: MatchId, tableId: TableId | null): Tournament {
+  const bracket = tournament.bracket;
+  if (bracket === null) {
+    return tournament;
+  }
+
+  let touched = false;
+  const nodes = bracket.nodes.map((node: BracketNode) => {
+    if (node.id !== (id as string) || node.tableId === tableId) {
+      return node;
+    }
+    touched = true;
+    return { ...node, tableId };
+  });
+
+  return touched ? { ...tournament, bracket: { ...bracket, nodes } } : tournament;
+}
+
+/**
  * Empties a table, doing whatever the host chose with the match on it.
  *
  * Returns null when the answer cannot be carried out — a move to a table that
@@ -460,7 +499,7 @@ function clearTable(
       ...match,
       tableId: disposition.toTableId,
     }));
-    return releaseTable(reassigned, table.id);
+    return releaseTable(seatBracketNode(reassigned, matchId, disposition.toTableId), table.id);
   }
 
   const requeued = mapMatch(tournament, matchId, (match) => ({
@@ -470,5 +509,5 @@ function clearTable(
     // reason it is still on a table is that nobody has closed it yet.
     status: match.winnerId === null ? 'WAITING_FOR_TABLE' : match.status,
   }));
-  return releaseTable(requeued, table.id);
+  return releaseTable(seatBracketNode(requeued, matchId, null), table.id);
 }

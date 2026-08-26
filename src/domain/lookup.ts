@@ -1,4 +1,13 @@
-import type { BracketNode, Group, Match, Round, Table, Tournament } from '@/domain/types';
+import { matchIdSchema } from '@/domain/ids';
+import type {
+  BracketNode,
+  Group,
+  Match,
+  MatchStatus,
+  Round,
+  Table,
+  Tournament,
+} from '@/domain/types';
 
 /**
  * Entities are reached by ID, never by array position (CLAUDE.md §6).
@@ -58,4 +67,54 @@ export function indexTournament(tournament: Tournament): TournamentIndex {
     matches: indexById(allMatches(tournament)),
     bracketNodes: indexById(tournament.bracket?.nodes ?? []),
   };
+}
+
+/**
+ * A bracket node as the `Partie` it is, or null while it has no pairing yet.
+ *
+ * The bracket phase appends nothing to `rounds` — a node carries its own
+ * pairing, winner and table (`@/domain/bracket`, docs/OPEN-QUESTIONS.md #68) —
+ * so this is how everything that reasons about *matches* keeps working while
+ * the final phase is being played: the occupancy board, the snapshot the
+ * beamer's `TABLE_OVERVIEW` draws, the elapsed time on a table.
+ *
+ * The id is the node's own, which is what `table.currentMatchId` names while a
+ * `Halbfinale` is on that table. Node ids (`bn_3`) and match ids (`mt_3`) come
+ * from two prefixes and cannot collide, so one id still names one thing.
+ *
+ * A node with one empty slot is a `Freilos` and becomes a match with `b: null`,
+ * exactly as the draw engine writes one (docs/TOURNAMENT-RULES.md §3).
+ */
+export function bracketNodeMatch(node: BracketNode): Match | null {
+  if (node.slotA === null) {
+    return null;
+  }
+  return {
+    id: matchIdSchema.parse(node.id),
+    tableId: node.tableId,
+    a: node.slotA,
+    b: node.slotB,
+    winnerId: node.winnerId,
+    status: bracketNodeStatus(node),
+  };
+}
+
+/** Every bracket match of the tournament, in node order. */
+export function bracketMatches(tournament: Tournament): readonly Match[] {
+  return (tournament.bracket?.nodes ?? []).flatMap((node) => bracketNodeMatch(node) ?? []);
+}
+
+/**
+ * A node's status in the words `matchStatusSchema` uses.
+ *
+ * Derived rather than stored, because a node has no status field to drift: it
+ * is decided, or it is on a table, or it is waiting for one. `READY` is not
+ * produced here for the same reason the draw engine never produces it — a match
+ * starts when it is put on a table (docs/OPEN-QUESTIONS.md #48).
+ */
+function bracketNodeStatus(node: BracketNode): MatchStatus {
+  if (node.winnerId !== null) {
+    return 'DONE';
+  }
+  return node.tableId === null ? 'WAITING_FOR_TABLE' : 'RUNNING';
 }
