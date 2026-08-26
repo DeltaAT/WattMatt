@@ -40,8 +40,18 @@ The exact, normative algorithm lives in [`docs/TOURNAMENT-RULES.md`](docs/TOURNA
 | [docs/MOTION.md](docs/MOTION.md) | Animation principles and scene choreography |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | German ↔ English domain terminology |
 | [docs/PACKAGING.md](docs/PACKAGING.md) | Installer, portable build, WebView2, SmartScreen, releases |
+| [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) | Shot list for the host manual, and how to capture it |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones and issue map |
 | [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | Decisions that still need the product owner |
+
+The one exception to "documentation is English" is the manual the tournament host reads. It is
+German because its readers are hosts, not developers (CLAUDE.md §1).
+
+| Dokument | Zweck |
+| --- | --- |
+| [docs/HANDBUCH.de.md](docs/HANDBUCH.de.md) | Handbuch für die Turnierleitung |
+| [docs/CHECKLISTE.de.md](docs/CHECKLISTE.de.md) | Checkliste vor der Veranstaltung, eine Seite |
+| [docs/PROBLEME.de.md](docs/PROBLEME.de.md) | Wenn etwas nicht funktioniert, eine Seite |
 
 ## Quick start
 
@@ -83,7 +93,7 @@ src/
   i18n/          de-AT.ts — every visible string
 src-tauri/       Rust: file I/O, window & monitor management, logging
 tools/           build-time tooling: the lint rules, the icon generator, packaging
-docs/            documentation (English)
+docs/            documentation (English; *.de.md is the German host manual)
 ```
 
 ## Licence
