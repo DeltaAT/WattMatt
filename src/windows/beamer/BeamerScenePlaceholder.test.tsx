@@ -23,7 +23,9 @@ describe('the beamer scene surface', () => {
       />,
     );
     expect(markup).toContain('data-scene="CEREMONY"');
-    expect(markup).toContain(de.beamer.scenePending);
+    // CEREMONY is implemented and should render its title rather than the generic pending text
+    expect(markup).not.toContain(de.beamer.scenePending);
+    expect(markup).toContain(de.beamer.ceremony.title);
   });
 
   /*

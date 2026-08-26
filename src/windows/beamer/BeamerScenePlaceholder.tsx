@@ -11,6 +11,7 @@ import {
   RepechageScene,
   RoundBoardScene,
   TableOverviewScene,
+  CeremonySceneHost,
 } from '@/windows/beamer/scenes';
 import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
@@ -153,10 +154,21 @@ export function BeamerScenePlaceholder({
     );
   }
 
+  if (scene.id === 'CEREMONY') {
+    return (
+      <CeremonySceneHost
+        tournament={tournament}
+        settled={settled}
+        delivery={delivery}
+        sceneReveal={(scene as { reveal?: unknown }).reveal}
+      />
+    );
+  }
+
   return (
     <div
       className="beamer-safe-area flex h-full flex-col items-center justify-center gap-4"
-      data-scene={scene.id}
+      data-scene={(scene as { id: string }).id}
       data-settled={settled}
     >
       <h1 className="wm-display text-beamer-h1">{de.beamer.idleTitle}</h1>

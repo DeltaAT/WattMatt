@@ -59,6 +59,9 @@ export function BracketPanel({
   onAssign,
   onFinish,
   onFocus,
+  phase,
+  onShowCeremony,
+  onShowCeremonyStep,
 }: {
   bracket: Bracket | null;
   columns: readonly BracketColumn[];
@@ -82,6 +85,10 @@ export function BracketPanel({
   onAssign: (nodeId: BracketNodeId, tableId: TableId) => void;
   onFinish: () => void;
   onFocus: (round: BracketRound | null) => void;
+  // New: phase and ceremony controls
+  phase?: string;
+  onShowCeremony?: (mode: 'AUTO' | 'STEP', step?: number) => void;
+  onShowCeremonyStep?: (next: number) => void;
 }) {
   /**
    * The one decided match the host has opened up for correction.
@@ -121,6 +128,24 @@ export function BracketPanel({
         )}
 
         <div className="ml-auto flex flex-wrap gap-2">
+          {phase === 'CEREMONY' ? (
+            <>
+              <button
+                type="button"
+                className={SECONDARY_CLASS}
+                onClick={() => onShowCeremony?.('AUTO', 0)}
+              >
+                {de.bracket.showCeremony}
+              </button>
+              <button
+                type="button"
+                className={SECONDARY_CLASS}
+                onClick={() => onShowCeremonyStep?.(0)}
+              >
+                {de.bracket.revealNext}
+              </button>
+            </>
+          ) : null}
           {bracket === null ? (
             <button
               type="button"
@@ -344,3 +369,6 @@ function blockerText(blocker: BracketBlocker, field: number): string {
 /** 40 px, the floor docs/STYLEGUIDE.md §3 sets for a primary host control. */
 const PRIMARY_CLASS =
   'h-10 rounded-wm-md border border-wm-accent bg-wm-accent-soft px-3 text-host-sm font-medium text-wm-text transition-colors duration-[--dur-fast] ease-out hover:bg-wm-surface-hover disabled:opacity-40';
+
+const SECONDARY_CLASS =
+  'h-8 rounded-wm-sm border px-2 text-host-xs transition-colors duration-[--dur-fast] ease-out border-wm-border-strong bg-wm-bg-elevated text-wm-text-muted hover:bg-wm-surface-hover';

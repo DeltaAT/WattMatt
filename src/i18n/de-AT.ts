@@ -1063,6 +1063,16 @@ export const deAT = {
       field: (params: { participants: string }) => `${params.participants} in der Finalphase`,
     },
 
+    ceremony: {
+      title: 'Siegerehrung',
+      notice: 'Die Teilnehmenden treten aufs Podest.',
+      positions: {
+        gold: 'Gold',
+        silver: 'Silber',
+        bronze: 'Bronze',
+      },
+    },
+
     /**
      * The `BRACKET` scene: the `Turnierbaum` on the wall (issue #25,
      * docs/MOTION.md §4.4).

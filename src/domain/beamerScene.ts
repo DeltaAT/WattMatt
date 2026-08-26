@@ -54,7 +54,12 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
    * and nothing had to learn a new field to keep saying so.
    */
   z.object({ id: z.literal('BRACKET'), focus: bracketRoundSchema.optional() }),
-  z.object({ id: z.literal('CEREMONY') }),
+  z.object({
+    id: z.literal('CEREMONY'),
+    reveal: z
+      .object({ mode: z.enum(['AUTO', 'STEP']), step: z.number().int().nonnegative() })
+      .optional(),
+  }),
 ]);
 
 export type BeamerScene = z.infer<typeof beamerSceneSchema>;
