@@ -697,3 +697,46 @@
   opacity: 1;
   animation: wm-blackout var(--dur-blackout) var(--ease-out) both;
 }
+
+/* ---------------------------------------------------------------------------
+ * The error toast (issue #30, docs/MOTION.md §5 "Toast").
+ *
+ * Enters from the edge it sits on, so the movement reads as arriving rather
+ * than as the layout shifting. `--dur-base` is the host's dialog duration and
+ * sits inside §2's 150–250 ms band for occasional host motion.
+ *
+ * There is deliberately no exit animation. A toast is dismissed by the host,
+ * who has already read it and is on their way back to the round; holding the
+ * card on screen for another fifth of a second to animate it away is a fifth of
+ * a second in which the button behind it is not clickable.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-toast-enter {
+  from {
+    opacity: 0;
+    /* The stack is in the bottom-right corner, so the card comes in from the
+     * right — §5's "from the same edge it exits to". */
+    transform: translateX(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@utility wm-toast {
+  animation: wm-toast-enter var(--dur-base) var(--ease-out) both;
+}
+
+/* docs/MOTION.md §6, the same answer the draw's reveal gives: the message still
+ * has to arrive, so the fade stays and the travel goes. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-toast-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { describeError, logEvent } from '@/platform/log';
 import {
   heartbeatSchema,
   HEARTBEAT_EVENT,
@@ -58,7 +59,15 @@ export function startHeartbeat(
 
   const send = () => {
     transport.emit(HEARTBEAT_EVENT, { beat: beat++ }).catch((error: unknown) => {
-      console.error('beamer heartbeat failed', error);
+      // Logged from the beamer window, where nothing reads the toast strip
+      // (issue #30). The host learns about it the way it is meant to: the beats
+      // stop arriving and the liveness light goes out.
+      logEvent({
+        level: 'warn',
+        event: 'beamer.heartbeat-failed',
+        message: 'a heartbeat could not be sent to the host',
+        detail: describeError(error),
+      });
     });
   };
 

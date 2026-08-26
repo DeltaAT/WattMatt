@@ -11,7 +11,7 @@ laptop, continue. No hidden state outside the file except UI preferences.
 | Backups | next to the file: `name.wattmatt.bak1` … `.bak3` |
 | Pre-migration copy | next to the file: `name.wattmatt.v1.bak` (rule 7) |
 | Session marker | `%APPDATA%/WattMatt/session.json` (never tournament data) |
-| Logs | `%APPDATA%/WattMatt/logs/` |
+| Logs | `%APPDATA%/WattMatt/logs/wattmatt.log`, rotated at 1 MiB into `wattmatt.1.log` … `.5.log` (never tournament data) |
 | UI preferences | `%APPDATA%/WattMatt/settings.json` (never tournament data) |
 
 The host may save anywhere via *Speichern unter…*.

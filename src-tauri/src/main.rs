@@ -32,9 +32,24 @@ fn main() {
             session::dismiss_recovery,
             session::mark_session_document,
             session::end_session,
+            logging::log_event,
+            logging::log_directory,
+            logging::open_log_directory,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // First, so that everything below it is on the record. A panic is
+            // the one failure no error boundary and no `catch` can reach, and
+            // the release profile aborts on it — without the hook there would
+            // be nothing at all to read afterwards (src-tauri/src/logging.rs).
+            logging::install_panic_hook();
+            logging::record(
+                logging::LogLevel::Info,
+                "app.started",
+                concat!("WattMatt ", env!("CARGO_PKG_VERSION")),
+                None,
+            );
 
             // Before anything else: the marker the last run left behind is the
             // only evidence that it crashed, and it is overwritten by this
@@ -47,7 +62,12 @@ fn main() {
             // screen WattMatt has to stay fully usable, and that is the same
             // code path as "monitor enumeration went wrong".
             if let Err(error) = windows::open_beamer_on_startup(&handle) {
-                eprintln!("beamer startup placement failed: {error}");
+                logging::record(
+                    logging::LogLevel::Warn,
+                    "beamer.startup-placement-failed",
+                    "the beamer could not be placed at startup",
+                    Some(&error.to_string()),
+                );
             }
 
             windows::watch_monitors(handle);

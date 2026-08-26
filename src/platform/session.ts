@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { invokeCommand, isTauriRuntime } from '@/platform/tauri';
+import { reportProblem } from '@/store/problems';
 
 /**
  * The session-marker half of the Rust boundary (src-tauri/src/session.rs).
@@ -88,7 +89,9 @@ async function call(command: string, args?: Record<string, unknown>): Promise<vo
     await invokeCommand(command, z.null().or(z.undefined()), args);
   } catch (error) {
     // Never thrown onward: none of this is worth taking the host window down
-    // for mid-event. Proper surfacing lands with issue #30.
-    console.error('session marker update failed', error);
+    // for mid-event. It is not swallowed either — a marker that stopped being
+    // written means the next crash offers no recovery, and the host has to
+    // hear that while they can still save by hand (issue #30).
+    reportProblem('sessionMarkerFailed', 'session.marker-failed', error);
   }
 }

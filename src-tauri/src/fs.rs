@@ -69,7 +69,11 @@ pub struct FileError {
 }
 
 impl FileError {
-    fn new(kind: FileErrorKind, detail: impl Into<String>, path: Option<&Path>) -> Self {
+    /// `pub(crate)` for `logging.rs`: the log folder lives under the same
+    /// `%APPDATA%\WattMatt` root as the library and fails in the same ways, so
+    /// it reports through the same typed error rather than inventing a second
+    /// one for the frontend to translate (docs/ARCHITECTURE.md §6).
+    pub(crate) fn new(kind: FileErrorKind, detail: impl Into<String>, path: Option<&Path>) -> Self {
         Self {
             kind,
             detail: detail.into(),
@@ -77,7 +81,7 @@ impl FileError {
         }
     }
 
-    fn from_io(error: &std::io::Error, path: &Path) -> Self {
+    pub(crate) fn from_io(error: &std::io::Error, path: &Path) -> Self {
         let kind = match error.kind() {
             std::io::ErrorKind::NotFound => FileErrorKind::NotFound,
             std::io::ErrorKind::PermissionDenied => FileErrorKind::PermissionDenied,

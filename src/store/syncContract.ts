@@ -32,6 +32,18 @@ export const SCENE_EVENT = 'beamer:scene';
 /** Beamer → host. Proof the projector window is still alive. */
 export const HEARTBEAT_EVENT = 'beamer:heartbeat';
 
+/**
+ * Beamer → host. "I could not draw what you staged" (issue #30).
+ *
+ * The second and last message the projector is allowed to send, and it changes
+ * nothing: it carries no tournament data and the host reacts by showing a
+ * German toast, not by touching state. Golden rule 4 survives intact — the
+ * beamer still cannot alter the tournament, it can only say that it failed to
+ * *render* it, which is the one thing the host cannot see from the laptop when
+ * the projector is across the room.
+ */
+export const BEAMER_PROBLEM_EVENT = 'beamer:problem';
+
 export const sceneMessageSchema = z.object({
   revision: z.number().int().nonnegative(),
   scene: beamerSceneSchema,
@@ -42,6 +54,15 @@ export const sceneMessageSchema = z.object({
 });
 
 export type SceneMessage = z.infer<typeof sceneMessageSchema>;
+
+export const beamerProblemSchema = z.object({
+  /** The scene that failed, as an id — for the log, not for the host's copy. */
+  scene: z.string(),
+  /** The exception, for `%APPDATA%/WattMatt/logs/`. Never shown to anybody. */
+  detail: z.string(),
+});
+
+export type BeamerProblem = z.infer<typeof beamerProblemSchema>;
 
 export const heartbeatSchema = z.object({
   /** Counts beats within one beamer session; resets when the window restarts. */

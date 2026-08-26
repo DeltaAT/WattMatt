@@ -1,8 +1,10 @@
+export { BeamerHoldingScene } from '@/windows/beamer/BeamerHoldingScene';
 export { BeamerPicture } from '@/windows/beamer/BeamerPicture';
 export { BeamerScenePlaceholder } from '@/windows/beamer/BeamerScenePlaceholder';
 export { BeamerSurface } from '@/windows/beamer/BeamerSurface';
 export { BeamerWindow } from '@/windows/beamer/BeamerWindow';
 export { LetterboxStage } from '@/windows/beamer/LetterboxStage';
+export { SafeBeamerPicture } from '@/windows/beamer/SafeBeamerPicture';
 export { useBeamerView } from '@/windows/beamer/useBeamerView';
 export { useBlackout } from '@/windows/beamer/useBlackout';
 export { useRepechageBeat } from '@/windows/beamer/useRepechageBeat';

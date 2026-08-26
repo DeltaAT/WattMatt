@@ -6,8 +6,9 @@ import { midTournament } from '@/domain/testFixtures';
 import { setOpenedDocument } from '@/store/actions/document';
 import { blackout, setFrozen, showScene, skipAnimation } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
+import { problemStore } from '@/store/problems';
 import { startBeamerSync, startHostSync } from '@/store/sync';
-import { requestSnapshotSchema } from '@/store/syncContract';
+import { BEAMER_PROBLEM_EVENT, requestSnapshotSchema } from '@/store/syncContract';
 import { createLinkedTransports } from '@/store/testTransport';
 import { createTournamentStore } from '@/store/tournamentStore';
 
@@ -429,5 +430,63 @@ describe('the host skip', () => {
     // re-entered the draw here would replay the sequence it was told to end.
     expect(beamer.getState().snapshot.scene).toEqual(staged);
     expect(beamer.getState().animate).toBe(false);
+  });
+});
+
+/**
+ * Issue #30's other half of *a deliberately thrown error in a beamer scene
+ * shows a neutral picture on the projector and a clear message on the host
+ * screen*: the message crossing the window boundary.
+ *
+ * The projector may be behind the host, or in another room. Without this the
+ * one person who can stage a different scene is the last to hear that the
+ * current one cannot be drawn — which, in practice, is never.
+ */
+describe('the beamer reporting that it could not draw a scene', () => {
+  afterEach(() => {
+    problemStore.dismissAll();
+  });
+
+  it('raises a toast on the host screen', async () => {
+    const { transports } = await wiredPair();
+
+    await transports.beamer.emit(BEAMER_PROBLEM_EVENT, {
+      scene: 'BRACKET',
+      detail: 'TypeError: cannot read properties of undefined',
+    });
+
+    expect(problemStore.getState().map((problem) => problem.kind)).toEqual(['beamerScene']);
+  });
+
+  /*
+   * Golden rule 4 is enforced by the contract having no message that could do
+   * this, not by the beamer choosing not to send one. The report is the second
+   * and last thing the projector may say, and it says nothing about the
+   * tournament.
+   */
+  it('changes nothing about the tournament', async () => {
+    const { transports, host } = await wiredPair();
+    const before = host.getState();
+
+    await transports.beamer.emit(BEAMER_PROBLEM_EVENT, { scene: 'BRACKET', detail: 'boom' });
+
+    expect(host.getState()).toBe(before);
+  });
+
+  it('ignores a report that does not match the contract', async () => {
+    const { transports } = await wiredPair();
+
+    await transports.beamer.emit(BEAMER_PROBLEM_EVENT, { scene: 17 });
+
+    expect(problemStore.getState()).toEqual([]);
+  });
+
+  it('stops listening once the channel is stopped', async () => {
+    const { transports, hostSync } = await wiredPair();
+    await hostSync.stop();
+
+    await transports.beamer.emit(BEAMER_PROBLEM_EVENT, { scene: 'BRACKET', detail: 'boom' });
+
+    expect(problemStore.getState()).toEqual([]);
   });
 });

@@ -64,7 +64,9 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Finished | beendet |
 | Undo | Rückgängig |
 | Redo | Wiederholen |
-| Action log | Verlauf |
+| Action log | Verlauf | The tournament's own history, the one undo walks |
+| Log (diagnostic) | Protokoll | The rolling file at `%APPDATA%/WattMatt/logs/` (issue #30) — never `Verlauf` |
+| To open the log | Protokoll öffnen | Opens the folder, not one file: the rotated archives sit beside the live one |
 | Blackout | Bildschirm aus |
 | To release a blackout | Bildschirm wieder an |
 | Freeze (hold the beamer picture) | Bild einfrieren | The host works ahead while the room keeps the last picture (issue #28) |

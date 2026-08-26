@@ -1,6 +1,7 @@
-import { BeamerPicture } from '@/windows/beamer/BeamerPicture';
 import { BeamerSurface } from '@/windows/beamer/BeamerSurface';
 import { FpsOverlay } from '@/windows/beamer/FpsOverlay';
+import { reportSceneFailure } from '@/windows/beamer/reportSceneFailure';
+import { SafeBeamerPicture } from '@/windows/beamer/SafeBeamerPicture';
 import { useBeamerView } from '@/windows/beamer/useBeamerView';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
 
@@ -20,7 +21,13 @@ export function BeamerWindow() {
       placement={status.placement}
       performanceMode={view.snapshot.tournament.performanceMode}
     >
-      <BeamerPicture view={view} />
+      {/*
+        Never a bare `BeamerPicture`: a scene that throws must land on the
+        holding picture inside this surface, not take the window with it
+        (issue #30). The host is told over the channel — the projector is
+        usually behind them, and this is the one failure they cannot see.
+      */}
+      <SafeBeamerPicture view={view} onSceneFailure={reportSceneFailure} />
 
       {/*
         The frame-rate readout of docs/MOTION.md §6, dev builds only (issue

@@ -1,8 +1,11 @@
 import { snapshotSchema, type Snapshot } from '@/domain/snapshot';
 import type { BeamerStore } from '@/store/beamerStore';
+import { reportProblem } from '@/store/problems';
 import {
+  beamerProblemSchema,
   requestSnapshotSchema,
   sceneMessageSchema,
+  BEAMER_PROBLEM_EVENT,
   REQUEST_SNAPSHOT_EVENT,
   SCENE_EVENT,
   SNAPSHOT_EVENT,
@@ -21,8 +24,9 @@ import { toSnapshot, type TournamentStore } from '@/store/tournamentStore';
 
 function reportSyncFailure(error: unknown): void {
   // Never throws onward: a failed broadcast must not take down the host window
-  // mid-event. Proper surfacing lands with issue #30.
-  console.error('beamer sync failed', error);
+  // mid-event. It is not swallowed either — a projector that stopped being
+  // sent pictures looks exactly like one that is up to date (issue #30).
+  reportProblem('beamerSync', 'beamer.sync-failed', error);
 }
 
 export interface HostSync {
@@ -125,11 +129,26 @@ export async function startHostSync(
     () => broadcast('catchUp'),
   );
 
+  /*
+    The projector saying it could not draw what it was staged (issue #30).
+    Nothing about the tournament changes — this only reaches the host's toast
+    strip, because the host is the one who can stage something else, and with
+    the projector behind them they have no other way of finding out.
+  */
+  const unlistenProblem = await transport.listen(
+    BEAMER_PROBLEM_EVENT,
+    beamerProblemSchema,
+    ({ scene, detail }) => {
+      reportProblem('beamerScene', 'beamer.scene-failed-remote', `${scene}: ${detail}`);
+    },
+  );
+
   return {
     broadcast,
     stop: async () => {
       unsubscribeStore();
       unlistenRequest();
+      unlistenProblem();
     },
   };
 }

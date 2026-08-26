@@ -6,6 +6,7 @@ import {
   UNKNOWN_BEAMER_STATUS,
   type BeamerStatus,
 } from '@/platform/beamerWindow';
+import { reportProblem } from '@/store/problems';
 
 /**
  * The current beamer placement, kept live.
@@ -33,7 +34,7 @@ export function useBeamerStatus(): BeamerStatus {
 
     // A failure here is not fatal: the panel keeps showing "closed", which is
     // the reading that makes the host look at the projector rather than trust
-    // it. Proper error surfacing lands with issue #30.
+    // it, and the failure itself becomes a toast (issue #30).
     fetchBeamerStatus().then(apply, reportBeamerFailure);
     const subscription = onBeamerStatus(apply);
 
@@ -47,5 +48,5 @@ export function useBeamerStatus(): BeamerStatus {
 }
 
 function reportBeamerFailure(error: unknown): void {
-  console.error('beamer status unavailable', error);
+  reportProblem('beamerStatus', 'beamer.status-unavailable', error);
 }
