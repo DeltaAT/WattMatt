@@ -487,7 +487,11 @@ export async function runDryRun(spec: DryRunSpec, hooks: DryRunHooks = {}): Prom
       throw new DryRunStuck(read().phase, 'no round is open');
     }
     const byes = opened.matches.filter((match) => match.b === null).length;
-    let queued = queuedMatches(opened).length;
+    // Measured at the draw and not again, because that is when it is deepest:
+    // the queue only ever drains from here. It could grow if a table were taken
+    // out of service with a match on it and the host requeued it (issue #13),
+    // and a scenario that does that will have to measure this per wave.
+    const queued = queuedMatches(opened).length;
     peakQueue = Math.max(peakQueue, queued);
 
     for (let wave = 0; wave < MAX_STEPS; wave += 1) {
@@ -516,7 +520,6 @@ export async function runDryRun(spec: DryRunSpec, hooks: DryRunHooks = {}): Prom
           `match ${match.id}`,
         );
       }
-      queued = Math.max(queued, queuedMatches(round).length);
     }
     throw new DryRunStuck(read().phase, 'the round would not finish');
   };
