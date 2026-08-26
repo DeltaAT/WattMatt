@@ -1,3 +1,4 @@
+export { drawBracket, setBracketWinner, startNextBracketMatch } from '@/store/actions/bracket';
 export {
   closeDocument,
   setDocumentSaved,

@@ -7,6 +7,25 @@ export {
   type BeamerSceneId,
 } from '@/domain/beamerScene';
 export {
+  assignBracketNode,
+  assignNextBracketNode,
+  bracketBlockers,
+  bracketRoundForSize,
+  buildBracket,
+  canDrawBracket,
+  drawBracket,
+  finalStandings,
+  isBracketComplete,
+  nextQueuedBracketNode,
+  queuedBracketNodes,
+  setBracketWinner,
+  type AssignBracketNodeInput,
+  type BracketBlocker,
+  type BuildBracketInput,
+  type DrawBracketInput,
+  type FinalStandings,
+} from '@/domain/bracket';
+export {
   assignMatch,
   assignNextQueuedMatch,
   byesOwed,
@@ -65,7 +84,14 @@ export {
   type TableId,
   type TournamentId,
 } from '@/domain/ids';
-export { allMatches, indexById, indexTournament, type TournamentIndex } from '@/domain/lookup';
+export {
+  allMatches,
+  bracketMatches,
+  bracketNodeMatch,
+  indexById,
+  indexTournament,
+  type TournamentIndex,
+} from '@/domain/lookup';
 export {
   isNamingComplete,
   isNamingOpen,
