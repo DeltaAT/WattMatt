@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { createHostTransport, mergeTransports } from '@/platform/windowSync';
 import { HEARTBEAT_INTERVAL_MS, isBeamerAlive, watchHeartbeat } from '@/store/heartbeat';
+import { reportProblem } from '@/store/problems';
 import { beamerPreviewStore, previewChannel, tournamentStore } from '@/store/session';
 import { startBeamerSync, startHostSync } from '@/store/sync';
 
@@ -49,5 +50,5 @@ export function useBeamerAlive(): boolean {
 }
 
 function reportHostSyncFailure(error: unknown): void {
-  console.error('host sync failed', error);
+  reportProblem('beamerSync', 'host.sync-failed', error);
 }

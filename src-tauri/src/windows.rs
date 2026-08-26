@@ -37,35 +37,52 @@ const PREVIEW_SIZE: LogicalSize<f64> = LogicalSize {
     height: 540.0,
 };
 
-/// Errors crossing the IPC boundary. The frontend maps the variant to a German
-/// string; the message itself is for the log (docs/ARCHITECTURE.md §6).
-#[derive(Debug)]
-pub enum WindowError {
+/// What went wrong, in a form the frontend can switch on.
+///
+/// The variant is the contract, exactly as it is for `FileErrorKind`
+/// (docs/ARCHITECTURE.md §6): the German sentence is picked from `de-AT.ts` by
+/// variant, and the `detail` beside it carries a message from the window system
+/// in whatever language Windows is installed in — for the log, never for the
+/// host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowErrorKind {
+    /// The host window is gone. Nothing can be placed relative to it.
     NoHostWindow,
-    Tauri(String),
+    /// The window system refused: a monitor that vanished mid-call, a WebView
+    /// that would not build.
+    WindowSystem,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowError {
+    pub kind: WindowErrorKind,
+    /// For `%APPDATA%/WattMatt/logs/` (issue #30), never for the host.
+    pub detail: String,
+}
+
+impl WindowError {
+    pub fn no_host_window() -> Self {
+        Self {
+            kind: WindowErrorKind::NoHostWindow,
+            detail: "no window labelled host".to_owned(),
+        }
+    }
 }
 
 impl std::fmt::Display for WindowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoHostWindow => write!(f, "no-host-window"),
-            Self::Tauri(message) => write!(f, "tauri: {message}"),
-        }
+        write!(f, "{:?}: {}", self.kind, self.detail)
     }
 }
 
 impl From<tauri::Error> for WindowError {
     fn from(error: tauri::Error) -> Self {
-        Self::Tauri(error.to_string())
-    }
-}
-
-impl Serialize for WindowError {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        Self {
+            kind: WindowErrorKind::WindowSystem,
+            detail: error.to_string(),
+        }
     }
 }
 
@@ -406,7 +423,7 @@ pub fn close_beamer<R: Runtime>(app: AppHandle<R>) -> Result<BeamerStatus> {
 pub fn focus_host<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     let window = app
         .get_webview_window(HOST_LABEL)
-        .ok_or(WindowError::NoHostWindow)?;
+        .ok_or_else(WindowError::no_host_window)?;
     window.unminimize()?;
     window.set_focus()?;
     Ok(())

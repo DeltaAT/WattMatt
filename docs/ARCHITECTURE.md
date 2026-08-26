@@ -263,6 +263,7 @@ src/
     sync.ts            snapshot broadcast, wired once per window
     syncContract.ts    the typed event contract between the windows
     heartbeat.ts       beamer liveness
+    problems.ts        what failed and has not been dismissed; one toast per kind
     session.ts         the one store each window owns
     persistence.ts     new / open / save / save-as, and the one autosave write
     persistenceRuntime.ts  the real file and dialog dependencies, wired once
@@ -274,6 +275,8 @@ src/
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
     tournamentFile.ts  read/write/list files, and the native open/save dialogs
     clock.ts           the wall clock the domain is not allowed to read
+    log.ts             the rolling log's frontend half, and "Protokoll öffnen"
+    globalErrors.ts    the two window listeners React's boundaries cannot replace
     session.ts         the crash marker: what the last run left behind
     seed.ts            crypto.getRandomValues — the one non-deterministic step
     id.ts              the tournament id, from the same entropy source
@@ -292,7 +295,12 @@ src/
     beamer/useSkipSignal.ts  the host's Space, arriving from the other window
     beamer/BeamerPicture.tsx the stage contents, shared with the host's preview
     beamer/reducedMotion.ts  whether this window was asked to hold still
+    host/ProblemToasts.tsx    the German toast stack, over the panels
+    host/HostErrorFallback.tsx what fills the window when its tree could not be drawn
+    beamer/SafeBeamerPicture.tsx the boundary both windows draw the picture through
+    beamer/BeamerHoldingScene.tsx the neutral picture a failed scene is replaced by
   ui/                  Button, Card, GroupChip, TableChip, motion presets
+    ErrorBoundary.tsx  the one class component: catch, report, draw something else
   i18n/
     de-AT.ts           every user-visible string, one typed tree
     t.ts               `t('round.title', { n: 2 })`, typed dotted-path keys
@@ -304,7 +312,7 @@ src-tauri/src/
   session.rs           the session marker that turns a crash into a recovery offer
   windows.rs           monitor enumeration, window placement
   power.rs             holds off sleep and the screensaver during an event
-  logging.rs           rolling log file
+  logging.rs           rolling log file, rotation, the panic hook
 ```
 
 ## 5. Determinism and testability
@@ -396,3 +404,65 @@ charge them a redundant write and a backup rotation for it every time.
 - Any unexpected exception shows a non-blocking German error toast **and** writes to the
   rolling log at `%APPDATA%/WattMatt/logs/`. The tournament never silently continues in a
   broken state, but it also never hard-crashes to a white screen during an event.
+
+### Never a white screen
+
+Issue #30 makes that last sentence structural rather than aspirational. Four nets, in the
+order a failure meets them.
+
+**A boundary per window** (`ui/ErrorBoundary.tsx`). React unmounts the whole tree on an
+exception thrown while rendering, which on the projector is a white rectangle in front of
+the audience. The two fallbacks are deliberately different: the host gets a screen with
+*Erneut versuchen* and *Protokoll öffnen*, the beamer gets `--wm-bg` and nothing else.
+A message on the projector is a message the host spends the next ten minutes being asked
+about; a black screen is indistinguishable from the blackout the room has already seen.
+
+**A boundary per scene** (`beamer/SafeBeamerPicture.tsx`), inside `BeamerSurface` so the
+letterbox, the background and the hidden cursor survive the scene that failed. It is
+reset by the *staged scene id*, not by every snapshot: a scene that threw will throw again
+on the next commit, so retrying on each one would flicker and fill the log. Staging
+anything else — the blackout is one key away — makes the projector try again.
+
+**Two window listeners** (`platform/globalErrors.ts`). A boundary sees renders. It does
+not see a click handler that threw, an unawaited promise or a timer callback, and during
+an event those are most of the code that runs. Without them the host presses a button,
+nothing happens, and nothing anywhere says why.
+
+**The panic hook** (`src-tauri/src/logging.rs`). The release profile aborts on panic, so
+the hook is the only record that will ever exist of the one failure no `catch` can reach.
+
+### Being told, and telling the log
+
+Everything above reports through one call, `reportProblem(kind, event, cause)`
+(`store/problems.ts`). It writes the log entry *and* raises the toast, in that order,
+because a site that did one and forgot the other is indistinguishable from one that worked.
+
+The `kind` is the contract, exactly as `FileErrorKind` is: the German sentence is picked
+from `de.error.*` by kind, and the exception itself — English, technical, written for
+whoever reads the log — never reaches the screen. Repeats of a kind collapse into one card
+with a count, which is not cosmetic: a broken sync fails on *every* commit, and a host who
+has dismissed forty identical toasts during one round will dismiss the forty-first without
+reading it.
+
+File failures do **not** come through here. They have their own strip at the top of the
+host window (`FileNotice`) because they carry a way out — a backup to open, a place to
+save — and because an autosave that has stopped working must not be dismissible at all.
+
+The projector reports over the channel (`BEAMER_PROBLEM_EVENT`). It is the second and last
+message the beamer may send and it carries no tournament data: golden rule 4 survives
+because the contract has no message that could break it, not because the beamer chooses
+not to send one. Without it the one person who can stage a different scene is the last to
+find out that the current one cannot be drawn — which, with the projector behind them, is
+never.
+
+### The log itself
+
+`%APPDATA%/WattMatt/logs/wattmatt.log`, plain text, one line per entry, rotated at 1 MiB
+with five archives behind it. Plain text because of who reads it: the host, afterwards, in
+Notepad. Newlines inside a message are folded, so a JavaScript stack stays one entry and
+one `findstr` hit rather than a dozen.
+
+Timestamps are UTC, because Rust has no timezone database without a dependency and a log
+that guessed at local time would be wrong for half the year. The frontend writes one
+`session.started` entry carrying the host's own clock and offset, which is what makes the
+UTC stamps translatable back to the evening the host remembers.

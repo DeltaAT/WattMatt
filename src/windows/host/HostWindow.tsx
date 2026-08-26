@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { setSleepInhibited } from '@/platform/beamerWindow';
+import { reportProblem } from '@/store/problems';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { BracketPanel } from '@/windows/host/BracketPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
@@ -8,6 +9,7 @@ import { GroupPanel } from '@/windows/host/GroupPanel';
 import { NamingPanel } from '@/windows/host/NamingPanel';
 import { PhasePanel } from '@/windows/host/PhasePanel';
 import { PreStartPanel } from '@/windows/host/PreStartPanel';
+import { ProblemToasts } from '@/windows/host/ProblemToasts';
 import { RecoveryNotice } from '@/windows/host/RecoveryNotice';
 import { RepechagePanel } from '@/windows/host/RepechagePanel';
 import { RoundHistoryPanel } from '@/windows/host/RoundHistoryPanel';
@@ -27,6 +29,7 @@ import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useNaming } from '@/windows/host/useNaming';
 import { usePhase } from '@/windows/host/usePhase';
 import { usePreStart } from '@/windows/host/usePreStart';
+import { useProblems } from '@/windows/host/useProblems';
 import { useRepechage } from '@/windows/host/useRepechage';
 import { useRound } from '@/windows/host/useRound';
 import { useSettings } from '@/windows/host/useSettings';
@@ -62,6 +65,9 @@ export function HostWindow() {
   const bracket = useBracket();
   const phase = usePhase();
   const beamer = useBeamerControl();
+  // Everything that failed and is not about a file (issue #30). File outcomes
+  // have their own strip above, because they carry a way out.
+  const problems = useProblems();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const openShortcuts = useCallback(() => setShowShortcuts(true), []);
   // Only while something is actually running: a setup screen has no stopwatch
@@ -328,9 +334,20 @@ export function HostWindow() {
         beamerAlive={beamerAlive}
         control={beamer}
         onShowShortcuts={openShortcuts}
+        onOpenLog={problems.openLog}
+        logDirectory={problems.directory}
       />
 
       {showShortcuts ? <ShortcutsDialog onClose={() => setShowShortcuts(false)} /> : null}
+
+      {/*
+        Over everything, in the corner, and never in the layout: a message that
+        arrived between two rounds must not move the button the host was about
+        to press (issue #30). Outside the left column on purpose — a broken
+        beamer channel is not news about the tournament, and the host may well
+        be looking at the control column when it happens.
+      */}
+      <ProblemToasts problems={problems.problems} onDismiss={problems.dismiss} />
 
       {document.pendingIntent === null ? null : (
         <UnsavedChangesDialog onAnswer={document.answerUnsaved} />
@@ -350,9 +367,13 @@ export function HostWindow() {
  */
 function useSleepInhibitor(active: boolean): void {
   useEffect(() => {
-    setSleepInhibited(active).catch((error: unknown) =>
-      console.error('sleep inhibitor unavailable', error),
-    );
+    setSleepInhibited(active).catch((error: unknown) => {
+      // A screensaver that comes up mid-final is the audience looking at a
+      // lock screen, and it is entirely fixable — in the Windows energy
+      // options, by the host, in the twenty minutes before it happens
+      // (issue #30).
+      reportProblem('sleepInhibitFailed', 'power.sleep-inhibit-failed', error);
+    });
   }, [active]);
 
   // Releasing on unmount as well would fight React's strict-mode double-invoke

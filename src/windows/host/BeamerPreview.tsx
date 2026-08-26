@@ -2,9 +2,10 @@ import { useSyncExternalStore } from 'react';
 
 import { de } from '@/i18n';
 import type { BeamerPlacement } from '@/platform/beamerWindow';
+import { reportProblem } from '@/store/problems';
 import { beamerPreviewStore } from '@/store/session';
-import { BeamerPicture } from '@/windows/beamer/BeamerPicture';
 import { BeamerSurface } from '@/windows/beamer/BeamerSurface';
+import { SafeBeamerPicture } from '@/windows/beamer/SafeBeamerPicture';
 
 /**
  * What the audience is looking at, in the host's column
@@ -56,7 +57,26 @@ export function BeamerPreview({
           performanceMode={view.snapshot.tournament.performanceMode}
           embedded
         >
-          <BeamerPicture view={view} />
+          {/*
+            The same net the projector has, for the same reason and in the same
+            place (issue #30). The preview draws the identical tree, so a scene
+            that throws on the wall throws here too — and a thumbnail that went
+            white while the projector held a picture would be a preview the host
+            cannot trust at the moment they most need to.
+
+            Reported locally rather than over the channel: this failure happened
+            in the host window, and the message has no distance to travel.
+          */}
+          <SafeBeamerPicture
+            view={view}
+            onSceneFailure={(scene, error) =>
+              reportProblem(
+                'beamerScene',
+                'beamer.preview-scene-failed',
+                `${scene}: ${String(error)}`,
+              )
+            }
+          />
         </BeamerSurface>
 
         {/*

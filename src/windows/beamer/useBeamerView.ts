@@ -3,6 +3,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { createBeamerTransport } from '@/platform/windowSync';
 import type { BeamerViewState } from '@/store/beamerStore';
 import { startHeartbeat } from '@/store/heartbeat';
+import { reportProblem } from '@/store/problems';
 import { beamerViewStore } from '@/store/session';
 import { startBeamerSync } from '@/store/sync';
 
@@ -29,5 +30,5 @@ export function useBeamerView(): BeamerViewState {
 }
 
 function reportBeamerViewFailure(error: unknown): void {
-  console.error('beamer view sync failed', error);
+  reportProblem('beamerSync', 'beamer.view-sync-failed', error);
 }

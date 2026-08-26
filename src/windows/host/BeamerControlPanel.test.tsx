@@ -60,12 +60,15 @@ function render(
   status: Partial<BeamerStatus>,
   beamerAlive = true,
   handle: BeamerControlHandle = control(),
+  logDirectory: string | null = null,
 ): string {
   return renderToStaticMarkup(
     <BeamerControlPanel
       beamerAlive={beamerAlive}
       control={handle}
       onShowShortcuts={noop}
+      onOpenLog={noop}
+      logDirectory={logDirectory}
       status={{
         open: true,
         placement: 'projected',
@@ -237,5 +240,27 @@ describe('the two holds the host can put on the projector', () => {
 
   it('offers the shortcut overview from the panel as well as from the keyboard', () => {
     expect(render({})).toContain(de.beamerControl.shortcuts.open);
+  });
+
+  /*
+   * The log button (issue #30). It lives here rather than in the tournament
+   * shell because the log outlives the tournament: a host who has closed the
+   * file, or never opened one, still has to be able to reach it — which is
+   * exactly the state they are in when they go looking for it after the event.
+   */
+  it('offers the log, with a tournament open and without one', () => {
+    expect(render({})).toContain(de.log.open);
+  });
+
+  it('prints the folder as well, so it can be found without the button', () => {
+    const path = 'C:\\Users\\host\\AppData\\Roaming\\WattMatt\\logs';
+
+    expect(render({}, true, control(), path)).toContain(de.log.location({ path }));
+  });
+
+  /* In a plain browser there is no folder to name, and an empty line under the
+   * button would read as an answer rather than as a missing one. */
+  it('prints no folder when there is no backend to ask', () => {
+    expect(render({})).not.toContain('Ordner:');
   });
 });

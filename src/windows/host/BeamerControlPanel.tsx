@@ -10,6 +10,7 @@ import {
   type BeamerStatus,
   type MonitorInfo,
 } from '@/platform/beamerWindow';
+import { reportProblem } from '@/store/problems';
 import { BeamerPreview } from '@/windows/host/BeamerPreview';
 import type { BeamerControlHandle } from '@/windows/host/useBeamerControl';
 
@@ -44,6 +45,8 @@ export function BeamerControlPanel({
   beamerAlive,
   control,
   onShowShortcuts,
+  onOpenLog,
+  logDirectory,
 }: {
   status: BeamerStatus;
   /**
@@ -56,17 +59,28 @@ export function BeamerControlPanel({
   beamerAlive: boolean;
   control: BeamerControlHandle;
   onShowShortcuts: () => void;
+  /** Opens `%APPDATA%\WattMatt\logs` in Explorer (issue #30). */
+  onOpenLog: () => void;
+  /**
+   * Printed under the button, or `null` where there is no backend to ask.
+   *
+   * The path and not only the button: Explorer can refuse, and a host who has
+   * been told where the folder is can still get at it from the address bar.
+   */
+  logDirectory: string | null;
 }) {
   const summary = summariseBeamer(status);
   const monitors = sortMonitors(status.monitors);
 
   // Every action is fire-and-forget: Rust answers with a status event, so the
   // panel never has to guess what happened. A rejected promise means the window
-  // system refused, which issue #30 turns into a toast; swallowing it here
-  // would at worst leave the panel one event behind, which the two-second
-  // monitor poll corrects on its own.
+  // system refused, and that becomes a toast (issue #30) — a host who pressed
+  // "Beamer öffnen" and got nothing must not be left wondering whether they
+  // missed the button.
   const run = useCallback((action: () => Promise<unknown>) => {
-    action().catch((error: unknown) => console.error('beamer command failed', error));
+    action().catch((error: unknown) => {
+      reportProblem('beamerCommand', 'beamer.command-failed', error);
+    });
   }, []);
 
   return (
@@ -202,6 +216,28 @@ export function BeamerControlPanel({
         <button type="button" className={SECONDARY_CLASS} onClick={onShowShortcuts}>
           {de.beamerControl.shortcuts.open}
         </button>
+
+        {/*
+          Last in the column, under everything the host uses during the event
+          (issue #30). It is deliberately the least prominent control in the
+          window: it answers a question that is asked *after* the evening —
+          "what actually happened at 19:31?" — and nothing about it should
+          compete with the blackout for a hand reaching across the keyboard.
+
+          Here rather than in the tournament shell because the log outlives the
+          tournament: a host who closed the file, or never opened one, still has
+          to be able to reach it.
+        */}
+        <div className="flex flex-col gap-1">
+          <button type="button" className={SECONDARY_CLASS} onClick={onOpenLog}>
+            {de.log.open}
+          </button>
+          {logDirectory === null ? null : (
+            <p className="break-all text-host-xs text-wm-text-faint">
+              {de.log.location({ path: logDirectory })}
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );

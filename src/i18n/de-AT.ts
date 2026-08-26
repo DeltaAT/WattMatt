@@ -265,6 +265,63 @@ export const deAT = {
       'Auf die Turnierdatei darf nicht zugegriffen werden. Schließen Sie andere Programme, die sie geöffnet haben.',
     autosaveFailed:
       'Das Turnier wird gerade nicht automatisch gespeichert. Wählen Sie über „Speichern unter…“ einen anderen Speicherort.',
+
+    /*
+      Everything from here down is a *problem* rather than a file outcome
+      (issue #30): the sentence a toast carries, keyed on `ProblemKind` in
+      `@/store/problems`. Same rule as above — what happened, then what to do
+      about it — and never the exception's own message, which is English,
+      technical and written for whoever will read the log rather than for the
+      host standing in front of the room.
+    */
+
+    /** The catch-all: an exception nothing else was expecting. */
+    unexpected:
+      'In WattMatt ist ein unerwarteter Fehler aufgetreten. Der zuletzt gespeicherte Stand des Turniers bleibt erhalten, Einzelheiten stehen im Protokoll.',
+    /** The host window could not be drawn — shown in place of the window. */
+    hostCrashed:
+      'Die Bedienoberfläche konnte nicht gezeichnet werden. Versuchen Sie es erneut — das geöffnete Turnier bleibt dabei erhalten.',
+    beamerScene:
+      'Die Beamer-Ansicht konnte nicht gezeichnet werden. Der Beamer zeigt ein neutrales Bild, wählen Sie eine andere Beamer-Ansicht.',
+    beamerSync:
+      'Das Bild konnte nicht an den Beamer geschickt werden. Prüfen Sie rechts, ob das Beamer-Fenster noch läuft, und öffnen Sie es notfalls neu.',
+    beamerCommand:
+      'Das Beamer-Fenster hat den Befehl abgelehnt. Schließen Sie das Beamer-Fenster und öffnen Sie es erneut.',
+    beamerStatus:
+      'Die angeschlossenen Bildschirme konnten nicht abgefragt werden. Prüfen Sie die Verbindung zum Beamer und öffnen Sie das Beamer-Fenster erneut.',
+    sleepInhibitFailed:
+      'Der Energiesparmodus konnte nicht abgeschaltet werden. Stellen Sie in den Windows-Energieoptionen Bildschirm und Standby auf „Nie“.',
+    sessionMarkerFailed:
+      'Der Vermerk für die Wiederherstellung nach einem Absturz konnte nicht geschrieben werden. Speichern Sie das Turnier zwischendurch von Hand.',
+    logUnavailable:
+      'Das Protokoll konnte nicht geöffnet werden. Öffnen Sie den Ordner %APPDATA%\\WattMatt\\logs im Explorer von Hand.',
+  },
+
+  /**
+   * The diagnostic log at `%APPDATA%/WattMatt/logs/` (issue #30).
+   *
+   * `Protokoll` and not `Verlauf`: `Verlauf` is the tournament's own action log,
+   * the one undo walks (docs/GLOSSARY.md). This is the technical record of what
+   * the app did, read after the event and by somebody else.
+   */
+  log: {
+    open: 'Protokoll öffnen',
+    /** Under the button, so the folder is findable without the button. */
+    location: (params: { path: string }) => `Ordner: ${params.path}`,
+  },
+
+  /**
+   * What the host is shown when something failed that is not about a file
+   * (issue #30). File outcomes have their own strip — see `FileNotice`.
+   */
+  failure: {
+    /** The heading over a host window that could not be drawn at all. */
+    title: 'WattMatt hat einen Fehler',
+    retry: 'Erneut versuchen',
+    /** Names the toast stack for screen readers and for the tests. */
+    regionLabel: 'Meldungen',
+    /** How often the same thing has gone wrong since it was last dismissed. */
+    repeated: (params: { n: number }) => `${params.n}×`,
   },
 
   tournament: {
@@ -945,6 +1002,16 @@ export const deAT = {
      * components arrive with issues #18, #19, #25 and #27.
      */
     scenePending: 'Ansicht wird vorbereitet.',
+
+    /**
+     * The holding picture a scene that threw is replaced by (issue #30).
+     *
+     * Deliberately says nothing about a failure: fifty people are looking at
+     * it, and „Fehler“ on the projector is the picture the host spends the
+     * next ten minutes being asked about. The host screen is where the problem
+     * is reported — see `de.error.beamerScene`.
+     */
+    holdingNotice: 'Einen Moment bitte.',
 
     /**
      * The `GROUP_OVERVIEW` scene: everyone who is playing (issue #14).
