@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  activeBracketRound,
   assignBracketNode,
   assignNextBracketNode,
   bracketBlockers,
+  bracketColumns,
   bracketRoundForSize,
   buildBracket,
+  chipOrigin,
   canDrawBracket,
   drawBracket,
   finalStandings,
@@ -725,5 +728,134 @@ describe('finalStandings', () => {
     expect(finalStandings(document)?.first).toBe(semis[0]?.slotA);
     expect(finalStandings(document)?.third).toBeNull();
     expect(isBracketComplete(document)).toBe(false);
+  });
+});
+
+describe('bracketColumns', () => {
+  it('lists every round in the order the tree is drawn', () => {
+    const bracket = buildBracket(named(16), { rng: createRng('seed') });
+
+    expect(bracketColumns(bracket).map((column) => column.round)).toEqual([
+      'ROUND_OF_16',
+      'QUARTER_FINAL',
+      'SEMI_FINAL',
+      'THIRD_PLACE',
+      'FINAL',
+    ]);
+    expect(bracketColumns(bracket).map((column) => column.field)).toEqual([16, 8, 4, 2, 2]);
+  });
+
+  it('is a single Finale at a field of two (§9 case 10)', () => {
+    const bracket = buildBracket(named(2), { rng: createRng('seed') });
+
+    expect(bracketColumns(bracket)).toHaveLength(1);
+    expect(bracketColumns(bracket)[0]?.round).toBe('FINAL');
+  });
+
+  it('marks the round that can be played now, and the ones around it', () => {
+    const drawn = drawBracket(readyToDraw(8, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    const states = (document: Tournament) =>
+      Object.fromEntries(
+        bracketColumns(bracketOf(document)).map((column) => [column.round, column.state]),
+      );
+
+    expect(states(drawn)).toEqual({
+      QUARTER_FINAL: 'ACTIVE',
+      SEMI_FINAL: 'FUTURE',
+      THIRD_PLACE: 'FUTURE',
+      FINAL: 'FUTURE',
+    });
+    expect(activeBracketRound(bracketOf(drawn))).toBe('QUARTER_FINAL');
+
+    let document = drawn;
+    for (const node of nodesOf(bracketOf(document), 'QUARTER_FINAL')) {
+      document = setBracketWinner(document, node.id, node.slotA as GroupId);
+    }
+
+    expect(states(document)).toEqual({
+      QUARTER_FINAL: 'DECIDED',
+      SEMI_FINAL: 'ACTIVE',
+      THIRD_PLACE: 'FUTURE',
+      FINAL: 'FUTURE',
+    });
+    expect(activeBracketRound(bracketOf(document))).toBe('SEMI_FINAL');
+  });
+
+  /*
+   * §7 schedules the third-place match at the same time as the final, so the
+   * state is a property of a round and never of its position in the tree.
+   */
+  it('leaves the Finale and the Spiel um Platz 3 active together', () => {
+    let document = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    for (const node of nodesOf(bracketOf(document), 'SEMI_FINAL')) {
+      document = setBracketWinner(document, node.id, node.slotA as GroupId);
+    }
+
+    const columns = bracketColumns(bracketOf(document));
+
+    expect(columns.find((column) => column.round === 'FINAL')?.state).toBe('ACTIVE');
+    expect(columns.find((column) => column.round === 'THIRD_PLACE')?.state).toBe('ACTIVE');
+  });
+
+  it('has nothing active once the last match is decided', () => {
+    let document = drawBracket(readyToDraw(2, { tables: [table(1)] }), { at: FIXED_NOW });
+    const final = bracketOf(document).nodes[0];
+    document = setBracketWinner(document, final?.id as BracketNodeId, final?.slotA as GroupId);
+
+    expect(activeBracketRound(bracketOf(document))).toBeNull();
+    expect(bracketColumns(bracketOf(document))[0]?.state).toBe('DECIDED');
+  });
+});
+
+describe('chipOrigin', () => {
+  /** A bracket of four with both semi-finals decided. */
+  function semisDecided(): Tournament {
+    let document = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    for (const node of nodesOf(bracketOf(document), 'SEMI_FINAL')) {
+      document = setBracketWinner(document, node.id, node.slotA as GroupId);
+    }
+    return document;
+  }
+
+  it('names the chip a winner travelled from', () => {
+    const bracket = bracketOf(semisDecided());
+
+    expect(chipOrigin(bracket, 'bn_4' as BracketNodeId, 'A')).toEqual({
+      nodeId: 'bn_1',
+      side: 'A',
+    });
+    expect(chipOrigin(bracket, 'bn_4' as BracketNodeId, 'B')).toEqual({
+      nodeId: 'bn_2',
+      side: 'A',
+    });
+  });
+
+  /*
+   * The chip that travels into the third-place match is the semi-final's
+   * *loser* — the whole rule of §7, and the one case a scene that assumed
+   * winners would get wrong in front of the room.
+   */
+  it('names the loser for the Spiel um Platz 3', () => {
+    const bracket = bracketOf(semisDecided());
+
+    expect(chipOrigin(bracket, 'bn_3' as BracketNodeId, 'A')).toEqual({
+      nodeId: 'bn_1',
+      side: 'B',
+    });
+    expect(chipOrigin(bracket, 'bn_3' as BracketNodeId, 'B')).toEqual({
+      nodeId: 'bn_2',
+      side: 'B',
+    });
+  });
+
+  it('is null for the first round, an empty slot and an unknown node', () => {
+    const drawn = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    const bracket = bracketOf(drawn);
+
+    // Drawn into their slots rather than sent there by a match.
+    expect(chipOrigin(bracket, 'bn_1' as BracketNodeId, 'A')).toBeNull();
+    // Nobody has been sent up yet.
+    expect(chipOrigin(bracket, 'bn_4' as BracketNodeId, 'A')).toBeNull();
+    expect(chipOrigin(bracket, 'bn_99' as BracketNodeId, 'A')).toBeNull();
   });
 });

@@ -446,3 +446,107 @@
   letter-spacing: var(--wm-tracking-label);
   text-transform: uppercase;
 }
+
+/* ---------------------------------------------------------------------------
+ * The Turnierbaum (issue #25, docs/MOTION.md §4.4).
+ *
+ * Three separate pieces of motion, and only one of them is here in full. The
+ * first reveal and the connectors are predetermined, so they are keyframes for
+ * the reason the draw sequence is: they run off the main thread and stay smooth
+ * while React is building the next card. The *advancement* — the winner's chip
+ * moving into the round above — cannot be a keyframe, because how far it
+ * travels is only known once both nodes have been laid out; the beamer measures
+ * it and writes the transform, and what is here is the transition it rides on
+ * (`useBracketAdvance`).
+ * ------------------------------------------------------------------------- */
+
+/* A node arriving: from the left, because that is the direction the tree is
+ * read in. `translateX(-12px)` and opacity only — nothing scales, so sixteen of
+ * them staggered across a second cost one composited layer each. */
+@keyframes wm-bracket-node {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* The connector drawing itself in, from the node towards the round above. The
+ * path declares `pathLength="100"`, so the dash is expressed in hundredths of
+ * its own length and the animation is immune to the non-uniform scaling the
+ * connector box gets. */
+@keyframes wm-bracket-connector {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility wm-bracket-node {
+  animation: wm-bracket-node var(--dur-reveal) var(--ease-dramatic) both;
+  /* Left to right, one `--stagger-wide` per node. The index is written by the
+   * scene, which knows the reading order; performance mode sets the stagger to
+   * zero and the whole tree arrives at once. */
+  animation-delay: calc(var(--stagger-wide) * var(--wm-reveal-index, 0));
+}
+
+@utility wm-bracket-connector {
+  stroke-dasharray: 100;
+  /* `--dur-reveal` rather than the 500 ms §4.4 names: every duration on the
+   * beamer resolves through a token, which is what lets performance mode halve
+   * it without this rule knowing (issue #15). The 200 ms head start is
+   * `--dur-base` for the same reason. */
+  animation: wm-bracket-connector var(--dur-reveal) var(--ease-out) both;
+  animation-delay: calc(var(--stagger-wide) * var(--wm-reveal-index, 0) + var(--dur-base));
+}
+
+/* The focus levels of §4.4: the live round at full strength, decided rounds
+ * behind it, rounds nobody has reached yet further back still. A transition
+ * rather than a keyframe, because it retriggers every time a result lands and a
+ * keyframe would restart from zero (docs/MOTION.md §3). */
+@utility wm-bracket-focus {
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+/* The chip that has just been won its way into the round above. The transform
+ * itself is inline, written from a measurement; this is only how it rides
+ * home. `--ease-dramatic` stands in for the §4.4 spring: a bounce would have to
+ * come from the Motion library, and one motion system is worth more than
+ * 0.15 of overshoot (docs/OPEN-QUESTIONS.md #70). */
+@utility wm-bracket-advance {
+  transition: transform var(--dur-reveal) var(--ease-dramatic);
+  will-change: transform;
+}
+
+/* docs/MOTION.md §6 and the issue's last acceptance criterion: with reduced
+ * motion the chips *jump* rather than fly. Meaning is carried by opacity and
+ * colour, which both stay; every movement goes. The connector is drawn whole
+ * from the first frame rather than not at all — a tree with no lines in it is a
+ * different picture, not a calmer one. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-bracket-node {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  /* Plain selectors rather than `@utility`, which Tailwind only accepts at the
+   * top level. They are emitted after the utilities above at equal specificity,
+   * so they win — the same shape the draw sequence's override uses. */
+  .wm-bracket-connector {
+    stroke-dasharray: none;
+    animation: none;
+  }
+
+  .wm-bracket-advance {
+    transition: none;
+  }
+}

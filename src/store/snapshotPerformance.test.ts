@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildBracket } from '@/domain/bracket';
 import { groupIdSchema, matchIdSchema, roundIdSchema, tableIdSchema } from '@/domain/ids';
+import { createRng } from '@/domain/rng';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { showScene } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
@@ -59,6 +61,17 @@ function fullHouse(): TournamentSnapshot {
       occupiedSince: '2026-08-23T10:00:00+02:00',
     })),
     matches,
+    // Issue #25 sends the `Turnierbaum` too, and this is the heaviest one there
+    // is: a field of 16 is the largest bracket §7 names.
+    bracket: buildBracket(
+      Array.from({ length: 16 }, (_unused, index) => ({
+        id: groupIdSchema.parse(`group-${index + 1}`),
+        number: index + 1,
+        name: `Mannschaft ${index + 1}`,
+        status: 'ACTIVE' as const,
+      })),
+      { rng: createRng('performance') },
+    ),
     // Issue #18 widened the snapshot to carry the round the matches belong to,
     // so the measured payload carries one too — 32 pairings is exactly the
     // draw size that issue names as the worst case.
@@ -118,6 +131,7 @@ describe('snapshot round-trip performance', () => {
         matches: [...tournament.matches],
         round: tournament.round,
         repechage: tournament.repechage,
+        bracket: tournament.bracket,
         history: [...tournament.history],
       };
 

@@ -6,6 +6,7 @@ import { potEntrySchema, repechagePot, repechageState } from '@/domain/repechage
 import { currentRound } from '@/domain/selectors';
 import { matchesOnTables } from '@/domain/tables';
 import {
+  bracketSchema,
   groupSchema,
   matchSchema,
   participantLabelSchema,
@@ -177,6 +178,18 @@ export const tournamentSnapshotSchema = z.object({
    * was split to avoid.
    */
   history: z.array(roundSchema),
+  /**
+   * The `Turnierbaum`, or null until it is drawn (issue #25).
+   *
+   * The real `Bracket`, not a view of one, for the reason `groups` and `tables`
+   * are the real entities: a second definition of the same tree is the kind of
+   * thing that drifts silently, and the difference would surface as a projector
+   * showing a semi-final the host has already decided. What the scene draws on
+   * top of it — the columns, which round is live, where a chip travelled from —
+   * is derived by `@/domain/bracket` on both sides, so the host panel (#26) and
+   * the wall cannot disagree about it either.
+   */
+  bracket: bracketSchema.nullable(),
 });
 
 export type TournamentSnapshot = z.infer<typeof tournamentSnapshotSchema>;
@@ -234,6 +247,8 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   repechage: null,
   // Nothing has been played, so there is nothing to look back at.
   history: [],
+  // The final phase has not been reached, which is true of most of an evening.
+  bracket: null,
 };
 
 /**
@@ -285,6 +300,11 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
     // channel is a value the sync layer serialises, and the schema's inferred
     // arrays are mutable ones.
     history: tournament.rounds.filter((candidate) => candidate.state === 'CLOSED'),
+    // Sent whole, and sent from the moment it is drawn: the `BRACKET` scene is
+    // the main picture of the entire final phase, and a beamer reopened between
+    // two semi-finals has nothing of its own to draw the tree from (golden
+    // rule 4).
+    bracket: tournament.bracket,
   };
 }
 

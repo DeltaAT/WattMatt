@@ -445,6 +445,123 @@ export function finalStandings(tournament: Tournament): FinalStandings | null {
 }
 
 /**
+ * Which side of a node a participant stands on.
+ *
+ * The tree alternates: the node at an even position of its round feeds side
+ * `A` of the node above, the odd one feeds side `B`. Exported because the
+ * beamer has to name a single slot — the chip that is about to move is one side
+ * of one node (issue #25).
+ */
+export type BracketSide = 'A' | 'B';
+
+/** How much of the room's attention a round is owed (docs/MOTION.md §4.4). */
+export type BracketColumnState =
+  /** Every match in it has been played. */
+  | 'DECIDED'
+  /** Something in it can be played right now — the round the room is watching. */
+  | 'ACTIVE'
+  /** Still waiting for the round below to send it somebody. */
+  | 'FUTURE';
+
+/** One round of the tree, as the projector draws it (issue #25). */
+export interface BracketColumn {
+  round: BracketRound;
+  /** How many participants this round starts with: 16, 8, 4, 2. */
+  field: number;
+  /** In node order, which is top to bottom on the projector. */
+  nodes: readonly BracketNode[];
+  state: BracketColumnState;
+}
+
+/**
+ * The tree by round, in the order it is played and drawn.
+ *
+ * Derived here rather than in the scene, and taking a `Bracket` rather than a
+ * `Tournament`, for the reason `occupancyBoard` gives: the beamer has no
+ * tournament — it is handed the bracket in the snapshot — and the host panel
+ * (#26) has to arrive at exactly the same columns. One function, two callers,
+ * and no way for the projector and the laptop to disagree about which round is
+ * the live one (CLAUDE.md golden rule 4).
+ *
+ * The `Spiel um Platz 3` is a column of its own, in the position the file
+ * format gives it: after the semi-finals and before the final. It is *drawn*
+ * apart from the tree — §7 calls it "a separate node under the tree" — but as
+ * far as this is concerned it is a round like any other, which keeps one rule
+ * for the focus level instead of a special case.
+ *
+ * The state is a local property of a round and never of its position, so the
+ * `Finale` and the `Spiel um Platz 3` can both be `ACTIVE` at once — which is
+ * exactly what §7 asks for, since they are played at the same time.
+ */
+export function bracketColumns(bracket: Bracket): readonly BracketColumn[] {
+  const columns: BracketColumn[] = [];
+
+  for (const round of columnOrder(bracket)) {
+    const nodes = bracket.nodes.filter((node) => node.round === round);
+    if (nodes.length === 0) {
+      continue;
+    }
+    columns.push({
+      round,
+      field: round === 'THIRD_PLACE' ? MINIMUM_BRACKET_SIZE : nodes.length * 2,
+      nodes,
+      state: columnState(nodes),
+    });
+  }
+
+  return columns;
+}
+
+/**
+ * The round the room is watching: the first one with something left to play.
+ *
+ * What the scene puts in its heading, and null for a bracket that is over — at
+ * which point the heading belongs to the `Siegerehrung` rather than to a round
+ * nobody is playing.
+ */
+export function activeBracketRound(bracket: Bracket): BracketRound | null {
+  return bracketColumns(bracket).find((column) => column.state === 'ACTIVE')?.round ?? null;
+}
+
+/**
+ * Where the participant standing in a slot came from — a node and one of its
+ * sides — or null when nobody sent them there.
+ *
+ * This is what lets the projector *move* the chip rather than fade it in
+ * (docs/MOTION.md §4.4, issue #25): the audience has to be able to follow a
+ * team with their eyes, and to do that the scene has to know which chip already
+ * on screen is the same participant one round earlier.
+ *
+ * Null for the first round, whose participants come from the draw rather than
+ * from a match, and for a slot nothing has filled yet.
+ *
+ * The `Spiel um Platz 3` is the one place where the chip that travels is the
+ * *loser* of the round below. That is the whole rule of §7, and a scene that
+ * assumed winners would fly the wrong two chips into it.
+ */
+export function chipOrigin(
+  bracket: Bracket,
+  nodeId: BracketNodeId,
+  side: BracketSide,
+): { nodeId: BracketNodeId; side: BracketSide } | null {
+  const target = findNode(bracket, nodeId);
+  if (target === undefined || slotOf(target, side) === null) {
+    return null;
+  }
+
+  const feeder = feederOf(bracket, target, side);
+  if (feeder === undefined || feeder.winnerId === null) {
+    return null;
+  }
+
+  const travels = target.round === 'THIRD_PLACE' ? loserOf(feeder) : feeder.winnerId;
+  if (travels === null || travels !== slotOf(target, side)) {
+    return null;
+  }
+  return { nodeId: feeder.id, side: feeder.slotA === travels ? 'A' : 'B' };
+}
+
+/**
  * Whether every match of the bracket has been played.
  *
  * The gate in front of the `Siegerehrung` (#27): the third-place match counts,
@@ -465,7 +582,65 @@ export function isBracketComplete(tournament: Tournament): boolean {
 // ---------------------------------------------------------------------------
 
 /** Which side of the node above a node's winner lands on. */
-type Side = 'A' | 'B';
+type Side = BracketSide;
+
+/**
+ * The rounds this bracket has, in the order they are drawn and numbered.
+ *
+ * Read off the nodes rather than computed from the size, so a file repaired by
+ * hand is drawn as the tree it actually contains rather than as the tree its
+ * `size` claims.
+ */
+function columnOrder(bracket: Bracket): readonly BracketRound[] {
+  const seen: BracketRound[] = [];
+  for (const node of bracket.nodes) {
+    if (!seen.includes(node.round)) {
+      seen.push(node.round);
+    }
+  }
+  return seen;
+}
+
+/**
+ * How much attention a round is owed, from its own nodes and nothing else.
+ *
+ * A round with a match that could be played right now is the live one, whatever
+ * the rounds around it are doing. Deliberately not "the earliest undecided
+ * round": that would leave the `Finale` in the future while the
+ * `Spiel um Platz 3` beside it was being played, and the two are played
+ * together (§7).
+ */
+function columnState(nodes: readonly BracketNode[]): BracketColumnState {
+  if (nodes.every((node) => node.winnerId !== null)) {
+    return 'DECIDED';
+  }
+  return nodes.some(isReady) ? 'ACTIVE' : 'FUTURE';
+}
+
+/** Both participants are in and nobody has won — a match that can be played. */
+function isReady(node: BracketNode): boolean {
+  return node.slotA !== null && node.slotB !== null && node.winnerId === null;
+}
+
+function slotOf(node: BracketNode, side: Side): GroupId | null {
+  return side === 'A' ? node.slotA : node.slotB;
+}
+
+/**
+ * The node whose result fills one side of another node.
+ *
+ * For the tree that is the node below feeding it; for the `Spiel um Platz 3` it
+ * is the semi-final on the same side, because §7 fills that match from the two
+ * semi-finals in their own order.
+ */
+function feederOf(bracket: Bracket, target: BracketNode, side: Side): BracketNode | undefined {
+  const candidates =
+    target.round === 'THIRD_PLACE'
+      ? bracket.nodes.filter((node) => node.round === 'SEMI_FINAL')
+      : bracket.nodes.filter((node) => node.nextNodeId === target.id);
+
+  return candidates.find((node) => sideOf(bracket.nodes, node.id) === side);
+}
 
 function nodeIdOf(number: number): BracketNodeId {
   return bracketNodeIdSchema.parse(`${NODE_ID_PREFIX}${number}`);

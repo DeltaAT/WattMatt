@@ -1,3 +1,4 @@
+export { BracketScene } from '@/windows/beamer/scenes/BracketScene';
 export { DrawScene } from '@/windows/beamer/scenes/DrawScene';
 export { GroupOverviewScene } from '@/windows/beamer/scenes/GroupOverviewScene';
 export { NamingScene } from '@/windows/beamer/scenes/NamingScene';

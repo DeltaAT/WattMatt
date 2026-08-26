@@ -3,6 +3,7 @@ import type { RoundId } from '@/domain/ids';
 import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
 import { de } from '@/i18n';
 import {
+  BracketScene,
   DrawScene,
   GroupOverviewScene,
   NamingScene,
@@ -10,6 +11,7 @@ import {
   RoundBoardScene,
   TableOverviewScene,
 } from '@/windows/beamer/scenes';
+import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
 import { useRepechageBeat } from '@/windows/beamer/useRepechageBeat';
 import { useSkipKey } from '@/windows/beamer/useSkipKey';
@@ -19,8 +21,8 @@ import { useSkipKey } from '@/windows/beamer/useSkipKey';
  *
  * Issue #5 owns the channel, not the pictures. `TABLE_OVERVIEW` (#13),
  * `GROUP_OVERVIEW` (#14), `DRAW` (#18), `ROUND_BOARD` (#19), `REPECHAGE` (#21)
- * and `NAMING` (#23) are drawn for real; `BRACKET` and `CEREMONY` land with
- * issues #25 and #27, and until then render a placeholder — deliberately a real render of the
+ * `NAMING` (#23) and `BRACKET` (#25) are drawn for real; `CEREMONY` lands with
+ * issue #27, and until then renders a placeholder — deliberately a real render of the
  * *current* scene rather than a blank, so the channel is visibly working end to
  * end.
  *
@@ -113,6 +115,17 @@ export function BeamerScenePlaceholder({
     return <RepechageSceneHost tournament={tournament} delivery={delivery} />;
   }
 
+  if (scene.id === 'BRACKET') {
+    /*
+     * No guard against the snapshot, like the `Hoffnungsrunde` and unlike the
+     * two scenes below: the descriptor names nothing that could disagree with
+     * it, and a tournament has exactly one bracket. Before it is drawn the
+     * scene says so itself — a state the host can reach by staging the tree
+     * before the final phase, and one the room must be able to read.
+     */
+    return <BracketSceneHost tournament={tournament} settled={settled} delivery={delivery} />;
+  }
+
   if (scene.id === 'DRAW') {
     /*
      * The scene descriptor names a round; the snapshot carries one. They can
@@ -186,6 +199,29 @@ function RepechageSceneHost({
   const beat = useRepechageBeat(tournament.repechage?.last ?? null, delivery);
 
   return <RepechageScene tournament={tournament} beat={beat} />;
+}
+
+/**
+ * Binds the bracket scene to the chips this window is allowed to move.
+ *
+ * A component of its own for the same reason `RepechageSceneHost` is: the hook
+ * must not sit behind the early returns above, and keeping it out here leaves
+ * `BracketScene` a pure function of one snapshot — which is what lets every
+ * state of the tree be rendered in a test without a browser that can measure
+ * anything.
+ */
+function BracketSceneHost({
+  tournament,
+  settled,
+  delivery,
+}: {
+  tournament: TournamentSnapshot;
+  settled: boolean;
+  delivery: SnapshotDelivery;
+}) {
+  const advance = useBracketAdvance(tournament.bracket, delivery);
+
+  return <BracketScene tournament={tournament} settled={settled} advance={advance} />;
 }
 
 /**

@@ -100,9 +100,12 @@ fade to `opacity: .2` and desaturate.
 - **First reveal:** nodes stagger in left-to-right at `--stagger-wide`, `opacity 0 → 1`,
   `translateX(-12px) → 0`. Connector lines draw with `stroke-dashoffset` over 500 ms,
   starting 200 ms after their nodes.
-- **Advancement:** the winning group chip *moves* into the next node using a shared
-  `layoutId` — never fade out and fade in. The audience must be able to follow the team
-  with their eyes. Spring, `duration 0.6, bounce 0.15`.
+- **Advancement:** the winning group chip *moves* into the next node — never fade out and
+  fade in. The audience must be able to follow the team with their eyes. Spring,
+  `duration 0.6, bounce 0.15`. Implemented as a measured FLIP against `--dur-reveal` and
+  `--ease-dramatic` rather than a Motion `layoutId`, because the library is not a dependency
+  and one motion system is worth more than the overshoot (issue #25,
+  `useBracketAdvance`, docs/OPEN-QUESTIONS.md #70).
 - **Focus:** the currently active round is at full opacity; decided rounds sit at `.75`;
   future rounds at `.45`. Transition 400 ms.
 

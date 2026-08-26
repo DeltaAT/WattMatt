@@ -391,11 +391,20 @@ export const deAT = {
 
   bracket: {
     label: 'Turnierbaum',
-    roundOf16: 'Achtelfinale',
-    quarterFinal: 'Viertelfinale',
-    semiFinal: 'Halbfinale',
-    final: 'Finale',
-    thirdPlaceMatch: 'Spiel um Platz 3',
+    /**
+     * The rounds of docs/TOURNAMENT-RULES.md §7, keyed by the stored value.
+     *
+     * A record rather than five loose keys, so a scene can name the round a
+     * node belongs to without a lookup table of its own — and so the compiler
+     * says which name is missing when `bracketRound` gains a value.
+     */
+    round: {
+      ROUND_OF_16: 'Achtelfinale',
+      QUARTER_FINAL: 'Viertelfinale',
+      SEMI_FINAL: 'Halbfinale',
+      FINAL: 'Finale',
+      THIRD_PLACE: 'Spiel um Platz 3',
+    },
     awardCeremony: 'Siegerehrung',
   },
 
@@ -970,6 +979,37 @@ export const deAT = {
       notice: 'Die Finalphase wird vorbereitet.',
       /** How many are through, which is the one number the room can be told. */
       field: (params: { participants: string }) => `${params.participants} in der Finalphase`,
+    },
+
+    /**
+     * The `BRACKET` scene: the `Turnierbaum` on the wall (issue #25,
+     * docs/MOTION.md §4.4).
+     *
+     * The main picture of the whole final phase, and the one scene an audience
+     * reads without being told anything: the tree says who plays whom and where
+     * the evening is going. So the copy is almost nothing — the round names in
+     * the heading and above the columns, and the three words a slot can say.
+     *
+     * `winner` and `loser` are deliberately the words the round board already
+     * uses (`de.beamer.roundBoard`). The room learns one vocabulary over an
+     * evening, and a `Halbfinale` that said something new about the same result
+     * would read as a different kind of result.
+     */
+    bracket: {
+      /** The heading before the first round is under way, and once it is over. */
+      title: 'Turnierbaum',
+      /** The scene staged before the tree exists — the host can do that. */
+      empty: 'Der Turnierbaum ist noch nicht ausgelost.',
+      /** A slot nobody has reached yet: the match below is still being played. */
+      open: 'Offen',
+      /** The third signal on a result, beside the colour and the icon. */
+      winner: 'SIEGER',
+      loser: 'AUSGESCHIEDEN',
+      /**
+       * How big the final phase is, beside the tournament's name. Phrased like
+       * the naming scene's line, because it is the same fact said again.
+       */
+      field: (params: { n: number }) => `${params.n} in der Finalphase`,
     },
 
     /** The `TABLE_OVERVIEW` scene: who plays where (issue #13). */

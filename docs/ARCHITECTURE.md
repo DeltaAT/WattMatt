@@ -257,6 +257,8 @@ src/
     beamer/fit.ts      how many columns a grid takes, and how far a scene shrinks
     beamer/useFitToStage.ts  measures the stage and scales the scene body to it
     beamer/useRepechageBeat.ts  which card this window may animate, if any
+    beamer/useBracketAdvance.ts which chip moves into the round above, and from where
+    beamer/reducedMotion.ts  whether this window was asked to hold still
   ui/                  Button, Card, GroupChip, TableChip, motion presets
   i18n/
     de-AT.ts           every user-visible string, one typed tree
