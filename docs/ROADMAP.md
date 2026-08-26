@@ -37,7 +37,9 @@ working app into one that can be trusted in front of an audience.
 
 ## M6 — Release (#31–#33)
 
-Installer, German host manual, and a full dry run with 5, 13 and 40 groups.
+Installer, German host manual, and a full dry run with 5, 13 and 40 groups. The dry runs are
+half scripted and half done in a room with a projector — [QA-DRY-RUNS.md](QA-DRY-RUNS.md) is
+both halves, and neither is optional before a release.
 
 ---
 

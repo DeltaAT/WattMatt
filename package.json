@@ -21,6 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:watch": "vitest",
+    "qa:dry-run": "vitest run src/qa --silent=false --reporter=verbose",
     "test:coverage": "vitest run --coverage",
     "prepare": "husky"
   },
