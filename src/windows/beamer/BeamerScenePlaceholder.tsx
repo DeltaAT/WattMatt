@@ -11,7 +11,7 @@ import {
   RepechageScene,
   RoundBoardScene,
   TableOverviewScene,
-  CeremonyScene,
+  CeremonySceneHost,
 } from '@/windows/beamer/scenes';
 import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
@@ -155,7 +155,14 @@ export function BeamerScenePlaceholder({
   }
 
   if (scene.id === 'CEREMONY') {
-    return <CeremonyScene tournament={tournament} settled={settled} />;
+    return (
+      <CeremonySceneHost
+        tournament={tournament}
+        settled={settled}
+        delivery={delivery}
+        sceneReveal={(scene as { reveal?: unknown }).reveal}
+      />
+    );
   }
 
   return (

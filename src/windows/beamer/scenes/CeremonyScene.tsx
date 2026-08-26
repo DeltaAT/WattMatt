@@ -13,10 +13,17 @@ import { de } from '@/i18n';
 export function CeremonyScene({
   tournament,
   settled,
+  revealMode = null,
+  revealStep = -1,
 }: {
   tournament: TournamentSnapshot;
   settled: boolean;
+  revealMode?: 'AUTO' | 'STEP' | null;
+  revealStep?: number;
 }) {
+  // Consume reveal props to satisfy the compiler when they are unused.
+  void revealMode;
+  void revealStep;
   // The podium draws from the bracket winners where available; fall back to
   // group numbered labels when no winner names exist.
   const groupsById = new Map(tournament.groups.map((g) => [g.id, g]));

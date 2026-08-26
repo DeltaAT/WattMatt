@@ -232,6 +232,11 @@ export function HostWindow() {
                 onAssign={bracket.assign}
                 onFinish={bracket.finish}
                 onFocus={bracket.showOnBeamer}
+                phase={tournament.phase}
+                onShowCeremony={(mode: 'AUTO' | 'STEP', step = 0) =>
+                  bracket.showCeremony(mode, step)
+                }
+                onShowCeremonyStep={(next: number) => bracket.showCeremonyStep(next)}
               />
             ) : null}
 
