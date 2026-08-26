@@ -41,6 +41,7 @@ The exact, normative algorithm lives in [`docs/TOURNAMENT-RULES.md`](docs/TOURNA
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | German ↔ English domain terminology |
 | [docs/PACKAGING.md](docs/PACKAGING.md) | Installer, portable build, WebView2, SmartScreen, releases |
 | [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) | Shot list for the host manual, and how to capture it |
+| [docs/QA-DRY-RUNS.md](docs/QA-DRY-RUNS.md) | The release dry runs: what is scripted, what needs a room |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones and issue map |
 | [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | Decisions that still need the product owner |
 

@@ -75,6 +75,10 @@ export default defineConfig({
         // src/domain denominator with builders that exist to serve the tests
         // measuring it.
         'src/**/testFixtures.ts',
+        // The dry-run harness of issue #33. Test infrastructure like the
+        // fixtures above — it drives the app, it is never part of it, and no
+        // release bundle imports it.
+        'src/qa/**',
       ],
       thresholds: {
         // src/domain is the part a wrong result cannot be argued with, so it
