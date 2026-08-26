@@ -1,4 +1,4 @@
-import type { GroupId } from '@/domain/ids';
+import type { GroupId, MatchId } from '@/domain/ids';
 import {
   beamerBoard,
   matchesProgress,
@@ -6,12 +6,13 @@ import {
   type BoardSection,
   type MatchPhase,
 } from '@/domain/round';
-import type { TournamentSnapshot } from '@/domain/snapshot';
+import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
+import { useResultFlip } from '@/windows/beamer/useResultFlip';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -41,11 +42,26 @@ import { groupLabel } from '@/windows/groupLabel';
 export function RoundBoardScene({
   tournament,
   settled,
+  delivery = 'live',
 }: {
   tournament: TournamentSnapshot;
   /** False only while the scene is animating in. */
   settled: boolean;
+  /**
+   * Why this snapshot was sent (issue #29).
+   *
+   * Handed straight to `useResultFlip`, which is what decides that only the
+   * result the room has just watched being decided turns over. A board that is
+   * merely *arriving* carries however many results were decided before anybody
+   * looked — thirty-two matches and sixty-four sides at a full field, which is
+   * over the animated-element budget of docs/MOTION.md §6 and a projector
+   * replaying an hour of the evening besides.
+   */
+  delivery?: SnapshotDelivery;
 }) {
+  // Which matches turned over since this window last looked — never all of
+  // them, and never any of them on the first render (issue #29).
+  const flipping = useResultFlip(tournament.matches, delivery);
   const sections = beamerBoard(tournament.tables, tournament.matches);
   const progress = matchesProgress(tournament.matches);
   // Both inputs matter. Sixteen matches spread over sixteen tables is a wide,
@@ -101,6 +117,7 @@ export function RoundBoardScene({
                   groups={byId}
                   participant={tournament.participantLabel}
                   size={size}
+                  flipping={flipping}
                 />
               ))}
             </div>
@@ -116,11 +133,14 @@ function Section({
   groups,
   participant,
   size,
+  flipping,
 }: {
   section: BoardSection;
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   size: Density;
+  /** The matches whose result has just changed — see the scene. */
+  flipping: ReadonlySet<MatchId>;
 }) {
   const { table } = section;
   const isQueue = table === null;
@@ -157,6 +177,7 @@ function Section({
               groups={groups}
               participant={participant}
               size={size}
+              flip={flipping.has(match.id)}
             />
           ))}
         </ul>
@@ -170,11 +191,13 @@ function MatchCard({
   groups,
   participant,
   size,
+  flip,
 }: {
   match: Match;
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   size: Density;
+  flip: boolean;
 }) {
   const phase = matchPhase(match);
 
@@ -188,7 +211,14 @@ function MatchCard({
         {de.beamer.roundBoard.phase[phase]}
       </span>
 
-      <Side match={match} groupId={match.a} groups={groups} participant={participant} size={size} />
+      <Side
+        match={match}
+        groupId={match.a}
+        groups={groups}
+        participant={participant}
+        size={size}
+        flip={flip}
+      />
       {match.b === null ? null : (
         <Side
           match={match}
@@ -196,6 +226,7 @@ function MatchCard({
           groups={groups}
           participant={participant}
           size={size}
+          flip={flip}
         />
       )}
     </li>
@@ -215,12 +246,14 @@ function Side({
   groups,
   participant,
   size,
+  flip,
 }: {
   match: Match;
   groupId: GroupId;
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   size: Density;
+  flip: boolean;
 }) {
   const label = groupLabel(groupId, groups, participant);
   const decided = match.winnerId !== null;
@@ -235,8 +268,10 @@ function Side({
       className={`flex min-w-0 items-baseline gap-3 border-l-[6px] pl-3 ${OUTCOME_SIDE[outcome]} ${
         // The flip itself. Only the decided sides animate, and both run at once
         // — a stagger would look like hesitation about the result
-        // (docs/MOTION.md §4.2).
-        outcome === 'OPEN' ? '' : OUTCOME_ANIMATION[outcome]
+        // (docs/MOTION.md §4.2). A board that is only *arriving* does not flip
+        // at all: `OUTCOME_SIDE` already carries every settled colour, so the
+        // results are there, they simply do not replay (issue #29).
+        outcome === 'OPEN' || !flip ? '' : OUTCOME_ANIMATION[outcome]
       }`}
       data-outcome={outcome}
     >

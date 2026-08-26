@@ -106,6 +106,21 @@
   /* ---- motion: stagger ---- */
   --stagger-tight: 40ms; /* host lists */
   --stagger-wide: 80ms; /* beamer cards */
+
+  /* ---- motion: effects (docs/MOTION.md §6, issue #29) ----
+   *
+   * The two decorations performance mode switches off, expressed as lengths so
+   * that switching them off is a token redefinition rather than a rule per
+   * effect. `.beamer-root[data-performance-mode='true']` sets both to `0px`:
+   * a ring of zero spread paints nothing and a blur of zero radius costs
+   * nothing, so an effect written later is covered without its author
+   * remembering the flag — the same reason the durations are tokens (#15).
+   *
+   * Neither is ever animated: docs/MOTION.md §1 law 3 bans animating
+   * `box-shadow`, so a glow ring is a fixed shadow on a pseudo-element whose
+   * *opacity* animates. */
+  --wm-fx-glow-spread: 8px; /* accent ring on a reveal — §4.1, §4.3 */
+  --wm-fx-blur: 4px; /* the outgoing layer of a scene crossfade — §4.6 */
 }
 
 /*

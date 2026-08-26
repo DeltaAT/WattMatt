@@ -63,12 +63,18 @@
    * Redefining the tokens rather than switching off individual animations is
    * what makes it apply to scenes that do not exist yet: every duration in the
    * beamer window resolves through these, so a scene written for #18 or #25 is
-   * covered without its author remembering. The rest of MOTION.md's list —
-   * particles, blur, glow — is issue #29's, together with reduced motion.
+   * covered without its author remembering.
    *
    * Driven by an attribute the host sets from the snapshot, so it takes effect
    * on a window that is already showing something, which is exactly when a host
-   * reaches for it. */
+   * reaches for it.
+   *
+   * Issue #29 completes the list: the decorations go too. Both are lengths, so
+   * switching them off is a redefinition rather than a rule per effect — a ring
+   * of zero spread paints nothing and a blur of zero radius costs nothing, and
+   * neither changes a box, so nothing can reflow. That is what makes the mode
+   * safe to reach for mid-event: it is visibly faster and cannot move anything
+   * on the wall. */
   .beamer-root[data-performance-mode='true'] {
     --dur-instant: 50ms;
     --dur-fast: 80ms;
@@ -78,6 +84,17 @@
     --dur-story: 600ms;
     --stagger-tight: 0ms;
     --stagger-wide: 0ms;
+    --wm-fx-glow-spread: 0px;
+    --wm-fx-blur: 0px;
+  }
+
+  /* Particles are React, not CSS — a confetti burst is a list of elements
+   * somebody has to decide to render (§4.5) — so the scene branches on the flag
+   * instead. This rule is the backstop for anything that slips through: a
+   * particle layer marks itself `data-particles`, and in performance mode it is
+   * not drawn at all rather than drawn and hidden. */
+  .beamer-root[data-performance-mode='true'] [data-particles] {
+    display: none;
   }
 
   /*
@@ -166,6 +183,44 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Glow (issue #29, docs/MOTION.md §1 law 3, §6).
+ *
+ * A reveal wants an accent ring around it (§4.1, §4.3), and the obvious way to
+ * get one — animating `box-shadow` from nothing to a spread — is the way §1
+ * law 3 forbids: a growing shadow repaints the card and everything under it on
+ * every frame, which at 1080p on integrated graphics is exactly the cost the
+ * law exists to avoid. So the ring is a *fixed* shadow on a pseudo-element and
+ * only its opacity moves, which the compositor can do on its own.
+ *
+ * Two shapes, because there are two kinds of moment: a beat that passes
+ * (`pulse`, the draw's landing) and a state that is entered and held (`in`, the
+ * candidate lifted out of the repechage pot).
+ *
+ * Performance mode sets `--wm-fx-glow-spread` to `0px`, so the ring has no
+ * spread and nothing is painted at all. Reduced motion keeps it: §6 keeps
+ * colour and opacity, and the ring is how the room sees which card was drawn.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-glow-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
+@keyframes wm-glow-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * The draw sequence (issue #18, docs/MOTION.md §4.1).
  *
  * CSS rather than JavaScript because the beats are predetermined: keyframes run
@@ -182,17 +237,14 @@
   0% {
     opacity: 0;
     transform: scale(0.94) translateY(8px);
-    box-shadow: 0 0 0 0 var(--wm-accent);
   }
   60% {
     opacity: 1;
     transform: scale(1.04) translateY(0);
-    box-shadow: 0 0 0 6px var(--wm-accent-soft);
   }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
-    box-shadow: 0 0 0 0 transparent;
   }
 }
 
@@ -209,9 +261,27 @@
 }
 
 @utility wm-draw-reveal {
+  position: relative;
   animation: wm-draw-reveal calc(var(--dur-reveal) + var(--dur-slow)) var(--ease-dramatic) both;
-  /* Only for the duration of the animation, per docs/MOTION.md §6. */
+  /* Only for the duration of the animation, per docs/MOTION.md §6. The class
+   * cannot take it back off again, so `useWillChangeCleanup` does, on the
+   * `animationend` this animation is guaranteed to reach (issue #29). */
   will-change: transform, opacity;
+}
+
+/* The accent glow of the reveal beat, as a ring that fades rather than a
+ * `box-shadow` that grows: §1 law 3 bans animating `box-shadow` on the beamer,
+ * and it is the one property here that would repaint the card on every frame.
+ * The spread is `--wm-fx-glow-spread`, which performance mode sets to zero. */
+.wm-draw-reveal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 var(--wm-fx-glow-spread) var(--wm-accent-soft);
+  opacity: 0;
+  pointer-events: none;
+  animation: wm-glow-pulse calc(var(--dur-reveal) + var(--dur-slow)) var(--ease-dramatic) both;
 }
 
 @utility wm-draw-pool-number {
@@ -321,11 +391,9 @@
 @keyframes wm-repechage-lift {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 transparent;
   }
   100% {
     transform: scale(1.06);
-    box-shadow: 0 0 0 8px var(--wm-accent-soft);
   }
 }
 
@@ -390,9 +458,25 @@
 }
 
 @utility wm-repechage-lift {
+  position: relative;
   animation: wm-repechage-lift var(--dur-reveal) var(--ease-dramatic) both;
-  /* Only for the duration of the animation, per docs/MOTION.md §6. */
+  /* Only for the duration of the animation, per docs/MOTION.md §6.
+   * `useWillChangeCleanup` takes it back off at `animationend` (issue #29). */
   will-change: transform;
+}
+
+/* The accent ring the drawn candidate wears while the rest of the pot dims
+ * behind them. A held state rather than a beat, so it fades in and stays —
+ * until the card is accepted or declined and the class goes with it. */
+.wm-repechage-lift::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 var(--wm-fx-glow-spread) var(--wm-accent-soft);
+  opacity: 0;
+  pointer-events: none;
+  animation: wm-glow-in var(--dur-reveal) var(--ease-dramatic) both;
 }
 
 @utility wm-repechage-accept {
@@ -417,12 +501,15 @@
  * out and an acceptance still arrives — the room still sees that something
  * happened — but nothing shakes and nothing grows. */
 @media (prefers-reduced-motion: reduce) {
+  /* The lift loses its scale and keeps its ring: the ring is on `::after` and
+   * animates opacity only, so it is already what §6 asks for and stays as it
+   * is. What is left here is a card that stops growing. */
   @keyframes wm-repechage-lift {
     0% {
-      box-shadow: 0 0 0 0 transparent;
+      opacity: 1;
     }
     100% {
-      box-shadow: 0 0 0 8px var(--wm-accent-soft);
+      opacity: 1;
     }
   }
 
@@ -542,10 +629,17 @@
  * itself is inline, written from a measurement; this is only how it rides
  * home. `--ease-dramatic` stands in for the §4.4 spring: a bounce would have to
  * come from the Motion library, and one motion system is worth more than
- * 0.15 of overshoot (docs/OPEN-QUESTIONS.md #70). */
+ * 0.15 of overshoot (docs/OPEN-QUESTIONS.md #70).
+ *
+ * No `will-change` here, deliberately (issue #29). Every slot in the tree wears
+ * this class and only one or two of them are ever moving, so a hint in the class
+ * would be a promoted layer per chip — over a hundred of them in a 64-group
+ * field, permanently, for an animation that runs for 600 ms after a result.
+ * `useBracketAdvance` sets the hint on the chip it is about to move and
+ * `useWillChangeCleanup` takes it off again when the trip ends, which is what
+ * docs/MOTION.md §6 actually asks for. */
 @utility wm-bracket-advance {
   transition: transform var(--dur-reveal) var(--ease-dramatic);
-  will-change: transform;
 }
 
 /* docs/MOTION.md §6 and the issue's last acceptance criterion: with reduced

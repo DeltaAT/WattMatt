@@ -6,7 +6,7 @@ import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel, Table } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
-import { prefersReducedMotion } from '@/windows/beamer/reducedMotion';
+import { useReducedMotion } from '@/windows/beamer/reducedMotion';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -137,15 +137,16 @@ export function DrawScene({
  */
 function ShuffleSlot({ pool, size }: { pool: readonly Group[]; size: Density }) {
   const [tick, setTick] = useState(0);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    if (pool.length === 0 || prefersReducedMotion()) {
+    if (pool.length === 0 || reducedMotion) {
       return;
     }
     // ~60 ms per tick, the rate docs/MOTION.md §4.1 gives for the shuffle.
     const timer = setInterval(() => setTick((previous) => previous + 1), 60);
     return () => clearInterval(timer);
-  }, [pool.length]);
+  }, [pool.length, reducedMotion]);
 
   const showing = pool.length === 0 ? null : pool[tick % pool.length];
 
@@ -168,6 +169,13 @@ function ShuffleSlot({ pool, size }: { pool: readonly Group[]; size: Density }) 
  * they have not been dealt yet.
  */
 function Pool({ groups, settled }: { groups: readonly Group[]; settled: boolean }) {
+  // The pulse goes on the grid, not on each number in it. docs/MOTION.md §6
+  // caps the beamer at roughly sixty simultaneously animated elements and says
+  // to animate a container above that — and this is the one place in the app
+  // that would go through the cap, because the pool at the start of a 64-group
+  // draw *is* sixty-four elements (issue #29). One animated layer instead of
+  // sixty-four, and the audience sees the same thing: the pool breathing while
+  // it waits to be dealt from.
   return (
     <section
       className="flex min-h-0 flex-col gap-4 rounded-wm-xl border-4 border-wm-border-strong bg-wm-surface p-6"
@@ -180,13 +188,13 @@ function Pool({ groups, settled }: { groups: readonly Group[]; settled: boolean 
       {groups.length === 0 ? (
         <p className="text-beamer-body text-wm-text-faint">{de.beamer.draw.poolEmpty}</p>
       ) : (
-        <ul className="grid auto-rows-min grid-cols-4 gap-3">
+        <ul
+          className={`grid auto-rows-min grid-cols-4 gap-3 ${settled ? '' : 'wm-draw-pool-number'}`}
+        >
           {groups.map((group) => (
             <li
               key={group.id}
-              className={`wm-tnum rounded-wm-md bg-wm-bg px-3 py-2 text-center text-beamer-body font-bold ${
-                settled ? '' : 'wm-draw-pool-number'
-              }`}
+              className="wm-tnum rounded-wm-md bg-wm-bg px-3 py-2 text-center text-beamer-body font-bold"
               data-pool-group-id={group.id}
             >
               {group.number}

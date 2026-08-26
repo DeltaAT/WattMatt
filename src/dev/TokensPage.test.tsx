@@ -36,7 +36,9 @@ describe('the /tokens review page', () => {
   });
 
   it('lists every colour token', () => {
-    const colours = rootTokens(/^--wm-(?!space-|radius-|beamer-|font-|tracking-)/);
+    // `--wm-fx-*` are lengths, not colours (issue #29): they belong to the
+    // motion section below, which is where the page shows them.
+    const colours = rootTokens(/^--wm-(?!space-|radius-|beamer-|font-|tracking-|fx-)/);
     expect(colours.length).toBe(22);
     expect(colours.filter((name) => !markup.includes(name))).toEqual([]);
   });
@@ -50,9 +52,11 @@ describe('the /tokens review page', () => {
   it('lists every motion token', () => {
     const motion = [
       ...rootTokens(/^--(dur|stagger)-/),
+      // The effect lengths performance mode zeroes (issue #29).
+      ...rootTokens(/^--wm-fx-/),
       ...['out', 'in-out', 'dramatic', 'exit'].map((name) => `--ease-${name}`),
     ];
-    expect(motion.length).toBe(13);
+    expect(motion.length).toBe(15);
     expect(motion.filter((name) => !markup.includes(name))).toEqual([]);
   });
 

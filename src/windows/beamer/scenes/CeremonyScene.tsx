@@ -1,6 +1,7 @@
 import type { GroupId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { de } from '@/i18n';
+import { useReducedMotion } from '@/windows/beamer/reducedMotion';
 
 /**
  * `CEREMONY`: the award podium (issue #27).
@@ -24,6 +25,14 @@ export function CeremonyScene({
   // Consume reveal props to satisfy the compiler when they are unused.
   void revealMode;
   void revealStep;
+
+  // docs/MOTION.md §6: particles are the first thing both performance mode and
+  // reduced motion drop. The 150-particle burst of §4.5 is the heaviest thing
+  // the beamer ever draws, and it carries no information — the podium already
+  // says who won — so it is the cheapest thing to give up on weak hardware and
+  // the most obviously right thing to give up for a viewer who asked for calm.
+  const reducedMotion = useReducedMotion();
+  const particles = !tournament.performanceMode && !reducedMotion;
   // The podium draws from the bracket winners where available; fall back to
   // group numbered labels when no winner names exist.
   const groupsById = new Map(tournament.groups.map((g) => [g.id, g]));
@@ -92,8 +101,11 @@ export function CeremonyScene({
         </div>
       </div>
 
-      {/* Confetti placeholder: suppressed in performance mode */}
-      {tournament.performanceMode ? null : <div aria-hidden="true" data-confetti="" />}
+      {/* Confetti placeholder: suppressed in performance mode and under reduced
+          motion. `data-particles` is also what the CSS backstop in
+          src/styles/global.css keys on, so a particle layer added later is
+          covered whether or not its author remembers the flag. */}
+      {particles ? <div aria-hidden="true" data-confetti="" data-particles="" /> : null}
     </div>
   );
 }

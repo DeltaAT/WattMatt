@@ -4,7 +4,7 @@ import { chipOrigin, type BracketSide } from '@/domain/bracket';
 import type { BracketNodeId, GroupId } from '@/domain/ids';
 import type { SnapshotDelivery } from '@/domain/snapshot';
 import type { Bracket } from '@/domain/types';
-import { prefersReducedMotion } from '@/windows/beamer/reducedMotion';
+import { useReducedMotion } from '@/windows/beamer/reducedMotion';
 
 /**
  * The winner's chip *moving* into the round above (issue #25,
@@ -63,6 +63,7 @@ export function useBracketAdvance(
   bracket: Bracket | null,
   delivery: SnapshotDelivery,
 ): BracketAdvance {
+  const reducedMotion = useReducedMotion();
   const elements = useRef(new Map<ChipKey, HTMLElement>());
   // Where the tree stood the last time this window looked. A ref rather than
   // state: it is the *previous* picture, and re-rendering because it changed
@@ -76,7 +77,7 @@ export function useBracketAdvance(
     // Before the paint that would show the chip in its new slot, never after:
     // an effect that ran a frame later would let the audience see it arrive and
     // then jump back to where it came from.
-    if (bracket !== null && arriving.size > 0 && !prefersReducedMotion()) {
+    if (bracket !== null && arriving.size > 0 && !reducedMotion) {
       for (const key of arriving) {
         flip(bracket, key, elements.current);
       }
@@ -162,6 +163,11 @@ function flip(bracket: Bracket, key: ChipKey, elements: ReadonlyMap<ChipKey, HTM
 
   element.style.transition = 'none';
   element.style.transform = `translate(${String(dx)}px, ${String(dy)}px)`;
+  // The hint goes on the chip that is about to move and on no other, because
+  // every slot in the tree wears `wm-bracket-advance` and a hint in the class
+  // would promote a layer per chip for the whole evening (docs/MOTION.md §6,
+  // issue #29). `useWillChangeCleanup` takes it off when the trip ends.
+  element.style.willChange = 'transform';
 
   // Next frame, so the browser has painted the inverted position and has
   // something to transition *from*. Clearing both properties hands the chip
