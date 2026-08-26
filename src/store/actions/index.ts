@@ -1,4 +1,11 @@
-export { drawBracket, setBracketWinner, startNextBracketMatch } from '@/store/actions/bracket';
+export {
+  assignBracketMatch,
+  drawBracket,
+  finishBracket,
+  setBracketWinner,
+  showBracketOnBeamer,
+  startNextBracketMatch,
+} from '@/store/actions/bracket';
 export {
   closeDocument,
   setDocumentSaved,

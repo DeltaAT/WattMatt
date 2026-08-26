@@ -47,11 +47,14 @@ import type {
  * who then appears on the projector in another match is a contradiction the
  * whole room can see (§7, §8).
  *
- * **The bracket does not cascade.** Correcting a result whose winner has
- * already played on is refused rather than silently rewriting the rounds above
- * it — the way back from that is undo, which restores the whole document
- * (CLAUDE.md golden rule 6). Correcting the match the host has just decided,
- * which is the misclick that actually happens, is always allowed (§9 case 8).
+ * **A correction discards what was built on it, and says so first.** Marking
+ * the other participant in a `Viertelfinale` that has already been played on
+ * clears every result above it and puts those matches back in the queue with
+ * the corrected pairings — exactly those, and nothing in the other half of the
+ * tree. `bracketCorrection` is the same walk run as a question, so the host
+ * reads the list of what is about to be thrown away before they confirm it
+ * (issue #26, docs/OPEN-QUESTIONS.md #72). Undo still takes the whole thing
+ * back in one press (CLAUDE.md golden rule 6).
  *
  * Pure, like everything in `src/domain`: randomness arrives as an injected
  * `Rng` positioned at the tournament's own cursor, and every function hands its
@@ -290,7 +293,7 @@ export function setBracketWinner(
   if (winnerId !== node.slotA && winnerId !== node.slotB) {
     return tournament;
   }
-  if (node.winnerId === winnerId || isPlayedOn(bracket, node)) {
+  if (node.winnerId === winnerId) {
     return tournament;
   }
 
@@ -308,12 +311,79 @@ export function setBracketWinner(
     ? place(advanced, bracket.thirdPlaceNodeId, sideOf(advanced, node.id), loserId)
     : advanced;
 
+  // Everything that was decided *on top of* this result is no longer a result
+  // of anything. Cleared here rather than refused above (issue #26): a host who
+  // has to reach for undo to fix the quarter-final they misclicked would have
+  // to take back every result since, one press at a time, in front of the room.
+  // What is discarded is shown to them first — `bracketCorrection` — and this
+  // is the same walk that produces that list.
+  const invalidated = invalidateAbove(routed, node.id, bracket.thirdPlaceNodeId);
+
   const withBracket: Tournament = {
     ...tournament,
-    bracket: { ...bracket, nodes: settleThirdPlace(routed, bracket.thirdPlaceNodeId) },
+    bracket: {
+      ...bracket,
+      nodes: settleThirdPlace(invalidated, bracket.thirdPlaceNodeId),
+    },
   };
 
-  return releaseTableOf(restatus(withBracket, winnerId, loserId, playsForThird), node);
+  return freeTablesOfCleared(restatusBracket(withBracket), bracket, node.id);
+}
+
+/** What correcting a decided result would cost (issue #26). */
+export interface BracketCorrection {
+  /** The node being corrected, as it stands now. */
+  node: BracketNode;
+  /** The participant the host is about to declare the winner. */
+  winnerId: GroupId;
+  /**
+   * The results that would be discarded, in tree order and as they stand now.
+   *
+   * Everything built on top of the result being corrected, and nothing else:
+   * changing one `Viertelfinale` cannot touch the other three, because the walk
+   * only ever climbs the links out of the node it starts at (issue #26's first
+   * acceptance criterion).
+   */
+  discards: readonly BracketNode[];
+}
+
+/**
+ * What the host is about to lose, or null when they are about to lose nothing.
+ *
+ * Null is the ordinary case — a first decision, or a correction of the match
+ * that has just been played — and it is what tells the panel to skip the
+ * confirmation entirely. A dialog in front of every result would be a dialog
+ * the host learns to dismiss without reading, which is worse than no dialog at
+ * the one moment it matters (docs/OPEN-QUESTIONS.md #72).
+ *
+ * Computed by running the correction and comparing, rather than by walking the
+ * tree a second time: a preview that could disagree with what the button then
+ * does is the one thing this must not be.
+ */
+export function bracketCorrection(
+  tournament: Tournament,
+  nodeId: BracketNodeId,
+  winnerId: GroupId,
+): BracketCorrection | null {
+  const bracket = tournament.bracket;
+  const node = bracket === null ? undefined : findNode(bracket, nodeId);
+  if (bracket === null || node === undefined) {
+    return null;
+  }
+
+  const after = setBracketWinner(tournament, nodeId, winnerId).bracket;
+  if (after === null || after === bracket) {
+    return null;
+  }
+
+  const discards = bracket.nodes.filter(
+    (candidate) =>
+      candidate.id !== nodeId &&
+      candidate.winnerId !== null &&
+      findNode(after, candidate.id)?.winnerId === null,
+  );
+
+  return discards.length === 0 ? null : { node, winnerId, discards };
 }
 
 /**
@@ -559,6 +629,67 @@ export function chipOrigin(
     return null;
   }
   return { nodeId: feeder.id, side: feeder.slotA === travels ? 'A' : 'B' };
+}
+
+/**
+ * Where one match of the tree stands, in the words the host panel sorts by
+ * (issue #26).
+ *
+ * The same five states a match of a round can be in, read off the node instead
+ * of off a `status` field — a node has none, and deriving it is what keeps the
+ * host panel and the projector from disagreeing about which matches can be
+ * played right now (the issue's second acceptance criterion).
+ */
+export type BracketNodeState =
+  /** A `Freilos`: decided by the draw, with nobody on the other side (§9 case 1). */
+  | 'BYE'
+  /** Played. */
+  | 'DECIDED'
+  /** On a table, being played now. */
+  | 'RUNNING'
+  /** Both participants are in and it is waiting for a table (§3). */
+  | 'QUEUED'
+  /** Still waiting for the round below to send somebody up. */
+  | 'WAITING';
+
+export function bracketNodeState(node: BracketNode): BracketNodeState {
+  if (node.winnerId !== null) {
+    return node.slotA === null || node.slotB === null ? 'BYE' : 'DECIDED';
+  }
+  if (node.slotA === null || node.slotB === null) {
+    return 'WAITING';
+  }
+  return node.tableId === null ? 'QUEUED' : 'RUNNING';
+}
+
+/**
+ * Whether the host may end the final phase — *Finale abschließen* (issue #26).
+ *
+ * The transition `BRACKET → CEREMONY` of §1, gated on the tree actually being
+ * over. It lives here rather than in `phaseStep` for the reason the bracket
+ * draw does (docs/OPEN-QUESTIONS.md #65, #73): the phase panel offers one
+ * generic step, and a second button for the same transition would be a second
+ * set of reasons for it to be greyed out — the host presses this one where the
+ * final is, under the match they have just decided.
+ */
+export function canFinishBracket(tournament: Tournament): boolean {
+  return tournament.phase === 'BRACKET' && isBracketComplete(tournament);
+}
+
+/**
+ * Ends the final phase and moves to the `Siegerehrung`
+ * (docs/TOURNAMENT-RULES.md §1, §8).
+ *
+ * The phase and nothing else. §8 is explicit that the podium is revealed by the
+ * host and "must never fire automatically the instant the final is decided,
+ * because the host may still be talking" — so this does not stage a scene, and
+ * the beamer keeps showing the finished tree until somebody says otherwise.
+ */
+export function finishBracket(tournament: Tournament): Tournament {
+  if (!canFinishBracket(tournament)) {
+    return tournament;
+  }
+  return { ...tournament, phase: 'CEREMONY' };
 }
 
 /**
@@ -902,44 +1033,111 @@ function place(
 }
 
 /**
- * Whether a result has already been played on, in which case correcting it
- * would mean rewriting a match the room has watched.
+ * Clears everything that was decided on top of a result, and the tables those
+ * matches were on (issue #26).
+ *
+ * The walk only ever climbs the links *out of* the node it starts at — the node
+ * above, and the `Spiel um Platz 3` when the node is a semi-final — so the
+ * other half of the tree cannot be touched however deep it goes. That is the
+ * issue's first acceptance criterion, stated as an algorithm rather than as a
+ * promise.
+ *
+ * A cleared node also loses the table it was played on: the pairing standing in
+ * it is not the pairing that was played, so it goes back into the queue for the
+ * host to put somewhere (docs/TOURNAMENT-RULES.md §3).
  */
-function isPlayedOn(bracket: Bracket, node: BracketNode): boolean {
-  const above = node.nextNodeId === null ? undefined : findNode(bracket, node.nextNodeId);
-  if (above !== undefined && above.winnerId !== null) {
-    return true;
+function invalidateAbove(
+  nodes: readonly BracketNode[],
+  fromId: BracketNodeId,
+  thirdPlaceNodeId: BracketNodeId | null,
+): BracketNode[] {
+  const from = nodes.find((candidate) => candidate.id === fromId);
+  if (from === undefined) {
+    return [...nodes];
   }
-  if (node.round !== 'SEMI_FINAL' || bracket.thirdPlaceNodeId === null) {
-    return false;
+
+  const targets = [from.nextNodeId, from.round === 'SEMI_FINAL' ? thirdPlaceNodeId : null].filter(
+    (id): id is BracketNodeId => id !== null,
+  );
+
+  let next = [...nodes];
+  for (const target of targets) {
+    next = invalidateNode(next, target, thirdPlaceNodeId);
   }
-  return findNode(bracket, bracket.thirdPlaceNodeId)?.winnerId != null;
+  return next;
+}
+
+function invalidateNode(
+  nodes: readonly BracketNode[],
+  id: BracketNodeId,
+  thirdPlaceNodeId: BracketNodeId | null,
+): BracketNode[] {
+  const node = nodes.find((candidate) => candidate.id === id);
+  if (node === undefined) {
+    return [...nodes];
+  }
+
+  const cleared = nodes.map((candidate) =>
+    candidate.id === id ? { ...candidate, winnerId: null, tableId: null } : candidate,
+  );
+
+  if (node.winnerId === null) {
+    // Nothing was built on this one, so nothing above it changes. Its table
+    // still goes: the pair standing at it is no longer the pair that was sent
+    // there, and the room can see that at the table itself.
+    return node.tableId === null ? [...nodes] : cleared;
+  }
+
+  // Its winner is no longer in the round above, and — from a `Halbfinale` — its
+  // loser is no longer in the `Spiel um Platz 3`.
+  let next = place(cleared, node.nextNodeId, sideOf(cleared, id), null);
+  if (node.round === 'SEMI_FINAL' && thirdPlaceNodeId !== null) {
+    next = place(next, thirdPlaceNodeId, sideOf(next, id), null);
+  }
+  return invalidateAbove(next, id, thirdPlaceNodeId);
 }
 
 /**
- * Who is still in after a bracket result.
+ * Who is still in, read off the whole tree rather than off the one result that
+ * just changed.
  *
- * The loser of a `Halbfinale` stays `ACTIVE`: they have another match to play,
- * and a participant marked out who then appears on the projector in the
- * `Spiel um Platz 3` is a contradiction the room can see (§7).
+ * Recomputed rather than flipped, because a correction can discard a dozen
+ * results at once (issue #26) and every participant they knocked out is back in
+ * the tournament. One rule covers all of it, and it is the rule every earlier
+ * phase already follows: **a participant is out when they have lost and have
+ * nowhere left to play.** The loser of a `Halbfinale` is the one exception the
+ * rules name — they are routed into the `Spiel um Platz 3` (§7).
  *
- * The winner is set back to `ACTIVE` as well as the loser to `ELIMINATED`. On a
- * first decision that is a no-op; on a correction it is the whole point,
- * because the group being promoted is the one the previous decision knocked
- * out.
+ * Only participants the bracket names are touched. Somebody knocked out in the
+ * qualifying round was never in this arithmetic and must stay knocked out.
  */
-function restatus(
-  tournament: Tournament,
-  winnerId: GroupId,
-  loserId: GroupId,
-  playsForThird: boolean,
-): Tournament {
+function restatusBracket(tournament: Tournament): Tournament {
+  const bracket = tournament.bracket;
+  if (bracket === null) {
+    return tournament;
+  }
+
+  const drawn = new Set<GroupId>();
+  const out = new Set<GroupId>();
+  for (const node of bracket.nodes) {
+    for (const slot of [node.slotA, node.slotB]) {
+      if (slot !== null) {
+        drawn.add(slot);
+      }
+    }
+    const loser = loserOf(node);
+    if (loser === null || (node.round === 'SEMI_FINAL' && bracket.thirdPlaceNodeId !== null)) {
+      continue;
+    }
+    out.add(loser);
+  }
+
   let touched = false;
   const groups = tournament.groups.map((group) => {
-    if (group.id !== winnerId && group.id !== loserId) {
+    if (!drawn.has(group.id)) {
       return group;
     }
-    const status: GroupStatus = group.id === loserId && !playsForThird ? 'ELIMINATED' : 'ACTIVE';
+    const status: GroupStatus = out.has(group.id) ? 'ELIMINATED' : 'ACTIVE';
     if (group.status === status) {
       return group;
     }
@@ -948,6 +1146,34 @@ function restatus(
   });
 
   return touched ? { ...tournament, groups } : tournament;
+}
+
+/**
+ * Frees every table a correction took a match off.
+ *
+ * The corrected node's own table, because marking a winner ends the match on it
+ * (§3), and the table of every node whose result the correction discarded — a
+ * table that kept pointing at a match nobody will finish is one the host would
+ * have to delete and re-create mid-event to get back.
+ */
+function freeTablesOfCleared(
+  tournament: Tournament,
+  before: Bracket,
+  correctedId: BracketNodeId,
+): Tournament {
+  let next = tournament;
+
+  for (const node of before.nodes) {
+    if (node.tableId === null) {
+      continue;
+    }
+    const now = next.bracket?.nodes.find((candidate) => candidate.id === node.id);
+    if (node.id === correctedId || now?.tableId === null) {
+      next = releaseTableOf(next, node);
+    }
+  }
+
+  return next;
 }
 
 /**

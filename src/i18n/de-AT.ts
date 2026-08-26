@@ -140,6 +140,13 @@ export const deAT = {
        * before it.
        */
       bracketDrawn: 'Turnierbaum ausgelost',
+      /**
+       * The correction that threw results away (issue #26). It says how many,
+       * because that is the size of what the host is about to get back.
+       */
+      bracketCorrected: (params: { participant: string; n: number }) =>
+        `Sieger geändert: ${params.participant} — ${pluralizeDeAT(params.n, 'Ergebnis', 'Ergebnisse')} verworfen`,
+      bracketFinished: 'Finale abgeschlossen',
 
       blackout: 'Bildschirm ausgeschaltet',
       autoFollowOn: 'Beamer folgt dem Turnier',
@@ -406,6 +413,81 @@ export const deAT = {
       THIRD_PLACE: 'Spiel um Platz 3',
     },
     awardCeremony: 'Siegerehrung',
+
+    /**
+     * The host's bracket control (issue #26).
+     *
+     * The final phase is the most watched part of the evening and the part
+     * where a misclick is most expensive, so the copy has two jobs: say which
+     * matches can be played *right now*, and — when the host corrects a result
+     * something was built on — say exactly what that costs before it happens.
+     */
+    sectionLabel: 'Turnierbaum',
+    /** Before the tree exists. The button that creates it, and why it is off. */
+    draw: 'Turnierbaum auslosen',
+    empty: 'Der Turnierbaum ist noch nicht ausgelost.',
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    blocker: {
+      notInNaming: 'Der Turnierbaum wird nach der Namenserfassung ausgelost.',
+      alreadyDrawn: 'Der Turnierbaum ist bereits ausgelost.',
+      namesMissing: 'Es fehlen noch Namen. Erfassen Sie zuerst alle Namen.',
+      fieldTooLarge: (params: { n: number; max: number }) =>
+        `Es sind noch ${params.n} im Feld. Der Turnierbaum fasst höchstens ${params.max}.`,
+      fieldTooSmall: 'Es sind zu wenige Teilnehmende für einen Turnierbaum.',
+      fieldNotPowerOfTwo: (params: { n: number }) =>
+        `${params.n} Teilnehmende ergeben keinen vollständigen Turnierbaum. Prüfen Sie die Hoffnungsrunde.`,
+    },
+
+    /** How many matches the host could send to a table right now. */
+    playable: (params: { n: number }) => `${pluralizeDeAT(params.n, 'Partie', 'Partien')} spielbar`,
+    /** What one node of the tree is doing, on its card. */
+    state: {
+      BYE: 'Freilos',
+      DECIDED: 'Entschieden',
+      RUNNING: 'Läuft',
+      QUEUED: 'Wartet auf Tisch',
+      WAITING: 'Wartet auf Gegner',
+    },
+    /** A slot the round below has not filled yet. */
+    open: 'Offen',
+
+    /** Sending a bracket match to a table (docs/TOURNAMENT-RULES.md §3, §7). */
+    assign: 'Auf Tisch',
+    assignAction: (params: { table: string }) => `Partie auf ${params.table} starten`,
+    noFreeTable: 'Kein Tisch frei.',
+
+    /** Correcting a result, and what it costs. */
+    correct: 'Ergebnis ändern',
+    correctCancel: 'Abbrechen',
+    correctPrompt: 'Neuen Sieger wählen.',
+    correctDialog: {
+      title: 'Ergebnis ändern?',
+      body: (params: { participant: string }) =>
+        `${params.participant} wird als Sieger eingetragen. Die folgenden Ergebnisse bauen darauf auf und werden verworfen.`,
+      /** One discarded result: the round, and who beat whom in it. */
+      entry: (params: { round: string; winner: string; loser: string }) =>
+        `${params.round}: ${params.winner} schlägt ${params.loser}`,
+      /** A discarded match that was a `Freilos` — there is no loser to name. */
+      byeEntry: (params: { round: string; winner: string }) =>
+        `${params.round}: ${params.winner} — Freilos`,
+      /**
+       * Said before the host presses it, because it is the reason they can
+       * press it at all: nothing here is lost for good (golden rule 6).
+       */
+      note: 'Rückgängig macht diese Änderung samt der verworfenen Ergebnisse wieder rückgängig.',
+      confirm: 'Ändern und verwerfen',
+    },
+
+    /** The end of the final phase (docs/TOURNAMENT-RULES.md §1, §8). */
+    finish: 'Finale abschließen',
+    finishBlocked: 'Es sind noch Partien offen. Entscheiden Sie zuerst alle Partien.',
+    /**
+     * Which part of the tree the projector shows. The host zooms in for the
+     * last matches so they fill the screen (docs/MOTION.md §4.4).
+     */
+    focusLabel: 'Beamer',
+    focusAll: 'Ganzer Baum',
+    focusRound: (params: { round: string }) => `Ab ${params.round}`,
   },
 
   group: {

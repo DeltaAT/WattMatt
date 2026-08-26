@@ -1,6 +1,7 @@
 import type { BeamerScene } from '@/domain/beamerScene';
 import type { RoundId } from '@/domain/ids';
 import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
+import type { BracketRound } from '@/domain/types';
 import { de } from '@/i18n';
 import {
   BracketScene,
@@ -123,7 +124,14 @@ export function BeamerScenePlaceholder({
      * scene says so itself — a state the host can reach by staging the tree
      * before the final phase, and one the room must be able to read.
      */
-    return <BracketSceneHost tournament={tournament} settled={settled} delivery={delivery} />;
+    return (
+      <BracketSceneHost
+        tournament={tournament}
+        settled={settled}
+        delivery={delivery}
+        focus={scene.focus ?? null}
+      />
+    );
   }
 
   if (scene.id === 'DRAW') {
@@ -214,14 +222,16 @@ function BracketSceneHost({
   tournament,
   settled,
   delivery,
+  focus,
 }: {
   tournament: TournamentSnapshot;
   settled: boolean;
   delivery: SnapshotDelivery;
+  focus: BracketRound | null;
 }) {
   const advance = useBracketAdvance(tournament.bracket, delivery);
 
-  return <BracketScene tournament={tournament} settled={settled} advance={advance} />;
+  return <BracketScene tournament={tournament} settled={settled} focus={focus} advance={advance} />;
 }
 
 /**

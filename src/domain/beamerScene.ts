@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { roundIdSchema } from '@/domain/ids';
+import { bracketRoundSchema } from '@/domain/types';
 
 /**
  * What the beamer is showing, as defined in docs/ARCHITECTURE.md §3.
@@ -40,7 +41,19 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
    * of this phase.
    */
   z.object({ id: z.literal('NAMING') }),
-  z.object({ id: z.literal('BRACKET') }),
+  /*
+   * The `Turnierbaum`, optionally zoomed to one round (issue #26).
+   *
+   * `focus` is the round the host has asked the projector to concentrate on:
+   * the tree is drawn from that round onwards, so the last matches fill the
+   * screen while the rounds already played step out of the way. Absent — the
+   * ordinary case — means the whole tree.
+   *
+   * Optional rather than nullable, so every existing way of staging the scene
+   * still says exactly what it means: `{ id: 'BRACKET' }` is the whole tree,
+   * and nothing had to learn a new field to keep saying so.
+   */
+  z.object({ id: z.literal('BRACKET'), focus: bracketRoundSchema.optional() }),
   z.object({ id: z.literal('CEREMONY') }),
 ]);
 
@@ -64,5 +77,13 @@ export function isSameScene(a: BeamerScene, b: BeamerScene): boolean {
   if (a.id !== b.id) {
     return false;
   }
-  return 'roundId' in a && 'roundId' in b ? a.roundId === b.roundId : true;
+  if ('roundId' in a && 'roundId' in b) {
+    return a.roundId === b.roundId;
+  }
+  // Zooming the tree to a round is a different picture, and the beamer reveals
+  // it rather than cutting to it (issue #26, docs/MOTION.md §4.4).
+  if (a.id === 'BRACKET' && b.id === 'BRACKET') {
+    return a.focus === b.focus;
+  }
+  return true;
 }

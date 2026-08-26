@@ -1,9 +1,10 @@
 import type { BeamerScene } from '@/domain/beamerScene';
 import * as bracket from '@/domain/bracket';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
-import type { BracketNode, Clock, Tournament } from '@/domain/types';
+import type { BracketNode, BracketRound, Clock, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { systemClock } from '@/platform/clock';
+import { showScene } from '@/store/actions/scene';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
 
 /**
@@ -91,11 +92,18 @@ export function setBracketWinner(
       const node = nodeOf(before, nodeId);
       const previousWinnerId = node?.winnerId ?? null;
       const participant = participantOf(after, winnerId);
+      // What this decision threw away, if anything (issue #26). The count is on
+      // the undo button because it is the size of what pressing it gives back:
+      // a host who discarded the final and the third-place match by correcting
+      // a semi is looking for *that* step, not for "Sieger geändert".
+      const discarded = bracket.bracketCorrection(before, nodeId, winnerId)?.discards ?? [];
       return {
         undoLabel:
-          previousWinnerId === null
-            ? de.undo.action.matchWinnerSet({ participant })
-            : de.undo.action.matchWinnerCorrected({ participant }),
+          discarded.length > 0
+            ? de.undo.action.bracketCorrected({ participant, n: discarded.length })
+            : previousWinnerId === null
+              ? de.undo.action.matchWinnerSet({ participant })
+              : de.undo.action.matchWinnerCorrected({ participant }),
         log: {
           action: 'BRACKET_WINNER_SET',
           payload: {
@@ -110,11 +118,64 @@ export function setBracketWinner(
             loserId: loserOf(node?.slotA ?? null, node?.slotB ?? null, winnerId),
             thirdPlaceNodeId:
               node?.round === 'SEMI_FINAL' ? (after.bracket?.thirdPlaceNodeId ?? null) : null,
+            // "This situation is logged prominently" applies here as much as it
+            // does to the §4 fallback: results the room watched being played
+            // have been thrown away, and somebody will ask which.
+            discarded: discarded.map((discard) => ({
+              nodeId: discard.id,
+              round: discard.round,
+              winnerId: discard.winnerId,
+            })),
           },
         },
       };
     },
   );
+}
+
+/**
+ * Ends the final phase, once every match of the tree has been played —
+ * *Finale abschließen* (issue #26, docs/TOURNAMENT-RULES.md §1).
+ *
+ * The phase and nothing else. §8 is explicit that the podium is revealed by the
+ * host "manually — it must never fire automatically the instant the final is
+ * decided, because the host may still be talking", so no scene is staged here:
+ * the projector keeps the finished tree until somebody puts the `Siegerehrung`
+ * on it (issue #27).
+ */
+export function finishBracket(store: TournamentStore): void {
+  change(
+    store,
+    (document) => bracket.finishBracket(document),
+    (_before, after) => ({
+      // The line the host has told the room they have crossed, and the moment
+      // the evening's result is final — the same reason a closed round is
+      // urgent (issue #17).
+      urgent: true,
+      undoLabel: de.undo.action.bracketFinished,
+      log: {
+        action: 'BRACKET_FINISHED',
+        payload: {
+          // The podium, in the file, as of the moment the phase ended: the one
+          // record of what the tournament actually produced.
+          ...(bracket.finalStandings(after) ?? {}),
+        },
+      },
+    }),
+  );
+}
+
+/**
+ * Zooms the projector to one round of the tree, or back to the whole of it
+ * (issue #26).
+ *
+ * A scene change like any other, so it takes the beamer by hand and turns
+ * `autoFollow` off (golden rule 3): the host is pointing the room at the two
+ * matches that are left, and that decision must not be undone by the next
+ * phase change.
+ */
+export function showBracketOnBeamer(store: TournamentStore, focus: BracketRound | null): void {
+  showScene(store, focus === null ? { id: 'BRACKET' } : { id: 'BRACKET', focus });
 }
 
 /**
@@ -125,6 +186,30 @@ export function setBracketWinner(
  * moment the last one sits down takes the beamer away from the host
  * mid-sentence (docs/OPEN-QUESTIONS.md #35).
  */
+/**
+ * Puts one waiting bracket match on a table the host picked (issue #26).
+ *
+ * Per match rather than only "the next one", unlike a round: the `Finale` and
+ * the `Spiel um Platz 3` are playable at the same moment (§7), and which of the
+ * two goes on the good table in the middle of the room is exactly the kind of
+ * decision the host makes out loud.
+ */
+export function assignBracketMatch(
+  store: TournamentStore,
+  nodeId: BracketNodeId,
+  tableId: TableId,
+  clock: Clock = systemClock,
+): void {
+  change(
+    store,
+    (document) => bracket.assignBracketNode(document, { nodeId, tableId, at: clock.now() }),
+    (_before, after) => ({
+      undoLabel: de.undo.action.matchStarted({ table: tableLabel(after, tableId) }),
+      log: { action: 'BRACKET_MATCH_ASSIGNED', payload: { tableId, nodeId } },
+    }),
+  );
+}
+
 export function startNextBracketMatch(
   store: TournamentStore,
   tableId: TableId,
