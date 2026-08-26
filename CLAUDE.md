@@ -25,6 +25,10 @@ beat cleverness every single time.
 1. **UI is German. Code is English.** Every user-visible string lives in `src/i18n/de-AT.ts`.
    No German identifiers, comments, commit messages, branch names or documentation.
    No hardcoded German strings in components — ever.
+   The one exception is the host manual — `docs/HANDBUCH.de.md` and the two one-pagers it
+   links, `docs/CHECKLISTE.de.md` and `docs/PROBLEME.de.md`. They are German because their
+   readers are hosts, not developers (issue #32), and they are the only files under `docs/`
+   that may be. A German file name ends in `.de.md`; nothing else does.
 2. **Offline is non-negotiable.** No CDN, no Google Fonts, no telemetry, no update check,
    no external API. Fonts, icons and sounds are bundled at build time. A network call in
    runtime code is a bug.
