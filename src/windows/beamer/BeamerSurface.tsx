@@ -1,8 +1,9 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { de } from '@/i18n';
 import type { BeamerPlacement } from '@/platform/beamerWindow';
 import { LetterboxStage } from '@/windows/beamer/LetterboxStage';
+import { useWillChangeCleanup } from '@/windows/beamer/useWillChangeCleanup';
 
 /**
  * Everything that makes the beamer window a presentation surface rather than a
@@ -45,11 +46,16 @@ export function BeamerSurface({
   children: ReactNode;
 }) {
   const isPreview = placement === 'preview';
+  const root = useRef<HTMLDivElement>(null);
 
   usePresentationChrome(!embedded);
+  // Animation and transition events bubble, so one listener here reaches every
+  // scene — docs/MOTION.md §6, issue #29.
+  useWillChangeCleanup(root);
 
   return (
     <div
+      ref={root}
       // `.beamer-root` carries the resolution-relative type scale and hides the
       // cursor (src/styles/global.css). In the windowed preview the cursor has
       // to come back: with a single screen it is the host's only pointer, and

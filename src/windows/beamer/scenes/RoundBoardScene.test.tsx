@@ -198,13 +198,26 @@ describe('the round board', () => {
       expect(markup.match(/data-match-id="/g)).toHaveLength(2);
     });
 
-    /* Both sides animate at once — a stagger would look like hesitation about
-     * the result (docs/MOTION.md §4.2). */
-    it('flips both sides together', () => {
+    /*
+     * The flip belongs to the moment a result is decided, not to the state of
+     * being decided, so a first render never carries it: a board that is merely
+     * *arriving* — a reopened beamer, an undo, the host putting the round up an
+     * hour later — shows its results without replaying them (issue #29,
+     * `useResultFlip`). That both sides then turn over at once, and that only
+     * the match that changed does, is asserted against the full field in
+     * `src/windows/beamer/scenePerformance.test.tsx`, which needs two renders
+     * and therefore a DOM.
+     */
+    it('shows a decided result without replaying it on the first render', () => {
       const markup = scene(board({ pairs: 1, decided: 1 }));
 
-      expect(markup).toContain('wm-result-win');
-      expect(markup).toContain('wm-result-lose');
+      expect(markup).not.toContain('wm-result-win');
+      expect(markup).not.toContain('wm-result-lose');
+
+      // The result is there all the same — colour, icon and word (§1).
+      expect(markup).toContain('data-outcome="WINNER"');
+      expect(markup).toContain('data-outcome="LOSER"');
+      expect(markup).toContain('data-outcome-label=""');
     });
   });
 

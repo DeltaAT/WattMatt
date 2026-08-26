@@ -162,3 +162,16 @@ export const STAGGERS: readonly DurationEntry[] = [
   { token: '--stagger-tight', use: 'host lists' },
   { token: '--stagger-wide', use: 'beamer cards' },
 ];
+
+/**
+ * The decorations performance mode switches off (issue #29, docs/MOTION.md §6).
+ *
+ * Lengths rather than colours, which is why they are here with the durations
+ * and not in the palette: `.beamer-root[data-performance-mode='true']` sets
+ * both to `0px`, and an effect written against them is switched off without
+ * its author having to know the flag exists.
+ */
+export const EFFECTS: readonly DurationEntry[] = [
+  { token: '--wm-fx-glow-spread', use: 'accent ring on a reveal — 0 in performance mode' },
+  { token: '--wm-fx-blur', use: 'scene crossfade blur — 0 in performance mode' },
+];

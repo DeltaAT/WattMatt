@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 /**
  * Whether this window has been asked to hold still (docs/MOTION.md §6).
  *
@@ -17,9 +19,46 @@
  * anything here.
  */
 export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  return query()?.matches ?? false;
+}
+
+/**
+ * The same answer, kept current (issue #29).
+ *
+ * The setting can change while the window is open — a host turning it on
+ * precisely because the projector is misbehaving in front of them — and a value
+ * read once at mount would then be wrong for the rest of the evening, on the
+ * one window nobody can reach to reload. Subscribing is a few lines and removes
+ * the whole class of problem.
+ *
+ * `addEventListener` is fine to reach for unguarded: this runs in the app's own
+ * WebView2, not in whatever browser a user brought.
+ */
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(prefersReducedMotion);
+
+  useEffect(() => {
+    const media = query();
+    if (media === null) {
+      return;
+    }
+
+    // Read once more on subscribe: the setting can have changed between the
+    // first render and this effect, and nothing would tell us afterwards.
+    setReduced(media.matches);
+
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  return reduced;
+}
+
+/** `null` where there is no `matchMedia` — jsdom, a server render. */
+function query(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null;
+  }
+  return window.matchMedia('(prefers-reduced-motion: reduce)');
 }

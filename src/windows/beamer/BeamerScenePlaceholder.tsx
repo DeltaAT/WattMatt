@@ -110,7 +110,15 @@ export function BeamerScenePlaceholder({
      * against it, and the *next* round's pairings under the previous round's
      * heading is the one picture that must never appear.
      */
-    return <RoundBoardScene tournament={stageRound(tournament, scene.roundId)} settled={settled} />;
+    return (
+      <RoundBoardScene
+        tournament={stageRound(tournament, scene.roundId)}
+        settled={settled}
+        // A board that is catching up shows its results rather than replaying
+        // them (issue #29) — the same rule the bracket and the repechage follow.
+        delivery={delivery}
+      />
+    );
   }
 
   if (scene.id === 'REPECHAGE') {

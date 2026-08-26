@@ -6,6 +6,7 @@ import {
   COLOR_GROUPS,
   COLOR_TOKENS,
   DURATIONS,
+  EFFECTS,
   EASINGS,
   HOST_TYPE_SCALE,
   RADIUS_SCALE,
@@ -289,6 +290,13 @@ export function TokensPage() {
 
               <p className="wm-label pt-2">{'Stagger'}</p>
               {STAGGERS.map((entry) => (
+                <code key={entry.token} className="text-host-xs text-wm-text-muted">
+                  {`${entry.token} · ${entry.use}`}
+                </code>
+              ))}
+
+              <p className="wm-label pt-2">{'Effects'}</p>
+              {EFFECTS.map((entry) => (
                 <code key={entry.token} className="text-host-xs text-wm-text-muted">
                   {`${entry.token} · ${entry.use}`}
                 </code>

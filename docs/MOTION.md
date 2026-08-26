@@ -51,6 +51,10 @@ Every rule below follows from that split.
 /* stagger */
 --stagger-tight: 40ms; /* host lists */
 --stagger-wide:  80ms; /* beamer cards */
+
+/* effects — the decorations performance mode switches off (§6) */
+--wm-fx-glow-spread: 8px; /* accent ring on a reveal */
+--wm-fx-blur:        4px; /* the outgoing layer of a scene crossfade */
 ```
 
 **Never use `ease-in` on anything entering.** It delays the first movement — precisely the
@@ -147,12 +151,27 @@ screen black instantly rather than not black at all.
 ## 6. Performance budget
 
 - Target: **60 fps at 1920 × 1080 on integrated graphics.** Test on the actual event laptop,
-  not on a dev machine.
+  not on a dev machine. Dev builds carry an FPS readout in the corner of the stage
+  (`FpsOverlay`, issue #29) so the number is visible while a scene is being built; it is a
+  compile-time branch and cannot reach a release.
 - Maximum ~60 simultaneously animated elements on the beamer. Above that, animate a container.
-- `will-change` only during an animation; remove it afterwards.
+  The budget is spent **on mount**, when every animation class is applied at once — a field of
+  64 is where a per-card animation stops being free. Two scenes are shaped by this: the draw
+  pulses its *pool grid* rather than each of its 64 numbers, and the round board flips only the
+  result the window watched land (`useResultFlip`) rather than every decided side it was handed.
+  `src/windows/beamer/scenePerformance.test.tsx` renders every scene at 64 groups on 32 tables
+  and fails the build on either count.
+- `will-change` only during an animation; remove it afterwards. A class cannot express
+  "during", so the hint goes on the two finite reveals that need it and
+  `useWillChangeCleanup` — one delegated listener on the beamer root — takes it back off at
+  `animationend`. Motion driven from JavaScript sets and drops its own hint the same way
+  (`useBracketAdvance`). A hint in a class that every element wears is a promoted layer per
+  element, permanently, which is the opposite of what the rule is for.
 - Keep `blur()` under 20 px and never blur a full-screen layer for longer than 400 ms.
 - Prefer CSS animations for predetermined sequences — they run off the main thread and stay
   smooth while React is busy. Use Motion for dynamic and interruptible motion.
+- Never animate `box-shadow`, per §1 law 3 — a growing shadow repaints the card and everything
+  under it every frame. A glow ring is a fixed shadow on a `::after` whose *opacity* animates.
 
 ### Performance mode (`Performance-Modus`)
 
@@ -163,9 +182,19 @@ reloading the beamer window.
 It is `settings.performanceMode`, set in the host's settings panel (issue #15) and carried to
 the projector in every snapshot, which is what makes it reach a window that is already showing
 something. The beamer root carries it as `data-performance-mode`, and `src/styles/global.css`
-redefines the duration and stagger tokens under that attribute — so a scene picks it up without
-reading the flag itself. The rest of the list above (particles, blur, glow) and reduced motion
-are issue #29's.
+redefines the duration, stagger and effect tokens under that attribute — so a scene picks it up
+without reading the flag itself.
+
+Every item on the list is a token redefinition, which is what makes the mode safe to reach for
+mid-event: **it changes no property that could move a box**, so it cannot break a layout while
+the room is watching. Durations halve, staggers go to zero, and `--wm-fx-glow-spread` and
+`--wm-fx-blur` go to `0px` — a ring of zero spread paints nothing and a blur of zero radius
+costs nothing. Particles are the exception, because a particle burst is a list of elements
+somebody has to decide to render: the scene branches on the flag, and a
+`[data-particles]` layer that slips through is caught by a CSS backstop.
+
+`--dur-blackout` is deliberately *not* halved. §4.6 names 200 ms as the feel of the control
+itself, and a host reaching for the blackout wants the room dark, not the fade cheaper.
 
 ### Reduced motion
 
@@ -173,9 +202,20 @@ Respect `prefers-reduced-motion: reduce`: keep opacity and colour transitions (t
 meaning), drop movement, scale and particles. Reduced motion means *fewer and gentler*
 animations, not zero — the audience still needs to see that something changed.
 
+Answered in two places, because two of the beamer's motions are not keyframes. Every `wm-*`
+animation that moves something is redefined under a `@media (prefers-reduced-motion: reduce)`
+block in `src/styles/global.css`; the draw's cycling digits (#18) and the bracket's measured
+advancement (#25) read the setting themselves through `useReducedMotion`, which **subscribes**
+rather than reading once — the setting can change while the window is open, and the beamer is
+the one window nobody can reach to reload. The glow rings stay: they are opacity on a fixed
+shadow, and they are how the room sees which card was drawn.
+
 ## 7. Review checklist
 
-Before merging anything animated:
+Before merging anything animated. The boxes that can be checked by a machine are, in
+`src/styles/motionAudit.test.ts` — `transition: all`, `ease-in` on an enter, a `scale(0)`
+start, a layout-animated property, a stray `will-change` — because the reviewer of a rule is
+usually the person who just wrote it. The rest need eyes:
 
 - [ ] Does this animation have a purpose beyond "looks cool"? If the host sees it 100× per
       event, it should not exist.
@@ -186,6 +226,7 @@ Before merging anything animated:
 - [ ] Exit faster than enter?
 - [ ] Still 60 fps with 32 match cards on screen?
 - [ ] Correct with `prefers-reduced-motion` and in performance mode?
+- [ ] `will-change` left on after the animation, or on a class every element wears?
 - [ ] Reviewed at 4× slow motion — do colours cross-fade cleanly, is the transform origin right?
 
 Review animations again the next day with fresh eyes. Timing problems that are invisible

@@ -1,5 +1,6 @@
 import { BeamerPicture } from '@/windows/beamer/BeamerPicture';
 import { BeamerSurface } from '@/windows/beamer/BeamerSurface';
+import { FpsOverlay } from '@/windows/beamer/FpsOverlay';
 import { useBeamerView } from '@/windows/beamer/useBeamerView';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
 
@@ -20,6 +21,14 @@ export function BeamerWindow() {
       performanceMode={view.snapshot.tournament.performanceMode}
     >
       <BeamerPicture view={view} />
+
+      {/*
+        The frame-rate readout of docs/MOTION.md §6, dev builds only (issue
+        #29). `import.meta.env.DEV` is a compile-time constant, so this whole
+        branch — component, animation loop and all — is gone from a release
+        bundle rather than merely switched off.
+      */}
+      {import.meta.env.DEV ? <FpsOverlay /> : null}
     </BeamerSurface>
   );
 }
