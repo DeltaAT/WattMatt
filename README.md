@@ -39,6 +39,7 @@ The exact, normative algorithm lives in [`docs/TOURNAMENT-RULES.md`](docs/TOURNA
 | [docs/STYLEGUIDE.md](docs/STYLEGUIDE.md) | Design tokens, colour, typography, layout |
 | [docs/MOTION.md](docs/MOTION.md) | Animation principles and scene choreography |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | German ↔ English domain terminology |
+| [docs/PACKAGING.md](docs/PACKAGING.md) | Installer, portable build, WebView2, SmartScreen, releases |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones and issue map |
 | [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | Decisions that still need the product owner |
 
@@ -56,7 +57,14 @@ pnpm format           # prettier --write
 pnpm test             # domain unit tests
 pnpm test:coverage    # unit tests + coverage thresholds
 pnpm tauri build      # NSIS installer + portable exe in src-tauri/target/release
+pnpm package          # the same build, collected into release/ with checksums
+pnpm icons            # regenerate the app icon (tools/icons/)
 ```
+
+The installer registers the `.wattmatt` extension, so double-clicking a tournament opens it.
+Only one WattMatt ever runs: a second one hands its file over to the first and exits.
+[docs/PACKAGING.md](docs/PACKAGING.md) covers the artefacts, the WebView2 requirement and the
+SmartScreen warning an unsigned build produces.
 
 With a second monitor attached, `pnpm tauri dev` opens the beamer fullscreen on it. With a
 single screen it opens as a windowed 16:9 preview instead and says so in the host panel — the
@@ -74,6 +82,7 @@ src/
   ui/            shared primitives, tokens, motion presets
   i18n/          de-AT.ts — every visible string
 src-tauri/       Rust: file I/O, window & monitor management, logging
+tools/           build-time tooling: the lint rules, the icon generator, packaging
 docs/            documentation (English)
 ```
 

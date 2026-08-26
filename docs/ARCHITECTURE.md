@@ -278,6 +278,7 @@ src/
     log.ts             the rolling log's frontend half, and "Protokoll öffnen"
     globalErrors.ts    the two window listeners React's boundaries cannot replace
     session.ts         the crash marker: what the last run left behind
+    launch.ts          a tournament that arrived from Explorer rather than a dialog
     seed.ts            crypto.getRandomValues — the one non-deterministic step
     id.ts              the tournament id, from the same entropy source
   windows/
@@ -313,6 +314,7 @@ src-tauri/src/
   windows.rs           monitor enumeration, window placement
   power.rs             holds off sleep and the screensaver during an event
   logging.rs           rolling log file, rotation, the panic hook
+  launch.rs            the tournament the app was started with, and one instance only
 ```
 
 ## 5. Determinism and testability

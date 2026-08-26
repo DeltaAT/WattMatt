@@ -15,6 +15,10 @@ coverage/
 src-tauri/target/
 src-tauri/gen/
 
+# Collected release artefacts (tools/release/collect.js). Anchored: `release/`
+# unanchored would also swallow tools/release/.
+/release/
+
 # Editors
 .vscode/*
 !.vscode/extensions.json

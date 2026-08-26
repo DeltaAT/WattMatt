@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod fs;
+mod launch;
 mod logging;
 mod power;
 mod session;
@@ -11,10 +12,19 @@ use tauri::{Manager, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
+        // First, and it has to be first: the plugin decides whether this
+        // process is the app or the messenger, and everything below only makes
+        // sense in the one that stays (src-tauri/src/launch.rs).
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            launch::on_second_instance(app, args, cwd);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .manage(windows::BeamerState::default())
         .manage(power::SleepInhibitor::default())
         .manage(session::SessionState::default())
+        // Read before the window exists, because the frontend asks for it
+        // during its first render.
+        .manage(launch::LaunchState::from_environment())
         .invoke_handler(tauri::generate_handler![
             windows::list_monitors,
             windows::beamer_status,
@@ -32,6 +42,7 @@ fn main() {
             session::dismiss_recovery,
             session::mark_session_document,
             session::end_session,
+            launch::take_startup_document,
             logging::log_event,
             logging::log_directory,
             logging::open_log_directory,

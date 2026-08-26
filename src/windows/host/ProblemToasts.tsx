@@ -98,4 +98,5 @@ const MESSAGE: Record<ProblemKind, string> = {
   sleepInhibitFailed: de.error.sleepInhibitFailed,
   sessionMarkerFailed: de.error.sessionMarkerFailed,
   logUnavailable: de.error.logUnavailable,
+  documentAlreadyOpen: de.error.documentAlreadyOpen,
 };

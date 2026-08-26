@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "WattMatt",
+  "mainBinaryName": "WattMatt",
   "version": "0.1.0",
   "identifier": "at.deltadeveloping.wattmatt",
   "build": {
@@ -32,17 +33,31 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "WattMatt",
-    "copyright": "",
+    "copyright": "© 2026 WattMatt",
     "category": "Utility",
     "shortDescription": "Offline tournament management and beamer presentation",
     "longDescription": "Runs a live knockout tournament on a single offline Windows laptop, with a host control window and a fullscreen beamer presentation window.",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "createUpdaterArtifacts": false,
+    "fileAssociations": [
+      {
+        "ext": ["wattmatt"],
+        "name": "WattMatt.Tournament",
+        "description": "WattMatt-Turnier",
+        "role": "Editor"
+      }
     ],
-    "createUpdaterArtifacts": false
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "languages": ["German"],
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

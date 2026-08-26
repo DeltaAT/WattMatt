@@ -37,7 +37,13 @@ export type ProblemKind =
   /** The crash-recovery marker could not be written. */
   | 'sessionMarkerFailed'
   /** The log itself could not be opened. */
-  | 'logUnavailable';
+  | 'logUnavailable'
+  /**
+   * A `.wattmatt` file was double-clicked while a different tournament was
+   * open (issue #31). Not a failure of the app — a request it declined, and
+   * the host is told so, because from Explorer it looks like nothing happened.
+   */
+  | 'documentAlreadyOpen';
 
 export interface Problem {
   kind: ProblemKind;
