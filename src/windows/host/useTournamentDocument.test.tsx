@@ -9,6 +9,7 @@ import { TournamentFileError } from '@/platform/tournamentFile';
 import { closeDocument, setNewDocument, setOpenedDocument } from '@/store/actions/document';
 import { AUTOSAVE_DEBOUNCE_MS } from '@/store/autosave';
 import { serialiseTournament, type PersistenceDeps } from '@/store/persistence';
+import { problemStore } from '@/store/problems';
 import { tournamentStore } from '@/store/session';
 import { fakeDeps, fakeFiles, LIBRARY, type FakeFiles } from '@/store/testFixtures';
 import {
@@ -41,6 +42,10 @@ const mocks = vi.hoisted(() => ({
   markSessionDocument: vi.fn<(path: string | null) => Promise<void>>(async () => {}),
   endSession: vi.fn(async () => {}),
   dismissRecovery: vi.fn(async () => {}),
+  /** What Rust says this process was started with (issue #31). */
+  startupDocument: null as string | null,
+  /** Every handler `onOpenRequest` is currently holding. */
+  openRequests: [] as Array<(path: string) => void>,
 }));
 
 vi.mock('@/platform/session', () => ({
@@ -48,6 +53,24 @@ vi.mock('@/platform/session', () => ({
   markSessionDocument: (path: string | null) => mocks.markSessionDocument(path),
   endSession: () => mocks.endSession(),
   dismissRecovery: () => mocks.dismissRecovery(),
+}));
+
+vi.mock('@/platform/launch', () => ({
+  takeStartupDocument: async () => {
+    // Taken, exactly as Rust hands it out: a second mount must not reopen it.
+    const path = mocks.startupDocument;
+    mocks.startupDocument = null;
+    return path;
+  },
+  onOpenRequest: async (handler: (path: string) => void) => {
+    mocks.openRequests.push(handler);
+    return () => {
+      const at = mocks.openRequests.indexOf(handler);
+      if (at >= 0) {
+        mocks.openRequests.splice(at, 1);
+      }
+    };
+  },
 }));
 
 vi.mock('@/platform/tauri', async (importOriginal) => ({
@@ -89,6 +112,9 @@ beforeEach(() => {
   mocks.markSessionDocument.mockClear();
   mocks.endSession.mockClear();
   mocks.dismissRecovery.mockClear();
+  mocks.startupDocument = null;
+  mocks.openRequests.length = 0;
+  problemStore.dismissAll();
   // The store outlives a window, so each test starts it back at the start
   // screen rather than inheriting the previous test's tournament.
   closeDocument(tournamentStore);
@@ -978,5 +1004,126 @@ describe('the window going away', () => {
 
     expect(view.result.current.library).toBeNull();
     expect(console.error).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The `.wattmatt` file association of issue #31.
+ *
+ * A tournament can now arrive without anybody clicking anything in WattMatt —
+ * from Explorer, either into a process that is starting or into one that is
+ * already running an event. The second case is the one worth testing hardest:
+ * the wrong answer there is a round in progress being replaced by whatever file
+ * somebody double-clicked.
+ */
+describe('a tournament opened from Explorer', () => {
+  const OTHER = `${LIBRARY}\\Gestern.wattmatt`;
+
+  beforeEach(() => {
+    files.disk.set(PATH, serialiseTournament(midTournament(), '0.1.0'));
+    files.disk.set(OTHER, serialiseTournament(midTournament(), '0.1.0'));
+  });
+
+  it('opens the file the app was started with', async () => {
+    mocks.startupDocument = PATH;
+
+    const view = await mount();
+    await idle(view);
+
+    expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: PATH });
+  });
+
+  it('reaches the start screen when it was started with nothing', async () => {
+    const view = await mount();
+    await idle(view);
+
+    expect(tournamentStore.getState().document).toBeNull();
+  });
+
+  /**
+   * Restarting by double-clicking the tournament WattMatt died on is the
+   * shortest way back into an event. Offering to recover what is already open
+   * would be one more thing to dismiss while the room waits.
+   */
+  it('does not also offer to recover the file it was just asked to open', async () => {
+    mocks.startupDocument = PATH;
+    mocks.recovery = { path: PATH, startedAt: 1_700_000_000_000 };
+
+    const view = await mount();
+    await idle(view);
+
+    expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: PATH });
+    expect(view.result.current.recovery).toBeNull();
+  });
+
+  it('still offers a recovery of a different tournament', async () => {
+    mocks.startupDocument = PATH;
+    mocks.recovery = { path: OTHER, startedAt: 1_700_000_000_000 };
+
+    const view = await mount();
+    await idle(view);
+    await waitFor(() => expect(view.result.current.recovery).not.toBeNull());
+
+    expect(view.result.current.recovery?.path).toBe(OTHER);
+  });
+
+  it('opens a file a second instance hands over when nothing is open', async () => {
+    const view = await mount();
+    await waitFor(() => expect(mocks.openRequests).toHaveLength(1));
+
+    await act(async () => {
+      mocks.openRequests[0]?.(PATH);
+    });
+    await idle(view);
+
+    expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: PATH });
+  });
+
+  /**
+   * The one that decides whether a live event survives a misclick in Explorer.
+   * The open tournament stays exactly where it was, and the host is told why
+   * nothing happened — from Explorer the double-click looks like a no-op.
+   */
+  it('refuses to swap a tournament that is already open, and says so', async () => {
+    setOpenedDocument(tournamentStore, midTournament(), OTHER);
+    const view = await mount();
+    await waitFor(() => expect(mocks.openRequests).toHaveLength(1));
+
+    await act(async () => {
+      mocks.openRequests[0]?.(PATH);
+    });
+    await idle(view);
+
+    expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: OTHER });
+    expect(problemStore.getState().map((problem) => problem.kind)).toEqual(['documentAlreadyOpen']);
+  });
+
+  /**
+   * Double-clicking the tournament that is already open: the second instance
+   * has raised this window, which is all the host wanted. Complaining about it
+   * would be the app scolding somebody for asking for what they already have.
+   */
+  it('says nothing when the file handed over is the one already open', async () => {
+    setOpenedDocument(tournamentStore, midTournament(), PATH);
+    const view = await mount();
+    await waitFor(() => expect(mocks.openRequests).toHaveLength(1));
+
+    await act(async () => {
+      mocks.openRequests[0]?.(PATH);
+    });
+    await idle(view);
+
+    expect(tournamentStore.getState().file).toEqual({ status: 'saved', path: PATH });
+    expect(problemStore.getState()).toHaveLength(0);
+  });
+
+  it('stops listening once the window is gone', async () => {
+    const view = await mount();
+    await waitFor(() => expect(mocks.openRequests).toHaveLength(1));
+
+    view.unmount();
+    await act(async () => {});
+
+    expect(mocks.openRequests).toHaveLength(0);
   });
 });

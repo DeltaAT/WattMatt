@@ -295,6 +295,14 @@ export const deAT = {
       'Der Vermerk für die Wiederherstellung nach einem Absturz konnte nicht geschrieben werden. Speichern Sie das Turnier zwischendurch von Hand.',
     logUnavailable:
       'Das Protokoll konnte nicht geöffnet werden. Öffnen Sie den Ordner %APPDATA%\\WattMatt\\logs im Explorer von Hand.',
+    /**
+     * A tournament file was double-clicked in Explorer while a different one
+     * was open (issue #31). Refused rather than swapped: the open tournament
+     * may be mid-round, and the host is the one who decides when it closes
+     * (CLAUDE.md golden rule 3).
+     */
+    documentAlreadyOpen:
+      'Es ist bereits ein anderes Turnier geöffnet. Schließen Sie es, bevor Sie die angeklickte Datei öffnen.',
   },
 
   /**

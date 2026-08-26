@@ -16,6 +16,11 @@ laptop, continue. No hidden state outside the file except UI preferences.
 
 The host may save anywhere via *Speichern unter…*.
 
+The installer registers `.wattmatt` with the shell, so a tournament also opens by
+double-clicking it in Explorer (issue #31). Only the extension itself is registered — the
+rotated backups end in `.bak1` … `.bak3` and are never opened by accident. What a
+double-click does while WattMatt is already running is in docs/PACKAGING.md §6.
+
 The default library is created on first use, not on install, and is listed straight from disk:
 the start screen's *Zuletzt verwendet* is that listing, newest first, rather than a remembered
 list of files (docs/OPEN-QUESTIONS.md #25). A tournament is written into it the moment it is

@@ -1,0 +1,117 @@
+name: Release
+
+# Tagging is the whole trigger. `workflow_dispatch` builds the same artefacts
+# without publishing anything, which is how a build is checked before the tag
+# that would announce it exists.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Husky installs git hooks, which a CI checkout has no use for.
+  HUSKY: 0
+
+jobs:
+  windows:
+    # The only platform WattMatt ships to, and the only one that can produce an
+    # NSIS installer.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The tag is what everybody quotes afterwards; the version is what the app
+      # stamps into every tournament file it writes. A release where the two
+      # disagree is a support question nobody can answer.
+      - name: Check the tag against the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package.json version ${version}" >&2
+            exit 1
+          fi
+
+      # The same gates as every pull request. A tag can be pushed at any commit,
+      # including one that never went through CI.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint Rust
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # Builds the installer and the portable executable, then collects both
+      # into release/ with a checksum file (tools/release/collect.js).
+      - name: Build and collect
+        run: pnpm package
+
+      # Always, so a `workflow_dispatch` run is downloadable without a tag.
+      - name: Upload the artefacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: wattmatt-windows
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+
+      # A draft, deliberately. The build is unsigned and SmartScreen warns on
+      # first run (docs/OPEN-QUESTIONS.md #12), so somebody reads the notes and
+      # presses publish rather than a tag announcing itself.
+      - name: Draft the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Windows 11 x64. Both downloads are offline: no updater, no telemetry,
+          no network access at runtime.
+
+          - `*-setup.exe` — installer for the current user, no administrator
+            needed. Registers `.wattmatt` so a tournament opens by double-click,
+            and carries the WebView2 runtime for a machine that has never been
+            online.
+          - `*-portable.exe` — the same application, runnable from a USB stick.
+            Needs WebView2, which Windows 11 already has.
+
+          The build is unsigned, so SmartScreen warns the first time it runs.
+          Installation, verification and the SmartScreen click-through are in
+          `docs/PACKAGING.md`.
+
+          `SHA256SUMS.txt` is there so a copy on a stick can be checked against
+          the one that was built: `certutil -hashfile <file> SHA256`.
+          NOTES
+
+          gh release create "${GITHUB_REF_NAME}" --draft \
+            --title "WattMatt ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md release/*

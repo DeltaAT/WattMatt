@@ -26,6 +26,7 @@ const ALL_KINDS: ProblemKind[] = [
   'sleepInhibitFailed',
   'sessionMarkerFailed',
   'logUnavailable',
+  'documentAlreadyOpen',
 ];
 
 const MESSAGES: Record<ProblemKind, string> = {
@@ -37,6 +38,7 @@ const MESSAGES: Record<ProblemKind, string> = {
   sleepInhibitFailed: de.error.sleepInhibitFailed,
   sessionMarkerFailed: de.error.sessionMarkerFailed,
   logUnavailable: de.error.logUnavailable,
+  documentAlreadyOpen: de.error.documentAlreadyOpen,
 };
 
 function problem(kind: ProblemKind, count = 1): Problem {

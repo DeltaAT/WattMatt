@@ -21,6 +21,13 @@ serde_json = "1"
 # talks to no network, and the capability that grants it is host-only.
 tauri-plugin-dialog = "2"
 
+# One WattMatt at a time (src-tauri/src/launch.rs). Registering the .wattmatt
+# file association means a double-click can start the app while it is already
+# running; two processes would each open a beamer window and autosave the same
+# file from two places, the later write winning. The plugin hands the path to
+# the running instance and exits. Local IPC only — a named pipe, no network.
+tauri-plugin-single-instance = "2"
+
 # Only for SetThreadExecutionState — see src/power.rs. WattMatt ships to
 # Windows 11 exclusively, but keeping the dependency target-gated means the
 # crate still compiles elsewhere for a quick `cargo check`.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import { onOpenRequest, takeStartupDocument } from '@/platform/launch';
 import {
   dismissRecovery,
   endSession,
@@ -23,6 +24,7 @@ import {
   type OpenOutcome,
 } from '@/store/persistence';
 import { APP_VERSION, createPersistenceDeps } from '@/store/persistenceRuntime';
+import { reportProblem } from '@/store/problems';
 import { tournamentStore } from '@/store/session';
 import { filePath, hasUnsavedChanges, type TournamentState } from '@/store/tournamentStore';
 
@@ -104,6 +106,12 @@ export function useTournamentDocument(): TournamentDocument {
   const [transientNotice, setTransientNotice] = useState<FileNotice | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [recovery, setRecovery] = useState<RecoveryOffer | null>(null);
+  /**
+   * The tournament this process was started with, once it has been opened
+   * (issue #31). Kept only so the crash recovery below can be told apart from
+   * it — see `recovery`.
+   */
+  const [startupPath, setStartupPath] = useState<string | null>(null);
   const [autosaveState, setAutosaveState] = useState<AutosaveState>(IDLE_AUTOSAVE);
 
   const isDirty = hasUnsavedChanges(state);
@@ -252,6 +260,65 @@ export function useTournamentDocument(): TournamentDocument {
     [deps, run],
   );
 
+  /**
+   * The tournament WattMatt was started with, when the host got here by
+   * double-clicking a `.wattmatt` file in Explorer (issue #31).
+   *
+   * Opened without asking, and it may be: this runs once, on the first render
+   * of a process that has only just started, so there is nothing open for it to
+   * replace. Rust hands the path out exactly once, which is what stops a
+   * reloaded WebView from reopening the file over whatever the host has done
+   * since (src-tauri/src/launch.rs).
+   */
+  useEffect(() => {
+    takeStartupDocument().then((path) => {
+      if (path === null) {
+        return;
+      }
+      setStartupPath(path);
+      openAt(path);
+    }, reportFailure);
+  }, [openAt]);
+
+  /**
+   * A tournament double-clicked while WattMatt was already running.
+   *
+   * The second process has handed its path over and exited, and its only other
+   * effect was to raise this window (src-tauri/src/launch.rs). Three outcomes,
+   * and the dull one is the point: with nothing open it is an ordinary open;
+   * with that same tournament already open the raised window is exactly what
+   * the host wanted and nothing else should happen; with a *different* one open
+   * it is declined and said out loud, because swapping the file would throw
+   * away a round in progress on the strength of a double-click.
+   */
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+
+    onOpenRequest((path) => {
+      const current = tournamentStore.getState();
+      if (current.document === null) {
+        openAt(path);
+        return;
+      }
+      if (filePath(current.file) === path) {
+        return;
+      }
+      reportProblem('documentAlreadyOpen', 'launch.open-request-declined');
+    }).then((stop) => {
+      if (cancelled) {
+        stop();
+        return;
+      }
+      unlisten = stop;
+    }, reportFailure);
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [openAt]);
+
   const openWithDialog = useCallback(() => {
     run(async () => {
       setTransientNotice(noticeForOpen(await openTournamentWithDialog(tournamentStore, deps)));
@@ -360,6 +427,16 @@ export function useTournamentDocument(): TournamentDocument {
 
   useCloseRequest(requestQuit);
 
+  /**
+   * The crash offer, unless it names the file that was just double-clicked.
+   *
+   * Restarting by double-clicking the tournament that WattMatt died on is the
+   * shortest way back into an event, and being offered to open what is already
+   * open is an offer with nothing behind it — one more thing to read and
+   * dismiss while the room waits.
+   */
+  const recoveryOffer = recovery !== null && recovery.path === startupPath ? null : recovery;
+
   const recover = useCallback(() => {
     const offer = recovery;
     setRecovery(null);
@@ -382,7 +459,7 @@ export function useTournamentDocument(): TournamentDocument {
     recents,
     library,
     notice,
-    recovery,
+    recovery: recoveryOffer,
     pendingIntent,
     create,
     openWithDialog,
