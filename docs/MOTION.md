@@ -46,6 +46,7 @@ Every rule below follows from that split.
 --dur-slow:    400ms;  /* beamer scene crossfade */
 --dur-reveal:  600ms;  /* beamer single reveal */
 --dur-story:   1200ms; /* beamer choreographed sequence step */
+--dur-blackout: 200ms; /* the host's blackout, §4.6 */
 
 /* stagger */
 --stagger-tight: 40ms; /* host lists */
@@ -123,6 +124,14 @@ plus a 4 px blur on the outgoing layer. The blur is not decoration: it hides the
 two different scenes are visible at once, which otherwise reads as two objects rather than one
 transformation. Blackout is a hard 200 ms fade to `--wm-bg` — when the host wants the screen
 gone, they want it gone.
+
+The blackout is built (issue #28, `useBlackout` and `wm-blackout-veil`); the general crossfade
+between two scenes is not yet. A fade *from* a picture needs that picture to still be drawn, so
+the beamer keeps the covered scene for the length of the fade and drops it once the veil has
+landed — a sequence playing on behind an opaque layer would spend the §6 frame budget on
+something nobody can see. The veil's resting opacity is 1 and the animation only fades it *in*:
+this covers the one control that must never fail, so an animation that does not run leaves the
+screen black instantly rather than not black at all.
 
 ## 5. Host UI micro-interactions
 

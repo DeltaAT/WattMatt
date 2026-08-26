@@ -66,6 +66,15 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Redo | Wiederholen |
 | Action log | Verlauf |
 | Blackout | Bildschirm aus |
+| To release a blackout | Bildschirm wieder an |
+| Freeze (hold the beamer picture) | Bild einfrieren | The host works ahead while the room keeps the last picture (issue #28) |
+| To release a freeze | Bild freigeben |
+| Frozen | Eingefroren | The badge over the host's live preview while the picture is held |
+| Auto-follow | Automatisch folgen | The scene follows the tournament phase (`autoFollow`) |
+| Live preview | Live-Vorschau | The host's thumbnail of what the audience can see |
+| Skip an animation | Animation überspringen |
+| Keyboard shortcut | Tastenkürzel |
+| Scene switcher | Ansicht | The host's list of every beamer scene (issue #28) |
 | Performance mode | Performance-Modus |
 | Bracket node | Turnierbaum-Knoten |
 | Repechage draw | Auslosung der Hoffnungsrunde |

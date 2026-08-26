@@ -89,7 +89,7 @@ is `store/undo.ts`; see "Taking a decision back" below.
 | Event | Direction | Carries |
 | --- | --- | --- |
 | `state:snapshot` | host → beamer | The whole picture: revision, scene, `autoFollow`, tournament |
-| `beamer:scene` | host → beamer | Revision, scene and `autoFollow`, without the tournament payload |
+| `beamer:scene` | host → beamer | Revision, scene, `autoFollow` and `skipToken`, without the tournament payload |
 | `state:request-snapshot` | beamer → host | Nothing; its arrival is the message |
 | `beamer:heartbeat` | beamer → host | A beat counter |
 
@@ -199,9 +199,38 @@ time behind it, and a wall that followed along would put a half-filled field in 
 audience (issue #23, docs/TOURNAMENT-RULES.md §6). It is staged by the step into the naming
 phase, so the projector is protected without the host having to think about it.
 
-`autoFollow` (default on) makes the scene follow the tournament phase. The host can turn it
-off and drive the beamer manually at any moment — see issue *Beamer control center*. Staging a
-scene by hand turns it off on the spot: manual control always wins (golden rule 3).
+`autoFollow` (default on) makes the scene follow the tournament phase, and `sceneForPhase`
+(`domain/sceneCatalog.ts`) is the whole of that rule. It is consulted at **exactly two moments**:
+a phase step, and the host turning auto-follow back on. Never on an ordinary commit — a host who
+put the `Turnierbaum` on the wall to talk over it must not lose it because a result landed
+(docs/OPEN-QUESTIONS.md #76). Staging a scene by hand turns `autoFollow` off on the spot and it
+stays off until the host hands the beamer back: manual control always wins (golden rule 3).
+
+### Holding the picture, and jumping an animation
+
+Two host controls sit beside the scene and neither is a scene (issue #28).
+
+**Freeze** (`state.frozen`) is a hold. While it is on, `startHostSync` sends the projector
+nothing at all — not the scene, not the result just marked, not the round being drawn ahead — and
+answers a catch-up request with the picture captured at the freeze, so a beamer reopened mid-freeze
+shows the room what it was already looking at rather than the work in progress. Releasing sends the
+current state whole and flagged `catchUp`: the room is shown where the evening got to, not shown
+twenty minutes replayed at speed. It is deliberately not on the undo stack
+(docs/OPEN-QUESTIONS.md #75).
+
+**Skip** (`state.skipToken`) is a monotonic counter carried in the picture rather than a command
+channel. The beamer skips when the number it holds changes, so a re-delivered snapshot skips
+nothing and a beamer reopened after five skips fires none of them. This is what makes
+`Space` work from the *host* window, where the host's hands actually are
+(docs/OPEN-QUESTIONS.md #53).
+
+### The host's live preview
+
+The host column renders the real scenes from a second `BeamerStore`, fed by the loopback leg of
+the host channel (`createLoopbackChannel`, `mergeTransports`). The preview is therefore a genuine
+beamer — same store, same sync layer, same messages — and cannot disagree with the wall. It sends
+no heartbeat: a liveness light a preview could keep lit would report the projector healthy while
+the room stares at a frozen picture.
 
 ## 4. Module layout
 
@@ -224,6 +253,7 @@ src/
     repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
     progression.ts     the phase machine: what the field carries, where it goes next
     bracket.ts         bracket construction, third-place match
+    sceneCatalog.ts    every scene the host can stage, and the one a phase implies
     selectors.ts       derived data (standings, free tables, …)
   store/
     tournamentStore.ts host-owned truth; `commit` bumps the revision
@@ -239,7 +269,7 @@ src/
     autosave.ts        the 500 ms debounce, forced saves, and what the host is shown
   platform/
     tauri.ts           the IPC boundary: invoke + listen, every payload Zod-parsed
-    windowSync.ts      the Tauri transport behind sync.ts
+    windowSync.ts      the Tauri transport behind sync.ts, plus the host's own loopback
     beamerWindow.ts    monitor list, beamer placement, sleep inhibition
     beamerSummary.ts   pure reading of a placement: is the audience seeing this?
     tournamentFile.ts  read/write/list files, and the native open/save dialogs
@@ -258,6 +288,9 @@ src/
     beamer/useFitToStage.ts  measures the stage and scales the scene body to it
     beamer/useRepechageBeat.ts  which card this window may animate, if any
     beamer/useBracketAdvance.ts which chip moves into the round above, and from where
+    beamer/useBlackout.ts    the 200 ms veil, and the picture kept under it
+    beamer/useSkipSignal.ts  the host's Space, arriving from the other window
+    beamer/BeamerPicture.tsx the stage contents, shared with the host's preview
     beamer/reducedMotion.ts  whether this window was asked to hold still
   ui/                  Button, Card, GroupChip, TableChip, motion presets
   i18n/

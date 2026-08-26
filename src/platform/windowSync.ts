@@ -55,3 +55,80 @@ export function createHostTransport(): SyncTransport {
 export function createBeamerTransport(): SyncTransport {
   return isTauriRuntime() ? createTransport(HOST_WINDOW) : createDetachedTransport();
 }
+
+/**
+ * Two transports wired to each other inside one window (issue #28).
+ *
+ * The host's live preview is a real beamer: the same store, the same sync
+ * layer, the same scenes, fed by the same messages the projector gets. That is
+ * the only way "the preview matches the beamer" can be a property rather than a
+ * promise — a second rendering path would be a preview that could disagree with
+ * the wall at exactly the moment the host is relying on it.
+ *
+ * Synchronous delivery, unlike the Tauri transport. It costs nothing, and it
+ * means the preview is never a frame behind the projector for a reason that
+ * only exists in the host window.
+ */
+export function createLoopbackChannel(): { host: SyncTransport; beamer: SyncTransport } {
+  type Listener = (payload: unknown) => void;
+  const toBeamer = new Map<string, Set<Listener>>();
+  const toHost = new Map<string, Set<Listener>>();
+
+  const side = (
+    out: Map<string, Set<Listener>>,
+    inbox: Map<string, Set<Listener>>,
+  ): SyncTransport => ({
+    emit: async (event, payload) => {
+      // Copied before iterating: a listener that unsubscribes itself while the
+      // message is being delivered must not shorten the list underneath us.
+      for (const listener of [...(out.get(event) ?? [])]) {
+        listener(payload);
+      }
+    },
+    listen: async (event, schema, onMessage) => {
+      const listener: Listener = (payload) => {
+        const parsed = schema.safeParse(payload);
+        // Parsed even here, where both ends are the same build: the schema is
+        // the contract, and a preview that accepted what the projector rejects
+        // would hide exactly the bug it exists to reveal.
+        if (parsed.success) {
+          onMessage(parsed.data);
+        }
+      };
+      const listeners = inbox.get(event) ?? new Set<Listener>();
+      listeners.add(listener);
+      inbox.set(event, listeners);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  });
+
+  return { host: side(toBeamer, toHost), beamer: side(toHost, toBeamer) };
+}
+
+/**
+ * One transport that speaks for several.
+ *
+ * The host emits to the projector *and* to its own preview, and listens to
+ * both. Merging here rather than starting two host syncs matters: two syncs
+ * would mean two broadcasts per commit and two answers to every catch-up
+ * request, and the second of each would arrive at the projector as a duplicate.
+ */
+export function mergeTransports(transports: readonly SyncTransport[]): SyncTransport {
+  return {
+    emit: async (event, payload) => {
+      await Promise.all(transports.map((transport) => transport.emit(event, payload)));
+    },
+    listen: async (event, schema, onMessage) => {
+      const unlisteners = await Promise.all(
+        transports.map((transport) => transport.listen(event, schema, onMessage)),
+      );
+      return () => {
+        for (const unlisten of unlisteners) {
+          unlisten();
+        }
+      };
+    },
+  };
+}

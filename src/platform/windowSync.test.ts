@@ -104,3 +104,104 @@ describe('the Tauri sync transport', () => {
     expect(listen).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The in-window channel the host's live preview runs on (issue #28).
+ *
+ * The preview is a real beamer — same store, same sync layer, same scenes — so
+ * what has to hold here is that it is fed by exactly the messages the projector
+ * gets, and that plugging it in does not double what the projector receives.
+ */
+describe('the loopback channel', () => {
+  it('carries a message from the host side to the beamer side', async () => {
+    const { createLoopbackChannel } = await loadWindowSync();
+    const channel = createLoopbackChannel();
+    const received: unknown[] = [];
+
+    await channel.beamer.listen('state:snapshot', z.object({ revision: z.number() }), (payload) =>
+      received.push(payload),
+    );
+    await channel.host.emit('state:snapshot', { revision: 7 });
+
+    expect(received).toEqual([{ revision: 7 }]);
+  });
+
+  it('carries a request back the other way', async () => {
+    const { createLoopbackChannel } = await loadWindowSync();
+    const channel = createLoopbackChannel();
+    const asked: unknown[] = [];
+
+    await channel.host.listen('state:request-snapshot', z.object({}), (payload) =>
+      asked.push(payload),
+    );
+    await channel.beamer.emit('state:request-snapshot', {});
+
+    expect(asked).toHaveLength(1);
+  });
+
+  it('drops a payload that does not parse, exactly as the real transport does', async () => {
+    const { createLoopbackChannel } = await loadWindowSync();
+    const channel = createLoopbackChannel();
+    const received: unknown[] = [];
+
+    await channel.beamer.listen('state:snapshot', z.object({ revision: z.number() }), (payload) =>
+      received.push(payload),
+    );
+    await channel.host.emit('state:snapshot', { revision: 'seven' });
+
+    // A preview that accepted what the projector rejects would hide the bug it
+    // exists to reveal.
+    expect(received).toEqual([]);
+  });
+
+  it('stops delivering once the listener is gone', async () => {
+    const { createLoopbackChannel } = await loadWindowSync();
+    const channel = createLoopbackChannel();
+    const received: unknown[] = [];
+
+    const unlisten = await channel.beamer.listen('x', z.unknown(), (payload) =>
+      received.push(payload),
+    );
+    unlisten();
+    await channel.host.emit('x', 1);
+
+    expect(received).toEqual([]);
+  });
+});
+
+describe('merging transports', () => {
+  it('emits once to each and listens on all of them', async () => {
+    const { createLoopbackChannel, mergeTransports } = await loadWindowSync();
+    const projector = createLoopbackChannel();
+    const preview = createLoopbackChannel();
+    const seen: string[] = [];
+
+    await projector.beamer.listen('x', z.string(), (payload) => seen.push(`projector:${payload}`));
+    await preview.beamer.listen('x', z.string(), (payload) => seen.push(`preview:${payload}`));
+
+    await mergeTransports([projector.host, preview.host]).emit('x', 'snapshot');
+
+    // One commit, one message each — a second host sync would have sent the
+    // projector two.
+    expect(seen).toEqual(['projector:snapshot', 'preview:snapshot']);
+  });
+
+  it('unsubscribes from every leg at once', async () => {
+    const { createLoopbackChannel, mergeTransports } = await loadWindowSync();
+    const projector = createLoopbackChannel();
+    const preview = createLoopbackChannel();
+    const seen: unknown[] = [];
+
+    const unlisten = await mergeTransports([projector.host, preview.host]).listen(
+      'x',
+      z.unknown(),
+      (payload) => seen.push(payload),
+    );
+    unlisten();
+
+    await projector.beamer.emit('x', 1);
+    await preview.beamer.emit('x', 2);
+
+    expect(seen).toEqual([]);
+  });
+});

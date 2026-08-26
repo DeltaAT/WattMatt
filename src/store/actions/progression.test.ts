@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { closeRound, drawRound, setWinner } from '@/domain/draw';
 import { currentRound } from '@/domain/selectors';
-import { FIXED_NOW, group, table, tournament } from '@/domain/testFixtures';
+import { FIXED_NOW, group, roundId, table, tournament } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { advancePhase } from '@/store/actions/progression';
+import { showScene } from '@/store/actions/scene';
 import {
   createTournamentStore,
   INITIAL_TOURNAMENT_STATE,
@@ -142,12 +143,32 @@ describe('advancePhase', () => {
     expect(store.getState().scene).toEqual(INITIAL_TOURNAMENT_STATE.scene);
   });
 
-  it('leaves the projector alone for every other step', () => {
+  /*
+   * Every other step follows the phase rather than staging a fixed picture,
+   * which is the whole of `autoFollow` (issue #28). 64 groups leave 32
+   * standing, so this is the step into the elimination rounds, and the honest
+   * picture there is the board of the round the room has just watched.
+   */
+  it('follows the phase onto the board of the round that just finished', () => {
     const store = ready(qualified(64));
 
     advancePhase(store);
 
-    expect(store.getState().scene).toEqual(INITIAL_TOURNAMENT_STATE.scene);
+    expect(open(store).phase).toBe('ELIMINATION');
+    expect(store.getState().scene).toEqual({ id: 'ROUND_BOARD', roundId: roundId(1) });
+  });
+
+  it('leaves the projector alone once the host has taken it by hand', () => {
+    const store = ready(qualified(64));
+    showScene(store, { id: 'TABLE_OVERVIEW' });
+
+    advancePhase(store);
+
+    // Auto-follow is off from the moment the host stages anything, and stays
+    // off until they hand the beamer back (golden rule 3). It must never take
+    // the screen away from an explanation that is still going on.
+    expect(store.getState().autoFollow).toBe(false);
+    expect(store.getState().scene).toEqual({ id: 'TABLE_OVERVIEW' });
   });
 
   it('puts the phase back, and the pot with it, when the host undoes it', () => {

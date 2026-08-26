@@ -1,9 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import type { BeamerScene } from '@/domain/beamerScene';
+import { sceneChoices } from '@/domain/sceneCatalog';
+import { round, tournament } from '@/domain/testFixtures';
 import { de } from '@/i18n';
 import type { BeamerStatus, MonitorInfo } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
+import type { BeamerControlHandle } from '@/windows/host/useBeamerControl';
 
 const laptop: MonitorInfo = {
   id: 'laptop',
@@ -24,10 +28,44 @@ const projector: MonitorInfo = {
   isPrimary: false,
 };
 
-function render(status: Partial<BeamerStatus>, beamerAlive = true): string {
+const noop = () => {};
+
+/**
+ * A control handle standing in for the store-bound one.
+ *
+ * The hook is tested against the real store in `useBeamerControl.test`; what
+ * is checked here is the panel — that every scene is on it, that the state of
+ * the projector is legible, and that the two holds say which way round they are.
+ */
+function control(overrides: Partial<BeamerControlHandle> = {}): BeamerControlHandle {
+  const scene: BeamerScene = overrides.scene ?? { id: 'IDLE' };
+  return {
+    scene,
+    choices: sceneChoices(tournament({ rounds: [round(1)] })),
+    autoFollow: true,
+    frozen: false,
+    isBlackout: scene.id === 'BLACKOUT',
+    show: noop,
+    showAt: noop,
+    toggleBlackout: noop,
+    setAutoFollow: noop,
+    toggleFreeze: noop,
+    skip: noop,
+    isStaged: (choice) => choice.scene?.id === scene.id,
+    ...overrides,
+  };
+}
+
+function render(
+  status: Partial<BeamerStatus>,
+  beamerAlive = true,
+  handle: BeamerControlHandle = control(),
+): string {
   return renderToStaticMarkup(
     <BeamerControlPanel
       beamerAlive={beamerAlive}
+      control={handle}
+      onShowShortcuts={noop}
       status={{
         open: true,
         placement: 'projected',
@@ -56,10 +94,10 @@ describe('the beamer control panel', () => {
   });
 
   it('marks the monitor the beamer is actually on', () => {
-    expect(render({})).toContain('aria-pressed="true"');
+    expect(render({})).toContain(de.beamerControl.activeMonitor);
     // Nothing is active while the beamer is closed, however well remembered
     // the host's choice is.
-    expect(render({ open: false })).not.toContain('aria-pressed="true"');
+    expect(render({ open: false })).not.toContain(de.beamerControl.activeMonitor);
   });
 
   /*
@@ -131,5 +169,73 @@ describe('the beamer liveness readout', () => {
     const markup = render({ open: false, monitorId: null }, false);
     expect(markup).toContain(de.beamerControl.liveness.notRunning);
     expect(markup).toContain('data-liveness="closed"');
+  });
+});
+
+describe('the scene switcher', () => {
+  /*
+   * The issue's first acceptance criterion: any scene reachable within one
+   * click at any time, in any phase.
+   */
+  it('puts every scene on the panel, with the digit that stages it', () => {
+    const markup = render({});
+
+    for (const choice of sceneChoices(tournament({ rounds: [round(1)] }))) {
+      expect(markup).toContain(`data-scene="${choice.id}"`);
+      expect(markup).toContain(de.beamerControl.sceneName[choice.id]);
+    }
+  });
+
+  it('marks the one that is actually staged', () => {
+    const markup = render({}, true, control({ scene: { id: 'BRACKET' } }));
+
+    expect(markup).toContain('data-scene="BRACKET"');
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain(
+      de.beamerControl.onScreen({ scene: de.beamerControl.sceneName.BRACKET }),
+    );
+  });
+
+  /*
+   * A `DRAW` before anything has been drawn is not a scene the host is being
+   * denied, it is a scene that does not exist — and the button says so rather
+   * than staging something else.
+   */
+  it('disables the two round scenes before the first draw, with the reason on them', () => {
+    const markup = render({}, true, control({ choices: sceneChoices(tournament()) }));
+
+    expect(markup).toContain('disabled=""');
+    expect(markup).toContain(de.beamerControl.sceneUnavailable);
+  });
+});
+
+describe('the two holds the host can put on the projector', () => {
+  it('offers the blackout, and the way back out of it', () => {
+    expect(render({})).toContain(de.beamerControl.blackout);
+    expect(render({}, true, control({ scene: { id: 'BLACKOUT' }, isBlackout: true }))).toContain(
+      de.beamerControl.blackoutRelease,
+    );
+  });
+
+  it('says which way round the freeze is, and shouts while it is on', () => {
+    expect(render({})).toContain(de.beamerControl.freeze.label);
+
+    const frozen = render({}, true, control({ frozen: true }));
+    expect(frozen).toContain(de.beamerControl.freeze.release);
+    // A frozen preview looks exactly like a working one, so the panel has to
+    // say so where the host is already looking.
+    expect(frozen).toContain(de.beamerControl.freeze.badge);
+    expect(frozen).toContain(de.beamerControl.freeze.hint);
+  });
+
+  it('reads out whether the beamer is following the tournament', () => {
+    expect(render({})).toContain(de.beamerControl.autoFollow.on);
+    expect(render({}, true, control({ autoFollow: false }))).toContain(
+      de.beamerControl.autoFollow.off,
+    );
+  });
+
+  it('offers the shortcut overview from the panel as well as from the keyboard', () => {
+    expect(render({})).toContain(de.beamerControl.shortcuts.open);
   });
 });

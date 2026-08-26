@@ -1,4 +1,4 @@
-import { BeamerScenePlaceholder } from '@/windows/beamer/BeamerScenePlaceholder';
+import { BeamerPicture } from '@/windows/beamer/BeamerPicture';
 import { BeamerSurface } from '@/windows/beamer/BeamerSurface';
 import { useBeamerView } from '@/windows/beamer/useBeamerView';
 import { useBeamerStatus } from '@/windows/useBeamerStatus';
@@ -19,12 +19,7 @@ export function BeamerWindow() {
       placement={status.placement}
       performanceMode={view.snapshot.tournament.performanceMode}
     >
-      <BeamerScenePlaceholder
-        scene={view.snapshot.scene}
-        tournament={view.snapshot.tournament}
-        settled={!view.animate}
-        delivery={view.snapshot.delivery}
-      />
+      <BeamerPicture view={view} />
     </BeamerSurface>
   );
 }

@@ -52,7 +52,7 @@ describe('the /tokens review page', () => {
       ...rootTokens(/^--(dur|stagger)-/),
       ...['out', 'in-out', 'dramatic', 'exit'].map((name) => `--ease-${name}`),
     ];
-    expect(motion.length).toBe(12);
+    expect(motion.length).toBe(13);
     expect(motion.filter((name) => !markup.includes(name))).toEqual([]);
   });
 

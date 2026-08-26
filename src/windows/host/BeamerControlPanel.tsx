@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import type { SceneChoice } from '@/domain/sceneCatalog';
 import { de } from '@/i18n';
 import { summariseBeamer, sortMonitors, type BeamerHint } from '@/platform/beamerSummary';
 import {
@@ -9,16 +10,24 @@ import {
   type BeamerStatus,
   type MonitorInfo,
 } from '@/platform/beamerWindow';
+import { BeamerPreview } from '@/windows/host/BeamerPreview';
+import type { BeamerControlHandle } from '@/windows/host/useBeamerControl';
 
 /**
- * The host's control over the beamer window (docs/ARCHITECTURE.md §2).
+ * The host's control over the beamer (docs/ARCHITECTURE.md §2, issue #28).
  *
- * Three things the host must be able to do at any moment, without the
- * tournament noticing: open the beamer, close it, and move it to a different
- * monitor. None of them touches tournament state (CLAUDE.md golden rule 4).
+ * The column that makes "the host is always in control of what is displayed"
+ * literally true (golden rule 3). Three groups, in the order the host reaches
+ * for them under pressure:
  *
- * The live preview thumbnail from docs/STYLEGUIDE.md §4 lands with issue #28,
- * on top of the snapshot channel issue #5 builds.
+ *  - the **live preview**, the **blackout** and the **freeze**, pinned at the
+ *    top so none of them ever scrolls out of reach — the preview is the only
+ *    place the host can see what the room sees, and the blackout is the one
+ *    control that must be one click away in every state the panel can be in;
+ *  - the **switcher**, every scene one click away in any phase, in a fixed
+ *    order because the position is also the keyboard shortcut;
+ *  - the **window**, which is a presentation concern and touches no tournament
+ *    state at all (golden rule 4).
  */
 
 const HINT_TEXT: Record<BeamerHint, string> = {
@@ -33,6 +42,8 @@ const HINT_TEXT: Record<BeamerHint, string> = {
 export function BeamerControlPanel({
   status,
   beamerAlive,
+  control,
+  onShowShortcuts,
 }: {
   status: BeamerStatus;
   /**
@@ -43,6 +54,8 @@ export function BeamerControlPanel({
    * audience a frozen picture.
    */
   beamerAlive: boolean;
+  control: BeamerControlHandle;
+  onShowShortcuts: () => void;
 }) {
   const summary = summariseBeamer(status);
   const monitors = sortMonitors(status.monitors);
@@ -57,59 +70,180 @@ export function BeamerControlPanel({
   }, []);
 
   return (
-    <section className="flex w-80 shrink-0 flex-col gap-4 border-l border-wm-border bg-wm-bg-elevated p-4">
-      <h2 className="wm-label">{de.beamerControl.sectionLabel}</h2>
+    <section className="flex w-80 shrink-0 flex-col border-l border-wm-border bg-wm-bg-elevated">
+      {/*
+        Outside the scroll container on purpose. Whatever else the host has
+        scrolled to, the picture the room is looking at and the button that
+        takes it away sit in the same place every time.
+      */}
+      <div className="flex shrink-0 flex-col gap-3 border-b border-wm-border p-4">
+        <h2 className="wm-label">{de.beamerControl.sectionLabel}</h2>
 
-      <p
-        className={`text-host-sm ${summary.isWarning ? 'text-wm-live' : 'text-wm-text-muted'}`}
-        role={summary.isWarning ? 'alert' : undefined}
-      >
-        {HINT_TEXT[summary.hint]}
-      </p>
+        <BeamerPreview placement={status.placement} frozen={control.frozen} open={status.open} />
 
-      {summary.isLetterboxed ? (
-        <p className="text-host-xs text-wm-text-faint">{de.beamerControl.letterboxNotice}</p>
-      ) : null}
+        <p className="text-host-xs text-wm-text-faint" data-staged-scene={control.scene.id}>
+          {de.beamerControl.onScreen({ scene: de.beamerControl.sceneName[control.scene.id] })}
+        </p>
 
-      <LivenessRow open={status.open} alive={beamerAlive} />
-
-      <div className="flex gap-2">
-        {status.open ? (
-          <button type="button" className={ACTION_CLASS} onClick={() => run(() => closeBeamer())}>
-            {de.beamerControl.close}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            aria-pressed={control.isBlackout}
+            onClick={control.toggleBlackout}
+            className={control.isBlackout ? BLACKOUT_ACTIVE_CLASS : BLACKOUT_CLASS}
+          >
+            {control.isBlackout ? de.beamerControl.blackoutRelease : de.beamerControl.blackout}
           </button>
-        ) : (
-          <button type="button" className={ACTION_CLASS} onClick={() => run(() => openBeamer())}>
-            {de.beamerControl.open}
+          <button
+            type="button"
+            aria-pressed={control.frozen}
+            onClick={control.toggleFreeze}
+            className={control.frozen ? FREEZE_ACTIVE_CLASS : SECONDARY_CLASS}
+          >
+            {control.frozen ? de.beamerControl.freeze.release : de.beamerControl.freeze.label}
           </button>
-        )}
-        <button type="button" className={SECONDARY_CLASS} onClick={() => run(() => focusHost())}>
-          {de.beamerControl.focusHost}
-        </button>
+        </div>
+
+        {control.frozen ? (
+          <p className="text-host-xs text-wm-live" role="alert">
+            {de.beamerControl.freeze.hint}
+          </p>
+        ) : null}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h3 className="wm-label">{de.beamerControl.monitorsLabel}</h3>
-        {monitors.length === 0 ? (
-          <p className="text-host-sm text-wm-text-faint">{de.beamerControl.noMonitors}</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {monitors.map((monitor) => (
-              <li key={monitor.id}>
-                <MonitorButton
-                  monitor={monitor}
-                  isActive={monitor.id === status.monitorId && status.open}
-                  // Picking a monitor both opens and moves the beamer — the
-                  // host should not have to open it first to be allowed to
-                  // choose where it goes.
-                  onSelect={() => run(() => openBeamer(monitor.id))}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <div className="flex flex-col gap-2">
+          <h3 className="wm-label">{de.beamerControl.sceneSectionLabel}</h3>
+          <ul className="flex flex-col gap-1">
+            {control.choices.map((choice) => (
+              <li key={choice.id}>
+                <SceneButton
+                  choice={choice}
+                  isStaged={control.isStaged(choice)}
+                  onSelect={() => {
+                    if (choice.scene !== null) {
+                      control.show(choice.scene);
+                    }
+                  }}
                 />
               </li>
             ))}
           </ul>
-        )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={control.autoFollow}
+            onClick={() => control.setAutoFollow(!control.autoFollow)}
+            className={control.autoFollow ? ACTION_CLASS : SECONDARY_CLASS}
+          >
+            {de.beamerControl.autoFollow.label}
+          </button>
+          <p className="text-host-xs text-wm-text-faint">
+            {control.autoFollow ? de.beamerControl.autoFollow.on : de.beamerControl.autoFollow.off}
+          </p>
+          <button type="button" className={SECONDARY_CLASS} onClick={control.skip}>
+            {de.beamerControl.skip}
+          </button>
+        </div>
+
+        <p
+          className={`text-host-sm ${summary.isWarning ? 'text-wm-live' : 'text-wm-text-muted'}`}
+          role={summary.isWarning ? 'alert' : undefined}
+        >
+          {HINT_TEXT[summary.hint]}
+        </p>
+
+        {summary.isLetterboxed ? (
+          <p className="text-host-xs text-wm-text-faint">{de.beamerControl.letterboxNotice}</p>
+        ) : null}
+
+        <LivenessRow open={status.open} alive={beamerAlive} />
+
+        <div className="flex gap-2">
+          {status.open ? (
+            <button type="button" className={ACTION_CLASS} onClick={() => run(() => closeBeamer())}>
+              {de.beamerControl.close}
+            </button>
+          ) : (
+            <button type="button" className={ACTION_CLASS} onClick={() => run(() => openBeamer())}>
+              {de.beamerControl.open}
+            </button>
+          )}
+          <button type="button" className={SECONDARY_CLASS} onClick={() => run(() => focusHost())}>
+            {de.beamerControl.focusHost}
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h3 className="wm-label">{de.beamerControl.monitorsLabel}</h3>
+          {monitors.length === 0 ? (
+            <p className="text-host-sm text-wm-text-faint">{de.beamerControl.noMonitors}</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {monitors.map((monitor) => (
+                <li key={monitor.id}>
+                  <MonitorButton
+                    monitor={monitor}
+                    isActive={monitor.id === status.monitorId && status.open}
+                    // Picking a monitor both opens and moves the beamer — the
+                    // host should not have to open it first to be allowed to
+                    // choose where it goes.
+                    onSelect={() => run(() => openBeamer(monitor.id))}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <button type="button" className={SECONDARY_CLASS} onClick={onShowShortcuts}>
+          {de.beamerControl.shortcuts.open}
+        </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * One scene in the switcher, with the digit that stages it.
+ *
+ * The digit is printed on the button rather than hidden in a tooltip: the host
+ * learns the layout by reading it during the first half of the evening, and by
+ * the second half they are not looking at the panel at all.
+ */
+function SceneButton({
+  choice,
+  isStaged,
+  onSelect,
+}: {
+  choice: SceneChoice;
+  isStaged: boolean;
+  onSelect: () => void;
+}) {
+  const unavailable = choice.scene === null;
+
+  return (
+    <button
+      type="button"
+      aria-pressed={isStaged}
+      disabled={unavailable}
+      title={unavailable ? de.beamerControl.sceneUnavailable : undefined}
+      onClick={onSelect}
+      data-scene={choice.id}
+      className={`flex h-8 w-full items-center gap-2 rounded-wm-sm border px-2 text-left transition-colors duration-[--dur-fast] ease-out ${
+        isStaged
+          ? 'border-wm-accent bg-wm-accent-soft text-wm-text'
+          : 'border-wm-border bg-wm-surface text-wm-text-muted hover:bg-wm-surface-hover'
+      } ${unavailable ? 'opacity-40' : ''}`}
+    >
+      <span className="wm-tnum w-4 shrink-0 text-host-xs text-wm-text-faint">
+        {choice.shortcut}
+      </span>
+      <span className="text-host-sm">{de.beamerControl.sceneName[choice.id]}</span>
+    </button>
   );
 }
 
@@ -177,3 +311,17 @@ const ACTION_CLASS =
 
 const SECONDARY_CLASS =
   'h-10 flex-1 rounded-wm-md border border-wm-border-strong bg-wm-surface px-3 text-host-sm text-wm-text-muted transition-colors duration-[--dur-fast] ease-out hover:bg-wm-surface-hover';
+
+/**
+ * The panic button, and it looks like one. Colour only on the transition, per
+ * docs/MOTION.md §5: the host aims at this repeatedly under pressure and
+ * nothing may move under the cursor.
+ */
+const BLACKOUT_CLASS =
+  'h-10 flex-1 rounded-wm-md border border-wm-lose bg-wm-lose-bg px-3 text-host-sm font-medium text-wm-text transition-colors duration-[--dur-fast] ease-out';
+
+const BLACKOUT_ACTIVE_CLASS =
+  'h-10 flex-1 rounded-wm-md border border-wm-lose bg-wm-lose px-3 text-host-sm font-medium text-wm-bg transition-colors duration-[--dur-fast] ease-out';
+
+const FREEZE_ACTIVE_CLASS =
+  'h-10 flex-1 rounded-wm-md border border-wm-live bg-wm-live-bg px-3 text-host-sm font-medium text-wm-text transition-colors duration-[--dur-fast] ease-out';

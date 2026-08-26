@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
@@ -13,11 +13,14 @@ import { RepechagePanel } from '@/windows/host/RepechagePanel';
 import { RoundHistoryPanel } from '@/windows/host/RoundHistoryPanel';
 import { RoundPanel } from '@/windows/host/RoundPanel';
 import { SettingsPanel } from '@/windows/host/SettingsPanel';
+import { ShortcutsDialog } from '@/windows/host/ShortcutsDialog';
 import { StartScreen } from '@/windows/host/StartScreen';
 import { TablePanel } from '@/windows/host/TablePanel';
 import { TournamentBar } from '@/windows/host/TournamentBar';
 import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
+import { useBeamerControl } from '@/windows/host/useBeamerControl';
+import { useBeamerShortcuts } from '@/windows/host/useBeamerShortcuts';
 import { useBracket } from '@/windows/host/useBracket';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
@@ -58,6 +61,9 @@ export function HostWindow() {
   const naming = useNaming();
   const bracket = useBracket();
   const phase = usePhase();
+  const beamer = useBeamerControl();
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const openShortcuts = useCallback(() => setShowShortcuts(true), []);
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
   // open buys nothing.
@@ -66,6 +72,11 @@ export function HostWindow() {
   // Registered for the whole window, not just while the toolbar has focus:
   // the host's hands are on the keyboard between decisions (issue #11).
   useUndoShortcuts(undo);
+
+  // The same reasoning, for the projector (issue #28). Two hooks rather than
+  // one because undo exists before there is a beamer column to control, and
+  // neither should be able to break the other by being registered at all.
+  useBeamerShortcuts(beamer, openShortcuts);
 
   useSleepInhibitor(status.open);
 
@@ -312,7 +323,14 @@ export function HostWindow() {
         )}
       </div>
 
-      <BeamerControlPanel status={status} beamerAlive={beamerAlive} />
+      <BeamerControlPanel
+        status={status}
+        beamerAlive={beamerAlive}
+        control={beamer}
+        onShowShortcuts={openShortcuts}
+      />
+
+      {showShortcuts ? <ShortcutsDialog onClose={() => setShowShortcuts(false)} /> : null}
 
       {document.pendingIntent === null ? null : (
         <UnsavedChangesDialog onAnswer={document.answerUnsaved} />

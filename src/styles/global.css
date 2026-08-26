@@ -79,6 +79,31 @@
     --stagger-tight: 0ms;
     --stagger-wide: 0ms;
   }
+
+  /*
+   * The host's live preview thumbnail (issue #28, docs/STYLEGUIDE.md §4).
+   *
+   * The beamer unit is derived from the *viewport*, which is right for a window
+   * that fills a projector and wrong for a 300 px box inside the host shell:
+   * every scene would lay itself out for the laptop screen and be clipped by
+   * the thumbnail. Container query units re-derive both tokens from the
+   * thumbnail's own box, so what the host sees is the same picture at a
+   * different size rather than a different picture — which is the only way
+   * "the preview matches the beamer" can be true.
+   *
+   * `container-type: size` needs a definite box in both axes, which the aspect
+   * ratio supplies; the stage inside letterboxes against it exactly as it does
+   * on a projector.
+   */
+  .beamer-preview {
+    container-type: size;
+    aspect-ratio: 16 / 9;
+  }
+
+  .beamer-preview .beamer-root {
+    --wm-beamer-stage-width: min(100cqw, calc(100cqh * 16 / 9));
+    --wm-beamer-unit: calc(var(--wm-beamer-stage-width) / 120);
+  }
 }
 
 /* The 16:9 area every beamer scene is drawn into. A projector reporting 4:3,
@@ -549,4 +574,32 @@
   .wm-bracket-advance {
     transition: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * The blackout (issue #28, docs/MOTION.md §4.6).
+ *
+ * "A hard 200 ms fade to `--wm-bg` — when the host wants the screen gone, they
+ * want it gone." The veil is drawn over the picture it is replacing, which is
+ * kept underneath for exactly as long as the fade lasts.
+ *
+ * Note the base `opacity: 1`. It is load-bearing rather than redundant: this
+ * covers the one control that must never fail, so if the animation does not run
+ * at all — no CSS, a browser that ignores it — the screen is black instantly
+ * rather than not black. The animation can only ever make it gentler.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-blackout {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@utility wm-blackout-veil {
+  background-color: var(--wm-bg);
+  opacity: 1;
+  animation: wm-blackout var(--dur-blackout) var(--ease-out) both;
 }

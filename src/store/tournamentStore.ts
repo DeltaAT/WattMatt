@@ -82,6 +82,31 @@ export interface TournamentState {
   scene: BeamerScene;
   autoFollow: boolean;
   /**
+   * The host is holding the picture while they work ahead (issue #28).
+   *
+   * Nothing on the projector moves while this is true — not a scene change, not
+   * a result landing. It is the host's finger over the lens: the room keeps the
+   * last picture it was shown, and the host is free to draw the next round on
+   * the laptop without the wall narrating it.
+   *
+   * State rather than something local to the panel, because it is the sync
+   * layer that has to act on it, and it must survive the panel re-rendering.
+   * Deliberately **not** in the undo snapshot — see `setFrozen`.
+   */
+  frozen: boolean;
+  /**
+   * Bumped when the host tells the beamer to jump a running sequence to its
+   * end (issue #28, docs/OPEN-QUESTIONS.md #53).
+   *
+   * A counter carried in the picture rather than a command channel of its own.
+   * The event contract has one direction that carries truth and no direction
+   * that carries orders (docs/ARCHITECTURE.md §3), and a monotonic number is
+   * truth: it rides the same ordered channel as everything else, a beamer that
+   * reopens mid-draw catches up to it without replaying anything, and there is
+   * no message that can arrive twice and skip two sequences.
+   */
+  skipToken: number;
+  /**
    * The whole tournament the host owns — what gets written to disk. `null`
    * means no tournament is open and the host is looking at the start screen.
    *
@@ -123,6 +148,8 @@ export const INITIAL_TOURNAMENT_STATE: TournamentState = {
   documentRevision: 0,
   scene: IDLE_SCENE,
   autoFollow: true,
+  frozen: false,
+  skipToken: 0,
   document: null,
   file: UNSAVED_FILE,
   carried: NO_CARRIED_FIELDS,
@@ -455,6 +482,7 @@ export function toSnapshot(
     revision: state.revision,
     scene: state.scene,
     autoFollow: state.autoFollow,
+    skipToken: state.skipToken,
     tournament: state.tournament,
     delivery,
   };

@@ -17,6 +17,7 @@ import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
 import { useRepechageBeat } from '@/windows/beamer/useRepechageBeat';
 import { useSkipKey } from '@/windows/beamer/useSkipKey';
+import { useSkipSignal } from '@/windows/beamer/useSkipSignal';
 
 /**
  * Draws whichever scene the host has staged.
@@ -37,11 +38,17 @@ export function BeamerScenePlaceholder({
   tournament,
   settled,
   delivery,
+  skipToken,
 }: {
   scene: BeamerScene;
   /** What the host last sent. Every real scene draws from this and nothing else. */
   tournament: TournamentSnapshot;
   settled: boolean;
+  /**
+   * How many times the host has asked for the running sequence to be skipped
+   * (issue #28). Only the draw has one to skip; the rest ignore it.
+   */
+  skipToken: number;
   /**
    * Why this snapshot was sent (issue #21).
    *
@@ -150,6 +157,7 @@ export function BeamerScenePlaceholder({
         tournament={tournament}
         settled={settled || !isStagedRound}
         roundId={scene.roundId}
+        skipToken={skipToken}
       />
     );
   }
@@ -160,7 +168,7 @@ export function BeamerScenePlaceholder({
         tournament={tournament}
         settled={settled}
         delivery={delivery}
-        sceneReveal={(scene as { reveal?: unknown }).reveal}
+        sceneReveal={scene.reveal}
       />
     );
   }
@@ -258,10 +266,12 @@ function DrawSceneHost({
   tournament,
   settled,
   roundId,
+  skipToken,
 }: {
   tournament: TournamentSnapshot;
   settled: boolean;
   roundId: RoundId;
+  skipToken: number;
 }) {
   const sequence = useDrawSequence({
     roundId,
@@ -270,7 +280,11 @@ function DrawSceneHost({
     performanceMode: tournament.performanceMode,
   });
 
+  // Two ways in, one skip. The key covers a beamer window the host has clicked
+  // into; the token covers the ordinary case, where they are on the laptop and
+  // the projector has no focus at all (docs/OPEN-QUESTIONS.md #53).
   useSkipKey(sequence.skip, !sequence.isComplete);
+  useSkipSignal(skipToken, sequence.skip, !sequence.isComplete);
 
   return (
     <DrawScene

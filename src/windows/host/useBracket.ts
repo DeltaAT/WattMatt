@@ -83,6 +83,13 @@ export interface BracketHandle {
   finish: () => void;
   /** Points the projector at the tree, zoomed to a round or to the whole of it. */
   showOnBeamer: (focus: BracketRound | null) => void;
+  /**
+   * Stages the `Siegerehrung` (issue #27), either revealing itself or waiting
+   * for the host to step through the podium.
+   */
+  showCeremony: (mode: 'AUTO' | 'STEP', step?: number) => void;
+  /** Moves the stepped ceremony on to the next place. */
+  showCeremonyStep: (step: number) => void;
 }
 
 /** What a window with no tournament open reads: there is no bracket. */

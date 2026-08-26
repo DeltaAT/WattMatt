@@ -222,6 +222,19 @@ export const snapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
   scene: beamerSceneSchema,
   autoFollow: z.boolean(),
+  /**
+   * How many times the host has told the beamer to jump a running sequence to
+   * its end (issue #28).
+   *
+   * Part of the picture rather than a command of its own: the beamer skips when
+   * the number it is holding changes, so the message is idempotent, ordered
+   * with everything else, and harmless to a window that has just caught up.
+   *
+   * Defaulted rather than required, so a payload built before this field
+   * existed still parses into a beamer that simply never skips — the schema is
+   * the only thing standing between a mismatched message and a blank projector.
+   */
+  skipToken: z.number().int().nonnegative().default(0),
   tournament: tournamentSnapshotSchema,
   delivery: snapshotDeliverySchema,
 });
@@ -318,6 +331,8 @@ export const INITIAL_SNAPSHOT: Snapshot = {
   revision: 0,
   scene: IDLE_SCENE,
   autoFollow: true,
+  // Nothing has been skipped, and nothing is running to skip.
+  skipToken: 0,
   tournament: EMPTY_TOURNAMENT,
   delivery: 'catchUp',
 };

@@ -15,6 +15,7 @@ import { LetterboxStage } from '@/windows/beamer/LetterboxStage';
 export function BeamerSurface({
   placement,
   performanceMode,
+  embedded = false,
   children,
 }: {
   placement: BeamerPlacement;
@@ -29,11 +30,23 @@ export function BeamerSurface({
    * having to remember.
    */
   performanceMode: boolean;
+  /**
+   * Rendered inside another window's layout rather than owning the window it is
+   * in — the host's live preview thumbnail (issue #28).
+   *
+   * It changes nothing the audience can see and two things the *host* would
+   * notice: the surface keeps its hands off the window's context menu and text
+   * selection, which belong to the host UI around it, and the cursor stays
+   * visible over it. Everything below this line is otherwise identical, which
+   * is the point of the preview — a second implementation of the picture would
+   * be a preview that could lie.
+   */
+  embedded?: boolean;
   children: ReactNode;
 }) {
   const isPreview = placement === 'preview';
 
-  usePresentationChrome();
+  usePresentationChrome(!embedded);
 
   return (
     <div
@@ -43,7 +56,7 @@ export function BeamerSurface({
       // losing it over the preview window is a trap, not a feature
       // (docs/OPEN-QUESTIONS.md 16).
       className={`beamer-root relative h-full w-full select-none overflow-hidden ${
-        isPreview ? 'cursor-auto' : ''
+        isPreview || embedded ? 'cursor-auto' : ''
       }`}
       data-placement={placement}
       data-performance-mode={String(performanceMode)}
@@ -67,8 +80,12 @@ export function BeamerSurface({
  * host window deliberately keeps its defaults — nobody in the audience is
  * looking at it.
  */
-function usePresentationChrome(): void {
+function usePresentationChrome(enabled: boolean): void {
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const suppress = (event: Event) => event.preventDefault();
 
     window.addEventListener('contextmenu', suppress);
@@ -80,5 +97,5 @@ function usePresentationChrome(): void {
       window.removeEventListener('dragstart', suppress);
       window.removeEventListener('selectstart', suppress);
     };
-  }, []);
+  }, [enabled]);
 }
