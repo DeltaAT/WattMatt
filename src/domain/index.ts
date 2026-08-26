@@ -7,10 +7,13 @@ export {
   type BeamerSceneId,
 } from '@/domain/beamerScene';
 export {
+  activeBracketRound,
   assignBracketNode,
   assignNextBracketNode,
   bracketBlockers,
+  bracketColumns,
   bracketRoundForSize,
+  chipOrigin,
   buildBracket,
   canDrawBracket,
   drawBracket,
@@ -21,6 +24,9 @@ export {
   setBracketWinner,
   type AssignBracketNodeInput,
   type BracketBlocker,
+  type BracketColumn,
+  type BracketColumnState,
+  type BracketSide,
   type BuildBracketInput,
   type DrawBracketInput,
   type FinalStandings,

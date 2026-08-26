@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { buildBracket } from '@/domain/bracket';
 import { groupIdSchema, matchIdSchema, roundIdSchema } from '@/domain/ids';
-import { EMPTY_TOURNAMENT, type TournamentSnapshot } from '@/domain/snapshot';
+import { createRng } from '@/domain/rng';
+import { EMPTY_TOURNAMENT, toTournamentSnapshot, type TournamentSnapshot } from '@/domain/snapshot';
+import { group, tournament } from '@/domain/testFixtures';
 import type { Round } from '@/domain/types';
 import { de } from '@/i18n';
 import { BeamerScenePlaceholder } from '@/windows/beamer/BeamerScenePlaceholder';
@@ -210,6 +213,35 @@ describe('the beamer scene surface', () => {
     expect(markup).toContain('data-scene="NAMING"');
     expect(markup).not.toContain(de.beamer.scenePending);
     expect(markup).toContain(de.beamer.naming.title);
+  });
+
+  it('draws the Turnierbaum rather than a placeholder', () => {
+    const groups = [
+      group(1, { name: 'Team 1' }),
+      group(2, { name: 'Team 2' }),
+      group(3, { name: 'Team 3' }),
+      group(4, { name: 'Team 4' }),
+    ];
+    const markup = renderToStaticMarkup(
+      <BeamerScenePlaceholder
+        scene={{ id: 'BRACKET' }}
+        tournament={toTournamentSnapshot(
+          tournament({
+            phase: 'BRACKET',
+            groups,
+            nextGroupNumber: 5,
+            bracket: buildBracket(groups, { rng: createRng('seed') }),
+          }),
+        )}
+        settled
+        delivery="catchUp"
+      />,
+    );
+
+    expect(markup).toContain('data-scene="BRACKET"');
+    expect(markup).not.toContain(de.beamer.scenePending);
+    expect(markup).toContain(de.bracket.round.SEMI_FINAL);
+    expect(markup.match(/data-bracket-node="/g)).toHaveLength(4);
   });
 
   it('marks a caught-up scene as settled so it is not animated in', () => {

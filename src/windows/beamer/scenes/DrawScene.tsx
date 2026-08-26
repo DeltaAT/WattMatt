@@ -6,6 +6,7 @@ import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, ParticipantLabel, Table } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
+import { prefersReducedMotion } from '@/windows/beamer/reducedMotion';
 import { groupLabel } from '@/windows/groupLabel';
 
 /**
@@ -255,15 +256,6 @@ function PairingCard({
         {isBye ? de.beamer.draw.byeAdvances : (table?.label ?? de.beamer.draw.waitingForTable)}
       </span>
     </li>
-  );
-}
-
-/** Server-rendered markup has no `matchMedia`; treat that as "animate". */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
 

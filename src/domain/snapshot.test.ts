@@ -10,6 +10,7 @@ import {
   type Snapshot,
 } from '@/domain/snapshot';
 import {
+  bracketNodeId,
   group,
   match,
   matchId,
@@ -49,6 +50,24 @@ describe('the snapshot envelope', () => {
         round: null,
         repechage: null,
         history: [],
+        // The `BRACKET` scene above draws this, and it is the one field with a
+        // tree in it: a `nextNodeId` that came back as `undefined` would be a
+        // final nobody advances into (issue #25).
+        bracket: {
+          size: 2,
+          nodes: [
+            {
+              id: bracketNodeId(1),
+              round: 'FINAL',
+              slotA: groupIdSchema.parse('g1'),
+              slotB: null,
+              winnerId: null,
+              nextNodeId: null,
+              tableId: null,
+            },
+          ],
+          thirdPlaceNodeId: null,
+        },
       },
       delivery: 'live',
     });
@@ -195,6 +214,7 @@ describe('toTournamentSnapshot', () => {
     );
 
     expect(Object.keys(projected).sort()).toEqual([
+      'bracket',
       'groups',
       'history',
       'matches',
@@ -219,6 +239,25 @@ describe('toTournamentSnapshot', () => {
       round: null,
       repechage: null,
       history: [],
+      bracket: null,
     });
+  });
+});
+
+describe('the bracket in a snapshot (issue #25)', () => {
+  it('travels whole once the tree has been drawn', () => {
+    const projected = toTournamentSnapshot(midTournament());
+
+    expect(projected.bracket?.size).toBe(4);
+    expect(projected.bracket?.nodes).toHaveLength(3);
+    expect(projected.bracket?.thirdPlaceNodeId).toBe(bracketNodeId(2));
+  });
+
+  it('survives the wire, links and all', () => {
+    const sent = snapshot({ tournament: toTournamentSnapshot(midTournament()) });
+
+    const received = snapshotSchema.parse(JSON.parse(JSON.stringify(sent)));
+
+    expect(received.tournament.bracket).toEqual(sent.tournament.bracket);
   });
 });
