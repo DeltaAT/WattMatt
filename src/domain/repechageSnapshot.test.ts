@@ -68,6 +68,7 @@ function wire(document: Tournament): Snapshot {
     revision: 1,
     scene: { id: 'REPECHAGE' },
     autoFollow: true,
+    skipToken: 0,
     tournament: toTournamentSnapshot(document),
     delivery: 'live',
   };

@@ -1,4 +1,5 @@
 import { BLACKOUT_SCENE, type BeamerScene } from '@/domain/beamerScene';
+import { sceneForPhase } from '@/domain/sceneCatalog';
 import { de } from '@/i18n';
 import type { TournamentStore } from '@/store/tournamentStore';
 
@@ -37,13 +38,58 @@ export function blackout(store: TournamentStore): void {
 }
 
 /**
- * Hands the beamer back to the tournament phase.
+ * Hands the beamer back to the tournament phase, or takes it away again.
  *
- * Issue #22 decides which scene a phase implies; until then re-enabling
- * auto-follow leaves the current picture alone rather than guessing.
+ * Turning auto-follow **on** stages the scene the phase implies straight away
+ * (`sceneForPhase`), rather than waiting for the next phase step. Anything else
+ * would be a button that answers "the beamer follows the tournament" with a
+ * picture from twenty minutes ago until something happens to change — and the
+ * host presses this precisely when the wall is wrong.
+ *
+ * Turning it **off** leaves the picture exactly where it is: taking manual
+ * control is not a request for a different scene, it is a request for this one
+ * to stop moving (golden rule 3).
  */
 export function setAutoFollow(store: TournamentStore, autoFollow: boolean): void {
-  store.commit(() => ({ autoFollow }), {
-    undoLabel: autoFollow ? de.undo.action.autoFollowOn : de.undo.action.autoFollowOff,
-  });
+  store.commit(
+    (state) => ({
+      autoFollow,
+      ...(autoFollow && state.document !== null ? { scene: sceneForPhase(state.document) } : {}),
+    }),
+    { undoLabel: autoFollow ? de.undo.action.autoFollowOn : de.undo.action.autoFollowOff },
+  );
+}
+
+/**
+ * Holds the picture on the projector while the host works ahead (issue #28).
+ *
+ * While frozen the sync layer sends the beamer nothing at all, so the host can
+ * draw the next round, correct a result or stage the scene they want to come
+ * back to without any of it appearing on the wall. Thawing delivers where the
+ * evening actually got to, settled — the room is shown the new picture rather
+ * than watching twenty minutes replayed at speed (`startHostSync`).
+ *
+ * Deliberately **not** on the undo stack, unlike the three actions above, and
+ * `frozen` is deliberately not in the undo snapshot (docs/OPEN-QUESTIONS.md
+ * #75). A freeze is a hold the host is applying with their hand still on the
+ * key; undoing a misclicked result three panels away must not also whip the
+ * cover off a screen they are working behind. It is its own undo — the host
+ * presses the same control again — which is the property golden rule 6 is
+ * actually about.
+ */
+export function setFrozen(store: TournamentStore, frozen: boolean): void {
+  store.commit(() => ({ frozen }));
+}
+
+/**
+ * Tells the beamer to jump whatever it is playing to its settled end
+ * (docs/MOTION.md §1 law 2, docs/OPEN-QUESTIONS.md #53).
+ *
+ * A counter rather than a command: see `TournamentState.skipToken`. It changes
+ * nothing about the tournament and nothing about which scene is staged, so it
+ * carries no undo label and no audit entry — there is no such thing as
+ * un-skipping an animation the room has already seen the end of.
+ */
+export function skipAnimation(store: TournamentStore): void {
+  store.commit((state) => ({ skipToken: state.skipToken + 1 }));
 }

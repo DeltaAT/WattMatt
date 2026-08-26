@@ -19,6 +19,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'CEREMONY' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -41,6 +42,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'REPECHAGE' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -62,6 +64,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'DRAW', roundId: round('r2') }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -79,6 +82,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'GROUP_OVERVIEW' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -93,6 +97,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'BLACKOUT' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -151,6 +156,7 @@ describe('the beamer scene surface', () => {
           scene={{ id: 'ROUND_BOARD', roundId: past.id }}
           tournament={snapshot}
           settled
+          skipToken={0}
           delivery="catchUp"
         />,
       );
@@ -168,6 +174,7 @@ describe('the beamer scene surface', () => {
           scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2') }}
           tournament={snapshot}
           settled
+          skipToken={0}
           delivery="catchUp"
         />,
       );
@@ -187,6 +194,7 @@ describe('the beamer scene surface', () => {
           scene={{ id: 'ROUND_BOARD', roundId: round('rnd_9') }}
           tournament={snapshot}
           settled
+          skipToken={0}
           delivery="catchUp"
         />,
       );
@@ -208,6 +216,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'NAMING' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -236,6 +245,7 @@ describe('the beamer scene surface', () => {
           }),
         )}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -252,6 +262,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'BRACKET' }}
         tournament={EMPTY_TOURNAMENT}
         settled
+        skipToken={0}
         delivery="catchUp"
       />,
     );
@@ -260,6 +271,7 @@ describe('the beamer scene surface', () => {
         scene={{ id: 'BRACKET' }}
         tournament={EMPTY_TOURNAMENT}
         settled={false}
+        skipToken={0}
         delivery="live"
       />,
     );

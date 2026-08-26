@@ -488,6 +488,16 @@ export const deAT = {
     focusLabel: 'Beamer',
     focusAll: 'Ganzer Baum',
     focusRound: (params: { round: string }) => `Ab ${params.round}`,
+
+    /**
+     * The two ways the host puts the podium on the wall (issue #27).
+     *
+     * `showCeremony` reveals bronze, silver and gold by itself; `revealNext`
+     * hands the timing to the host, who says each name out loud before the
+     * room sees it.
+     */
+    showCeremony: 'Siegerehrung starten',
+    revealNext: 'Nächsten Platz zeigen',
   },
 
   group: {
@@ -1153,6 +1163,104 @@ export const deAT = {
 
     letterboxNotice:
       'Dieser Bildschirm ist nicht 16:9. Das Bild wird mit Balken angezeigt, statt umgebrochen zu werden.',
+
+    /**
+     * The control centre of issue #28: the switcher, the panic button and the
+     * two holds the host can put on the projector.
+     */
+    sceneSectionLabel: 'Ansicht',
+    /** Over the preview: what the room is looking at right now. */
+    onScreen: (params: { scene: string }) => `Auf der Leinwand: ${params.scene}`,
+
+    /**
+     * What each scene is called in the switcher. Short, because these sit on
+     * nine buttons in a narrow column and the host reads them at a glance.
+     *
+     * `GROUP_OVERVIEW` deliberately avoids the participant wording: the host
+     * may be running `Teams` or `Spieler`, and a button whose label changed with
+     * a setting is a button whose position the hand has to relearn.
+     */
+    sceneName: {
+      IDLE: 'Startbild',
+      BLACKOUT: 'Bildschirm aus',
+      GROUP_OVERVIEW: 'Teilnehmerfeld',
+      TABLE_OVERVIEW: 'Tische',
+      DRAW: 'Auslosung',
+      ROUND_BOARD: 'Runde',
+      REPECHAGE: 'Hoffnungsrunde',
+      NAMING: 'Namenserfassung',
+      BRACKET: 'Turnierbaum',
+      CEREMONY: 'Siegerehrung',
+    },
+    /** On the two scenes that name a round, before there is one to name. */
+    sceneUnavailable: 'Erst nach der ersten Auslosung verfügbar.',
+    /** Back out of a blackout, onto the picture that was up before it. */
+    blackoutRelease: 'Bildschirm wieder an',
+
+    /**
+     * Whether the projector follows the tournament by itself.
+     *
+     * Off the moment the host stages anything by hand, and only the host turns
+     * it back on — auto-follow must never take the screen away mid-sentence
+     * (CLAUDE.md golden rule 3).
+     */
+    autoFollow: {
+      label: 'Automatisch folgen',
+      on: 'Der Beamer folgt dem Turnierverlauf.',
+      off: 'Der Beamer wird von Hand gesteuert. Die gewählte Ansicht bleibt stehen.',
+    },
+
+    /**
+     * The hold. Everything the host does while this is on stays on the laptop:
+     * the room keeps the picture it was on.
+     */
+    freeze: {
+      label: 'Bild einfrieren',
+      release: 'Bild freigeben',
+      badge: 'Eingefroren',
+      hint: 'Die Leinwand bleibt stehen, bis Sie das Bild wieder freigeben.',
+    },
+
+    /** Jumps a running beamer animation straight to its finished picture. */
+    skip: 'Animation überspringen',
+
+    preview: {
+      label: 'Live-Vorschau',
+      /** Under the thumbnail while there is no beamer window to mirror. */
+      closed: 'Der Beamer ist geschlossen. Die Vorschau zeigt, was er zeigen würde.',
+    },
+
+    /**
+     * The `?` overview (issue #28).
+     *
+     * Every shortcut in one dialog, because the host learns them during an
+     * event and cannot go looking for documentation while the room waits. The
+     * key names are the ones printed on an Austrian keyboard.
+     */
+    shortcuts: {
+      open: 'Tastenkürzel',
+      title: 'Tastenkürzel',
+      close: 'Schließen',
+      hint: 'Die Kürzel gelten im ganzen Steuerfenster. Während einer Texteingabe sind sie abgeschaltet.',
+      key: {
+        skip: 'Leertaste',
+        blackout: 'B',
+        scenes: '1 bis 9',
+        undo: 'Strg+Z',
+        redo: 'Strg+Y',
+        freeze: 'F',
+        help: '?',
+      },
+      action: {
+        skip: 'Laufende Animation überspringen',
+        blackout: 'Bildschirm aus, nochmal für zurück',
+        scenes: 'Ansicht auf den Beamer legen',
+        undo: 'Letzte Aktion rückgängig machen',
+        redo: 'Wieder herstellen',
+        freeze: 'Bild einfrieren oder freigeben',
+        help: 'Diese Übersicht',
+      },
+    },
   },
 } as const;
 

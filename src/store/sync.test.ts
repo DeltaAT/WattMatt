@@ -4,7 +4,7 @@ import { groupIdSchema, roundIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { midTournament } from '@/domain/testFixtures';
 import { setOpenedDocument } from '@/store/actions/document';
-import { blackout, showScene } from '@/store/actions/scene';
+import { blackout, setFrozen, showScene, skipAnimation } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { startBeamerSync, startHostSync } from '@/store/sync';
 import { requestSnapshotSchema } from '@/store/syncContract';
@@ -333,5 +333,101 @@ describe('an undo on the projector', () => {
     expect(reopened.getState().snapshot.scene).toEqual({ id: 'IDLE' });
     expect(reopened.getState().snapshot.revision).toBe(host.getState().revision);
     expect(reopened.getState().animate).toBe(false);
+  });
+});
+
+describe('freezing the picture while the host works ahead', () => {
+  it('sends the projector nothing at all while it is on', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+    showScene(host, { id: 'BRACKET' });
+    const held = beamer.getState().snapshot.revision;
+
+    setFrozen(host, true);
+    showScene(host, { id: 'TABLE_OVERVIEW' });
+    setOpenedDocument(
+      host,
+      midTournament({ name: 'Winterturnier' }),
+      'C:\\Turniere\\Winter.wattmatt',
+    );
+
+    // Neither the scene the host staged nor the tournament they replaced
+    // behind it reaches the room.
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'BRACKET' });
+    expect(beamer.getState().snapshot.revision).toBe(held);
+  });
+
+  it('delivers where the evening actually got to when it comes off, settled', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+
+    setFrozen(host, true);
+    showScene(host, { id: 'TABLE_OVERVIEW' });
+    setFrozen(host, false);
+
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'TABLE_OVERVIEW' });
+    expect(beamer.getState().snapshot.revision).toBe(host.getState().revision);
+    // A catch-up, not a live change: the room is shown where things stand, not
+    // shown twenty minutes replayed at speed.
+    expect(beamer.getState().snapshot.delivery).toBe('catchUp');
+    expect(beamer.getState().animate).toBe(false);
+  });
+
+  /*
+   * The thaw has to be a whole snapshot even when the last commit behind the
+   * freeze only moved the projector: this listener saw one commit and there may
+   * have been fifty, so the light channel could leave the beamer holding a
+   * tournament from before the freeze.
+   */
+  it('brings the tournament with it even when the last change was only a scene', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+
+    setFrozen(host, true);
+    setOpenedDocument(
+      host,
+      midTournament({ name: 'Winterturnier' }),
+      'C:\\Turniere\\Winter.wattmatt',
+    );
+    showScene(host, { id: 'TABLE_OVERVIEW' });
+    setFrozen(host, false);
+
+    expect(beamer.getState().snapshot.tournament.name).toBe('Winterturnier');
+  });
+
+  it('answers a beamer reopened mid-freeze with the held picture', async () => {
+    const { host, transports, beamerSync } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+    showScene(host, { id: 'BRACKET' });
+
+    setFrozen(host, true);
+    showScene(host, { id: 'TABLE_OVERVIEW' });
+
+    // The projector cable is pulled and plugged back in while the host is
+    // working behind the freeze.
+    await beamerSync.stop();
+    const reopened = createBeamerStore();
+    await startBeamerSync(reopened, transports.beamer);
+
+    // Not the work in progress: what the room was looking at (golden rule 4).
+    expect(reopened.getState().snapshot.scene).toEqual({ id: 'BRACKET' });
+    expect(reopened.getState().animate).toBe(false);
+  });
+});
+
+describe('the host skip', () => {
+  it('reaches the beamer on the light channel, as part of the picture', async () => {
+    const { host, beamer } = await wiredPair();
+    setOpenedDocument(host, midTournament(), 'C:\\Turniere\\Sommer.wattmatt');
+    showScene(host, { id: 'DRAW', roundId: round('r1') });
+    const staged = beamer.getState().snapshot.scene;
+
+    skipAnimation(host);
+
+    expect(beamer.getState().snapshot.skipToken).toBe(host.getState().skipToken);
+    // The skip is not a scene change, and must not read as one: a beamer that
+    // re-entered the draw here would replay the sequence it was told to end.
+    expect(beamer.getState().snapshot.scene).toEqual(staged);
+    expect(beamer.getState().animate).toBe(false);
   });
 });

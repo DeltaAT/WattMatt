@@ -111,6 +111,7 @@ describe('toSnapshot', () => {
       revision: 1,
       scene: { id: 'BRACKET' },
       autoFollow: true,
+      skipToken: 0,
       tournament: EMPTY_TOURNAMENT,
       delivery: 'live',
     });
@@ -532,6 +533,7 @@ describe('undo and redo', () => {
       'delivery',
       'revision',
       'scene',
+      'skipToken',
       'tournament',
     ]);
   });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { tournamentStore } from '@/store/session';
 import { nextRedo, nextUndo } from '@/store/undo';
+import { isTextEntry } from '@/windows/host/textEntry';
 
 /**
  * The host's undo, bound to the one store this window owns (issue #11).
@@ -88,18 +89,4 @@ export function useUndoShortcuts(handle: UndoHandle): void {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-}
-
-/** Whether the keypress belongs to something the host is typing into. */
-function isTextEntry(target: EventTarget | null): boolean {
-  const element = target as HTMLElement | null;
-  if (element === null || typeof element.tagName !== 'string') {
-    return false;
-  }
-  return (
-    element.isContentEditable === true ||
-    element.tagName === 'INPUT' ||
-    element.tagName === 'TEXTAREA' ||
-    element.tagName === 'SELECT'
-  );
 }

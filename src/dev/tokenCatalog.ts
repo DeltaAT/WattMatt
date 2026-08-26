@@ -155,6 +155,7 @@ export const DURATIONS: readonly DurationEntry[] = [
   { token: '--dur-slow', use: 'beamer scene crossfade' },
   { token: '--dur-reveal', use: 'beamer single reveal' },
   { token: '--dur-story', use: 'beamer choreographed sequence step' },
+  { token: '--dur-blackout', use: 'beamer blackout fade' },
 ];
 
 export const STAGGERS: readonly DurationEntry[] = [

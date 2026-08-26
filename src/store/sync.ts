@@ -46,8 +46,30 @@ export async function startHostSync(
     transport.emit(event, payload).catch(reportSyncFailure);
   };
 
+  /**
+   * The picture the projector is holding while the host works ahead, or null
+   * when nothing is being held (issue #28).
+   *
+   * Captured at the commit that froze, because that state *is* what the beamer
+   * is showing — everything before it was broadcast. Holding it here rather
+   * than teaching the beamer about freezing keeps golden rule 4 intact: the
+   * beamer still renders whatever it was last told, and a beamer reopened
+   * mid-freeze is answered with the held picture rather than with the work in
+   * progress the room is not supposed to see yet.
+   */
+  let held: Snapshot | null = null;
+
   const broadcast = (delivery: Snapshot['delivery'] = 'live') => {
-    send(SNAPSHOT_EVENT, toSnapshot(store.getState(), delivery));
+    const state = store.getState();
+    if (state.frozen) {
+      // A beamer that reopens mid-freeze is answered with the held picture,
+      // never with the work in progress. Capturing here as well as on commit
+      // covers the case where nothing has been committed since the freeze.
+      held ??= toSnapshot(state, 'catchUp');
+      send(SNAPSHOT_EVENT, held);
+      return;
+    }
+    send(SNAPSHOT_EVENT, toSnapshot(state, delivery));
   };
 
   // Commits that left the tournament alone go out on the light channel, so a
@@ -56,13 +78,32 @@ export async function startHostSync(
   // reference equality, and an action that mutated the tournament in place
   // would look unchanged and lose its data silently.
   const unsubscribeStore = store.onCommit((next, meta) => {
+    // Frozen: nothing at all leaves the host. Not the scene, not the result the
+    // host has just marked, not the round they are drawing ahead — the room
+    // keeps the picture it was on when the host reached for the button
+    // (issue #28, golden rule 3).
+    if (next.frozen) {
+      held ??= toSnapshot(next, 'catchUp');
+      return;
+    }
+
     // An undo travels as a catch-up: the beamer follows it like any other
     // state change, but renders it settled rather than animating into it.
     // Replaying the pairing reveal because the host corrected a misclick would
     // show the audience a draw that is not happening (issue #11).
-    const delivery: Snapshot['delivery'] = meta.settled ? 'catchUp' : 'live';
+    //
+    // The thaw travels the same way and for the same reason: everything that
+    // happened behind the freeze arrives at once, and the room must be shown
+    // where the evening got to, not watch it played out in fast-forward.
+    const thawed = held !== null;
+    held = null;
+    const delivery: Snapshot['delivery'] = meta.settled || thawed ? 'catchUp' : 'live';
 
-    if (meta.touchedTournament) {
+    // A thaw always goes out whole. What changed behind the freeze is unknown
+    // to this listener — it saw one commit, and there may have been fifty — so
+    // the light channel could leave the projector holding a tournament from
+    // before the freeze.
+    if (meta.touchedTournament || thawed) {
       send(SNAPSHOT_EVENT, toSnapshot(next, delivery));
       return;
     }
@@ -70,6 +111,7 @@ export async function startHostSync(
       revision: next.revision,
       scene: next.scene,
       autoFollow: next.autoFollow,
+      skipToken: next.skipToken,
       delivery,
     });
   });
@@ -133,9 +175,9 @@ export async function startBeamerSync(
     await transport.listen(
       SCENE_EVENT,
       sceneMessageSchema,
-      ({ revision, scene, autoFollow, delivery }) => {
+      ({ revision, scene, autoFollow, skipToken, delivery }) => {
         const current = store.getState().snapshot;
-        store.applySnapshot({ ...current, revision, scene, autoFollow, delivery });
+        store.applySnapshot({ ...current, revision, scene, autoFollow, skipToken, delivery });
       },
     ),
   );

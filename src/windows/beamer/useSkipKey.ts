@@ -9,10 +9,11 @@ import { useEffect } from 'react';
  *
  * **This listens in the beamer window, so it only fires while that window has
  * focus.** With two screens the host is usually typing on the laptop, where the
- * key goes to the host window instead and nothing happens. Routing a host
- * keypress to the projector needs a message the contract does not have yet —
- * `beamer:scene` carries scenes, not commands — and that channel belongs to the
- * beamer control centre (issue #28). Recorded in docs/OPEN-QUESTIONS.md #53.
+ * key goes to the host window instead — which is what `useSkipSignal` and the
+ * host's own `Space` are for (issue #28, docs/OPEN-QUESTIONS.md #53). This is
+ * kept alongside it rather than replaced by it: on a single-screen venue the
+ * beamer is a window the host can click into, and the key should still work
+ * where it is pressed.
  *
  * `preventDefault` because Space scrolls a document by default, and the beamer
  * surface must never move under the audience.

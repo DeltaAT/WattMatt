@@ -36,6 +36,8 @@ export const sceneMessageSchema = z.object({
   revision: z.number().int().nonnegative(),
   scene: beamerSceneSchema,
   autoFollow: z.boolean(),
+  /** See `snapshotSchema`: the host's skip, carried as a count (issue #28). */
+  skipToken: z.number().int().nonnegative().default(0),
   delivery: snapshotDeliverySchema,
 });
 

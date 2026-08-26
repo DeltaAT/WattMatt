@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import { createHostTransport } from '@/platform/windowSync';
+import { createHostTransport, mergeTransports } from '@/platform/windowSync';
 import { HEARTBEAT_INTERVAL_MS, isBeamerAlive, watchHeartbeat } from '@/store/heartbeat';
-import { tournamentStore } from '@/store/session';
-import { startHostSync } from '@/store/sync';
+import { beamerPreviewStore, previewChannel, tournamentStore } from '@/store/session';
+import { startBeamerSync, startHostSync } from '@/store/sync';
 
 /**
  * Starts the host half of the channel and reports whether the beamer window is
@@ -18,12 +18,22 @@ export function useBeamerAlive(): boolean {
   const [alive, setAlive] = useState(false);
 
   useEffect(() => {
-    const transport = createHostTransport();
+    // The projector and the host's own preview, on one transport: two host
+    // syncs would broadcast twice per commit and answer every catch-up request
+    // twice (issue #28, `mergeTransports`).
+    const transport = mergeTransports([createHostTransport(), previewChannel.host]);
     const sync = startHostSync(tournamentStore, transport);
     const watch = watchHeartbeat(transport, () => Date.now(), setLastBeatAt);
 
+    // The preview is a beamer in every respect but one: it sends no heartbeat.
+    // A liveness light that a preview could keep lit would say the projector is
+    // fine while the room stares at a frozen picture — the exact failure the
+    // heartbeat exists to catch (docs/ARCHITECTURE.md §3 "Liveness").
+    const preview = startBeamerSync(beamerPreviewStore, previewChannel.beamer);
+
     return () => {
       sync.then((started) => started.stop(), reportHostSyncFailure);
+      preview.then((started) => started.stop(), reportHostSyncFailure);
       watch.then((unlisten) => unlisten(), reportHostSyncFailure);
     };
   }, []);

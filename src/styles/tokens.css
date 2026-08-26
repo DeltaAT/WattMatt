@@ -98,6 +98,10 @@
   --dur-slow: 400ms; /* beamer scene crossfade */
   --dur-reveal: 600ms; /* beamer single reveal */
   --dur-story: 1200ms; /* beamer choreographed sequence step */
+  /* The blackout, docs/MOTION.md §4.6. Its own token rather than `--dur-base`:
+   * §4.6 names 200 ms specifically, and it is the one duration the host feels
+   * as a delay between pressing and the room going dark (issue #28). */
+  --dur-blackout: 200ms;
 
   /* ---- motion: stagger ---- */
   --stagger-tight: 40ms; /* host lists */
