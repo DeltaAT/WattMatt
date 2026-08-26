@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
+import type { BeamerScene } from '@/domain/beamerScene';
 import {
   bracketBlockers,
   bracketColumns,
@@ -22,6 +23,7 @@ import {
   setBracketWinner,
   showBracketOnBeamer,
 } from '@/store/actions/bracket';
+import { showScene } from '@/store/actions/scene';
 import { tournamentStore } from '@/store/session';
 
 /**
@@ -122,7 +124,29 @@ export function useBracket(): BracketHandle {
     showBracketOnBeamer(tournamentStore, focus);
   }, []);
 
-  const actions = { draw, setWinner, correctionFor, assign, finish, showOnBeamer };
+  const showCeremony = useCallback((mode: 'AUTO' | 'STEP', step = 0) => {
+    const scene: BeamerScene = { id: 'CEREMONY', reveal: { mode, step } } as BeamerScene;
+    showScene(tournamentStore, scene);
+  }, []);
+
+  const showCeremonyStep = useCallback((nextStep: number) => {
+    const scene: BeamerScene = {
+      id: 'CEREMONY',
+      reveal: { mode: 'STEP', step: nextStep },
+    } as BeamerScene;
+    showScene(tournamentStore, scene);
+  }, []);
+
+  const actions = {
+    draw,
+    setWinner,
+    correctionFor,
+    assign,
+    finish,
+    showOnBeamer,
+    showCeremony,
+    showCeremonyStep,
+  };
 
   const document = state.document;
   if (document === null) {
