@@ -235,3 +235,48 @@ describe('the first reveal', () => {
     expect(markup).toContain('data-bracket-connector="up"');
   });
 });
+
+describe('the zoom to a round (issue #26)', () => {
+  it('draws the whole tree when the host has not zoomed', () => {
+    const markup = scene(drawn(8));
+
+    expect(markup).toContain(de.bracket.round.QUARTER_FINAL);
+    expect(markup.match(/data-bracket-node="/g)).toHaveLength(8);
+  });
+
+  it('drops the rounds already played so the last matches fill the screen', () => {
+    const markup = renderToStaticMarkup(
+      <BracketScene
+        tournament={toTournamentSnapshot(drawn(8))}
+        settled
+        focus="SEMI_FINAL"
+        advance={AT_REST}
+      />,
+    );
+
+    expect(markup).not.toContain(de.bracket.round.QUARTER_FINAL);
+    expect(markup).toContain(de.bracket.round.SEMI_FINAL);
+    // Two semi-finals, the final, and the third-place match.
+    expect(markup.match(/data-bracket-node="/g)).toHaveLength(4);
+  });
+
+  /*
+   * The third-place column sits before the final in the tree's own order, so a
+   * naive slice would cut off the one match §7 plays at the same time as the
+   * one being zoomed to.
+   */
+  it('keeps the Spiel um Platz 3 beside the Finale', () => {
+    const markup = renderToStaticMarkup(
+      <BracketScene
+        tournament={toTournamentSnapshot(drawn(8))}
+        settled
+        focus="FINAL"
+        advance={AT_REST}
+      />,
+    );
+
+    expect(markup).toContain(de.bracket.round.FINAL);
+    expect(markup).toContain(de.bracket.round.THIRD_PLACE);
+    expect(markup.match(/data-bracket-node="/g)).toHaveLength(2);
+  });
+});

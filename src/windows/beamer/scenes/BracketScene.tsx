@@ -7,7 +7,7 @@ import {
 } from '@/domain/bracket';
 import type { GroupId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
-import type { Bracket, BracketNode, Group, ParticipantLabel } from '@/domain/types';
+import type { BracketNode, BracketRound, Group, ParticipantLabel } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
 import { chipKey, type BracketAdvance } from '@/windows/beamer/useBracketAdvance';
@@ -48,11 +48,23 @@ import type { CSSProperties } from 'react';
 export function BracketScene({
   tournament,
   settled,
+  focus = null,
   advance,
 }: {
   tournament: TournamentSnapshot;
   /** False only while the scene is animating in — the first reveal of §4.4. */
   settled: boolean;
+  /**
+   * The round the host has zoomed the projector to, or null for the whole tree
+   * (issue #26).
+   *
+   * The tree is drawn *from* that round onwards rather than as that round
+   * alone: the last matches fill the screen, which is what the zoom is for, and
+   * the audience can still see where the winner of the match in front of them
+   * is going — which a single column stripped of its links could not show
+   * (docs/OPEN-QUESTIONS.md #74).
+   */
+  focus?: BracketRound | null;
   /**
    * The chips that are moving, and where to attach them.
    *
@@ -80,10 +92,23 @@ export function BracketScene({
     );
   }
 
-  const columns = bracketColumns(bracket);
+  const columns = zoom(bracketColumns(bracket), focus);
   const tree = columns.filter((column) => column.round !== 'THIRD_PLACE');
   const thirdPlace = columns.find((column) => column.round === 'THIRD_PLACE') ?? null;
   const active = activeBracketRound(bracket);
+  // What the heading names: the live round while it is on screen, and otherwise
+  // the round the host has zoomed to. A projector showing the semi-finals under
+  // the word `Viertelfinale` — true of the tournament, wrong about the picture
+  // — is exactly the disagreement the room would read as a mistake.
+  const heading =
+    active !== null && columns.some((column) => column.round === active)
+      ? active
+      : (focus ?? active);
+  // The rows the grid needs, and the type the names get, both come off what is
+  // actually drawn rather than off the size of the whole bracket: zooming to
+  // the semi-finals of a field of 16 is a board of two matches, and it should
+  // be typed like one.
+  const drawnField = tree[0]?.field ?? bracket.size;
 
   const byId: ReadonlyMap<GroupId, Group> = new Map(
     tournament.groups.map((group) => [group.id, group]),
@@ -91,7 +116,7 @@ export function BracketScene({
   const chips: ChipContext = {
     groups: byId,
     participant: tournament.participantLabel,
-    type: NAME_TYPE[nameDensity(bracket.size)],
+    type: NAME_TYPE[nameDensity(drawnField)],
     advance,
     settled,
   };
@@ -116,7 +141,7 @@ export function BracketScene({
       <header className="flex items-baseline justify-between gap-6">
         <div className="flex items-baseline gap-6">
           <h1 className="wm-display text-beamer-h1 font-extrabold" data-bracket-title="">
-            {active === null ? de.beamer.bracket.title : de.bracket.round[active]}
+            {heading === null ? de.beamer.bracket.title : de.bracket.round[heading]}
           </h1>
           {tournament.name === '' ? null : (
             <p className="text-beamer-body text-wm-text-muted" data-tournament-name="">
@@ -138,7 +163,7 @@ export function BracketScene({
               // One row per first-round node; every later round spans the rows
               // of the two nodes below it, which is what centres it between
               // them without a single measurement.
-              gridTemplateRows: `auto repeat(${String(Math.max(1, bracket.size / 2))}, minmax(0, 1fr))`,
+              gridTemplateRows: `auto repeat(${String(Math.max(1, drawnField / 2))}, minmax(0, 1fr))`,
             }}
             data-bracket-tree=""
           >
@@ -169,7 +194,7 @@ export function BracketScene({
                   style={{
                     gridColumn: index + 1,
                     // Row 1 is the round's heading, so the tree starts at 2.
-                    gridRow: `${String(position * rowSpan(bracket, column) + 2)} / span ${String(rowSpan(bracket, column))}`,
+                    gridRow: `${String(position * rowSpan(drawnField, column) + 2)} / span ${String(rowSpan(drawnField, column))}`,
                   }}
                 />
               )),
@@ -454,10 +479,41 @@ const NAME_TYPE: Record<NameDensity, NameType> = {
   dense: 'text-beamer-body',
 };
 
-/** How many first-round rows one node of a column spans. */
-function rowSpan(bracket: Bracket, column: BracketColumn): number {
-  const rows = Math.max(1, bracket.size / 2);
+/** How many rows of the drawn tree one node of a column spans. */
+function rowSpan(field: number, column: BracketColumn): number {
+  const rows = Math.max(1, field / 2);
   return Math.max(1, Math.round(rows / Math.max(1, column.nodes.length)));
+}
+
+/**
+ * The columns the projector actually draws.
+ *
+ * Everything, or — when the host has zoomed to a round — that round and the
+ * ones after it. The `Spiel um Platz 3` stays whenever the `Finale` is drawn,
+ * because §7 plays the two together and the whole point of the zoom is the end
+ * of the evening.
+ */
+function zoom(
+  columns: readonly BracketColumn[],
+  focus: BracketRound | null,
+): readonly BracketColumn[] {
+  if (focus === null) {
+    return columns;
+  }
+  const from = columns.findIndex((column) => column.round === focus);
+  if (from < 0) {
+    return columns;
+  }
+
+  const zoomed = columns.slice(from);
+  const third = columns.find((column) => column.round === 'THIRD_PLACE');
+  // The third-place column sits before the final in the file's own order, so a
+  // zoom to the `Finale` would otherwise slice it off — the one match §7 plays
+  // at the same time as the one being zoomed to.
+  if (third === undefined || zoomed.includes(third)) {
+    return zoomed;
+  }
+  return zoomed.some((column) => column.round === 'FINAL') ? [third, ...zoomed] : zoomed;
 }
 
 /**

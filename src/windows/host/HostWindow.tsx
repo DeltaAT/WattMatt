@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import { setSleepInhibited } from '@/platform/beamerWindow';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
+import { BracketPanel } from '@/windows/host/BracketPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
 import { NamingPanel } from '@/windows/host/NamingPanel';
@@ -17,6 +18,7 @@ import { TablePanel } from '@/windows/host/TablePanel';
 import { TournamentBar } from '@/windows/host/TournamentBar';
 import { UndoControls } from '@/windows/host/UndoControls';
 import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
+import { useBracket } from '@/windows/host/useBracket';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useNaming } from '@/windows/host/useNaming';
@@ -54,6 +56,7 @@ export function HostWindow() {
   const round = useRound();
   const repechage = useRepechage();
   const naming = useNaming();
+  const bracket = useBracket();
   const phase = usePhase();
   // Only while something is actually running: a setup screen has no stopwatch
   // to move, and re-rendering it once a second for an hour before the doors
@@ -198,6 +201,37 @@ export function HostWindow() {
                 participant={naming.participant}
                 onRename={naming.rename}
                 onShowOnBeamer={naming.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              The final phase, under the naming panel it follows on from: from
+              the moment the tree can be drawn until the podium, this is the
+              panel the host works in (issue #26). Absent for the whole first
+              half of the evening, when there is no bracket and no way to draw
+              one.
+            */}
+            {bracket.isActive ? (
+              <BracketPanel
+                bracket={bracket.bracket}
+                columns={bracket.columns}
+                groups={bracket.groups}
+                participant={bracket.participant}
+                freeTables={bracket.freeTables}
+                tables={document.state.tournament.tables}
+                playable={bracket.playable}
+                field={bracket.field}
+                now={now}
+                drawBlockers={bracket.drawBlockers}
+                canDraw={bracket.canDraw}
+                canFinish={bracket.canFinish}
+                focus={bracket.focus}
+                onDraw={bracket.draw}
+                onSetWinner={bracket.setWinner}
+                correctionFor={bracket.correctionFor}
+                onAssign={bracket.assign}
+                onFinish={bracket.finish}
+                onFocus={bracket.showOnBeamer}
               />
             ) : null}
 

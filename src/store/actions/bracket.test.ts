@@ -4,7 +4,13 @@ import type { BracketNodeId, GroupId } from '@/domain/ids';
 import { group, table, tableId, tournament } from '@/domain/testFixtures';
 import type { Bracket, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
-import { drawBracket, setBracketWinner, startNextBracketMatch } from '@/store/actions/bracket';
+import {
+  drawBracket,
+  finishBracket,
+  setBracketWinner,
+  showBracketOnBeamer,
+  startNextBracketMatch,
+} from '@/store/actions/bracket';
 import { createTournamentStore, type TournamentStore } from '@/store/tournamentStore';
 import { nextUndo } from '@/store/undo';
 
@@ -195,6 +201,115 @@ describe('setBracketWinner', () => {
     setBracketWinner(store, 'bn_1' as BracketNodeId, slotsOf(store, 'bn_2')[0] as GroupId);
 
     expect(store.getState().revision).toBe(before);
+  });
+});
+
+describe('a correction that discards results (issue #26)', () => {
+  /** A bracket of four played to the end: both semi-finals, final, third place. */
+  function played(): TournamentStore {
+    const store = ready(readyToDraw(4));
+    drawBracket(store);
+    const semis = bracketOf(store).nodes.filter((node) => node.round === 'SEMI_FINAL');
+    for (const semi of semis) {
+      setBracketWinner(store, semi.id, semi.slotA as GroupId);
+    }
+    setBracketWinner(store, 'bn_4' as BracketNodeId, slotsOf(store, 'bn_4')[0] as GroupId);
+    setBracketWinner(store, 'bn_3' as BracketNodeId, slotsOf(store, 'bn_3')[0] as GroupId);
+    return store;
+  }
+
+  it('says on the undo button how much is being thrown away', () => {
+    const store = played();
+    const [, loser] = slotsOf(store, 'bn_1');
+
+    setBracketWinner(store, 'bn_1' as BracketNodeId, loser as GroupId);
+
+    expect(nextUndo(store.getState().history)?.label).toBe(
+      de.undo.action.bracketCorrected({ participant: nameOf(store, loser), n: 2 }),
+    );
+  });
+
+  it('logs which results were discarded', () => {
+    const store = played();
+    const [, loser] = slotsOf(store, 'bn_1');
+
+    setBracketWinner(store, 'bn_1' as BracketNodeId, loser as GroupId);
+
+    const entry = open(store).log.at(-1);
+    expect(entry?.action).toBe('BRACKET_WINNER_SET');
+    expect(entry?.payload.discarded).toHaveLength(2);
+  });
+
+  it('gives every discarded result back in one press of Rückgängig', () => {
+    const store = played();
+    const before = bracketOf(store);
+    const [, loser] = slotsOf(store, 'bn_1');
+    setBracketWinner(store, 'bn_1' as BracketNodeId, loser as GroupId);
+
+    expect(store.undo()).toBe(true);
+
+    expect(bracketOf(store)).toEqual(before);
+  });
+});
+
+describe('finishBracket', () => {
+  it('moves into the Siegerehrung once the tree is over', () => {
+    const store = ready(readyToDraw(2, 1));
+    drawBracket(store);
+    const final = bracketOf(store).nodes[0];
+    setBracketWinner(store, final?.id as BracketNodeId, final?.slotA as GroupId);
+
+    finishBracket(store);
+
+    expect(open(store).phase).toBe('CEREMONY');
+    expect(nextUndo(store.getState().history)?.label).toBe(de.undo.action.bracketFinished);
+    expect(open(store).log.at(-1)?.action).toBe('BRACKET_FINISHED');
+  });
+
+  /*
+   * docs/TOURNAMENT-RULES.md §8: the podium is the host's to reveal, and must
+   * never appear the instant the final is decided.
+   */
+  it('leaves the projector showing the finished tree', () => {
+    const store = ready(readyToDraw(2, 1));
+    drawBracket(store);
+    const final = bracketOf(store).nodes[0];
+    setBracketWinner(store, final?.id as BracketNodeId, final?.slotA as GroupId);
+
+    finishBracket(store);
+
+    expect(store.getState().scene).toEqual({ id: 'BRACKET' });
+  });
+
+  it('commits nothing while a match is still open', () => {
+    const store = ready(readyToDraw(4));
+    drawBracket(store);
+    const before = store.getState().revision;
+
+    finishBracket(store);
+
+    expect(store.getState().revision).toBe(before);
+  });
+});
+
+describe('showBracketOnBeamer', () => {
+  it('zooms the projector to a round, and back to the whole tree', () => {
+    const store = ready(readyToDraw(4));
+    drawBracket(store);
+
+    showBracketOnBeamer(store, 'FINAL');
+    expect(store.getState().scene).toEqual({ id: 'BRACKET', focus: 'FINAL' });
+
+    showBracketOnBeamer(store, null);
+    expect(store.getState().scene).toEqual({ id: 'BRACKET' });
+  });
+
+  it('takes the beamer by hand, like every other scene change', () => {
+    const store = ready(readyToDraw(4));
+
+    showBracketOnBeamer(store, 'SEMI_FINAL');
+
+    expect(store.getState().autoFollow).toBe(false);
   });
 });
 

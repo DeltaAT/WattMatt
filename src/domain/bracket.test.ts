@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   activeBracketRound,
   assignBracketNode,
+  bracketCorrection,
+  bracketNodeState,
   assignNextBracketNode,
   bracketBlockers,
   bracketColumns,
@@ -10,7 +12,9 @@ import {
   buildBracket,
   chipOrigin,
   canDrawBracket,
+  canFinishBracket,
   drawBracket,
+  finishBracket,
   finalStandings,
   isBracketComplete,
   nextQueuedBracketNode,
@@ -479,19 +483,78 @@ describe('setBracketWinner', () => {
     expect(fixed.groups.find((group) => group.id === winner)?.status).toBe('ACTIVE');
   });
 
-  it('refuses a correction once the result has been played on', () => {
+  it('discards what was decided on top of a corrected result (issue #26)', () => {
     let document = semiFinals();
     const firstSemi = slots(document, 'bn_1');
     const secondSemi = slots(document, 'bn_2');
     document = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[0] as GroupId);
     document = setBracketWinner(document, 'bn_2' as BracketNodeId, secondSemi[0] as GroupId);
-    const played = setBracketWinner(document, 'bn_4' as BracketNodeId, firstSemi[0] as GroupId);
+    document = setBracketWinner(document, 'bn_4' as BracketNodeId, firstSemi[0] as GroupId);
+    document = setBracketWinner(document, 'bn_3' as BracketNodeId, firstSemi[1] as GroupId);
 
-    // The final is decided; the semi-final that fed it is no longer correctable
-    // in place — undo is the way back (CLAUDE.md golden rule 6).
-    expect(setBracketWinner(played, 'bn_1' as BracketNodeId, firstSemi[1] as GroupId)).toBe(played);
+    // The first semi-final went the other way after all.
+    const corrected = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[1] as GroupId);
+    const node = (id: string) =>
+      bracketOf(corrected).nodes.find((candidate) => candidate.id === id);
+
+    // The final and the third-place match were both built on it, so both are
+    // open again — with the corrected participants standing in them.
+    expect(node('bn_4')?.winnerId).toBeNull();
+    expect(node('bn_3')?.winnerId).toBeNull();
+    expect(slots(corrected, 'bn_4')).toEqual([firstSemi[1], secondSemi[0]]);
+    expect(slots(corrected, 'bn_3')).toEqual([firstSemi[0], secondSemi[1]]);
+    // The other semi-final is untouched: the walk only ever climbs out of the
+    // node it starts at.
+    expect(node('bn_2')?.winnerId).toBe(secondSemi[0]);
   });
 
+  it('puts everybody the discarded results knocked out back in the tournament', () => {
+    let document = semiFinals();
+    const firstSemi = slots(document, 'bn_1');
+    const secondSemi = slots(document, 'bn_2');
+    document = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[0] as GroupId);
+    document = setBracketWinner(document, 'bn_2' as BracketNodeId, secondSemi[0] as GroupId);
+    document = setBracketWinner(document, 'bn_4' as BracketNodeId, firstSemi[0] as GroupId);
+    const status = (document: Tournament, groupId: GroupId | null) =>
+      document.groups.find((group) => group.id === groupId)?.status;
+
+    expect(status(document, secondSemi[0])).toBe('ELIMINATED');
+
+    const corrected = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[1] as GroupId);
+
+    // The final was discarded, so the participant it knocked out is back in.
+    expect(status(corrected, secondSemi[0])).toBe('ACTIVE');
+    // And the corrected result's own two have swapped: the beaten semi-finalist
+    // plays for third rather than leaving (§7).
+    expect(status(corrected, firstSemi[1])).toBe('ACTIVE');
+    expect(status(corrected, firstSemi[0])).toBe('ACTIVE');
+  });
+
+  it('takes a discarded match off its table and back into the queue', () => {
+    let document = semiFinals();
+    const firstSemi = slots(document, 'bn_1');
+    const secondSemi = slots(document, 'bn_2');
+    document = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[0] as GroupId);
+    document = setBracketWinner(document, 'bn_2' as BracketNodeId, secondSemi[0] as GroupId);
+    document = assignBracketNode(document, {
+      nodeId: 'bn_4' as BracketNodeId,
+      tableId: tableId(1),
+      at: FIXED_NOW,
+    });
+    document = setBracketWinner(document, 'bn_4' as BracketNodeId, firstSemi[0] as GroupId);
+    document = assignBracketNode(document, {
+      nodeId: 'bn_3' as BracketNodeId,
+      tableId: tableId(1),
+      at: FIXED_NOW,
+    });
+
+    const corrected = setBracketWinner(document, 'bn_1' as BracketNodeId, firstSemi[1] as GroupId);
+
+    // The third-place match was on a table and is not the match it was: the
+    // table is free again and the node is back in the queue.
+    expect(corrected.tables[0]?.status).toBe('FREE');
+    expect(queuedBracketNodes(bracketOf(corrected)).map((node) => node.id)).toContain('bn_3');
+  });
   it('refuses a group that is not in the match, a Freilos and an unknown node', () => {
     const document = semiFinals();
     const [winner] = slots(document, 'bn_1');
@@ -526,6 +589,52 @@ describe('setBracketWinner', () => {
       third: null,
     });
     expect(isBracketComplete(after)).toBe(true);
+  });
+});
+
+describe('bracketCorrection', () => {
+  function played(): Tournament {
+    let document = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    for (const node of nodesOf(bracketOf(document), 'SEMI_FINAL')) {
+      document = setBracketWinner(document, node.id, node.slotA as GroupId);
+    }
+    return document;
+  }
+
+  it('is nothing at all for a decision that costs nothing', () => {
+    const document = played();
+    const semi = bracketOf(document).nodes[0];
+
+    // A first decision, and a correction with nothing built on it.
+    expect(bracketCorrection(document, 'bn_4' as BracketNodeId, semi?.slotA as GroupId)).toBeNull();
+    expect(
+      bracketCorrection(document, semi?.id as BracketNodeId, semi?.slotB as GroupId),
+    ).toBeNull();
+  });
+
+  it('lists exactly the results a correction would discard', () => {
+    let document = played();
+    const first = nodesOf(bracketOf(document), 'SEMI_FINAL')[0];
+    document = setBracketWinner(document, 'bn_4' as BracketNodeId, first?.slotA as GroupId);
+    document = setBracketWinner(document, 'bn_3' as BracketNodeId, first?.slotB as GroupId);
+
+    const correction = bracketCorrection(
+      document,
+      first?.id as BracketNodeId,
+      first?.slotB as GroupId,
+    );
+
+    expect(correction?.node.id).toBe(first?.id);
+    expect(correction?.winnerId).toBe(first?.slotB);
+    expect(correction?.discards.map((node) => node.id).sort()).toEqual(['bn_3', 'bn_4']);
+    // The discarded results are handed over as they stand, so the panel can say
+    // who beat whom in the match that is about to be thrown away.
+    expect(correction?.discards.every((node) => node.winnerId !== null)).toBe(true);
+  });
+
+  it('is nothing for a node that does not exist, or without a bracket', () => {
+    expect(bracketCorrection(played(), 'bn_99' as BracketNodeId, groupId(1))).toBeNull();
+    expect(bracketCorrection(readyToDraw(4), 'bn_1' as BracketNodeId, groupId(1))).toBeNull();
   });
 });
 
@@ -857,5 +966,77 @@ describe('chipOrigin', () => {
     // Nobody has been sent up yet.
     expect(chipOrigin(bracket, 'bn_4' as BracketNodeId, 'A')).toBeNull();
     expect(chipOrigin(bracket, 'bn_99' as BracketNodeId, 'A')).toBeNull();
+  });
+});
+
+describe('bracketNodeState', () => {
+  it('says which matches can be played right now (issue #26)', () => {
+    const document = drawBracket(readyToDraw(8, { tables: [table(1)], nextTableNumber: 2 }), {
+      at: FIXED_NOW,
+    });
+    const state = (id: string) => {
+      const node = bracketOf(document).nodes.find((candidate) => candidate.id === id);
+      return node === undefined ? null : bracketNodeState(node);
+    };
+
+    // One table, four quarter-finals: one is being played and three are queued.
+    expect(state('bn_1')).toBe('RUNNING');
+    expect(state('bn_2')).toBe('QUEUED');
+    // Nobody has reached the semi-finals, the final or the third-place match.
+    expect(state('bn_5')).toBe('WAITING');
+    expect(state('bn_8')).toBe('WAITING');
+  });
+
+  it('tells a played match from a Freilos', () => {
+    const groups = Array.from({ length: 3 }, (_unused, index) =>
+      group(index + 1, { name: `${NAMED} ${index + 1}` }),
+    );
+    const bracket = buildBracket(groups, { rng: createRng('seed'), size: 4 });
+    const bye = bracket.nodes.find((node) => node.round === 'SEMI_FINAL' && node.slotB === null);
+    const played = bracket.nodes.find((node) => node.round === 'SEMI_FINAL' && node.slotB !== null);
+
+    expect(bye === undefined ? null : bracketNodeState(bye)).toBe('BYE');
+    expect(played === undefined ? null : bracketNodeState(played)).toBe('QUEUED');
+  });
+});
+
+describe('finishBracket', () => {
+  /** A bracket of two, played to the end — the smallest complete one there is. */
+  function finished(): Tournament {
+    const drawn = drawBracket(readyToDraw(2, { tables: [table(1)] }), { at: FIXED_NOW });
+    const final = bracketOf(drawn).nodes[0];
+    return setBracketWinner(drawn, final?.id as BracketNodeId, final?.slotA as GroupId);
+  }
+
+  it('moves the tournament into the Siegerehrung once the tree is over', () => {
+    const document = finished();
+
+    expect(canFinishBracket(document)).toBe(true);
+    expect(finishBracket(document).phase).toBe('CEREMONY');
+  });
+
+  /*
+   * §8: the podium is revealed by the host and "must never fire automatically
+   * the instant the final is decided, because the host may still be talking".
+   * Moving the phase is not the reveal, and it changes nothing else.
+   */
+  it('changes the phase and nothing else', () => {
+    const document = finished();
+
+    expect(finishBracket(document)).toEqual({ ...document, phase: 'CEREMONY' });
+  });
+
+  it('refuses while a match is still to be played', () => {
+    const open = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+
+    expect(canFinishBracket(open)).toBe(false);
+    expect(finishBracket(open)).toBe(open);
+  });
+
+  it('refuses outside the final phase', () => {
+    const ready = readyToDraw(4);
+
+    expect(canFinishBracket(ready)).toBe(false);
+    expect(finishBracket(ready)).toBe(ready);
   });
 });
