@@ -70,7 +70,7 @@ uses.
 
 | File | Scene | State to capture |
 | --- | --- | --- |
-| `beamer-1-idle.png` | `IDLE` | Before the doors open. |
+| `beamer-1-welcome.png` | `WELCOME` | Before the doors open, with a couple of dozen registered so the count is on the wall. |
 | `beamer-2-groups.png` | `GROUP_OVERVIEW` | 40 participants, so the dense grid is what the reader sees. |
 | `beamer-3-tables.png` | `TABLE_OVERVIEW` | A mix of occupied, free and `gesperrt`. |
 | `beamer-4-draw.png` | `DRAW` | Mid-sequence: some pairings revealed, pool still filling, one *Wartet auf Tisch*. |

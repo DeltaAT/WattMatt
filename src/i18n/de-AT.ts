@@ -1,4 +1,4 @@
-import { pluralizeDeAT } from '@/i18n/plural';
+import { pluralizeDeAT, pluralWordDeAT } from '@/i18n/plural';
 
 /**
  * Every user-visible string in WattMatt lives here (CLAUDE.md §1).
@@ -607,6 +607,14 @@ export const deAT = {
       numbered: (params: { n: number }) => `Gruppe ${params.n}`,
       /** "1 Gruppe" / "5 Gruppen" — German pluralisation via @/i18n/plural. */
       count: (params: { n: number }) => pluralizeDeAT(params.n, 'Gruppe', 'Gruppen'),
+      /**
+       * The bare word in the right number — no figure in front of it.
+       *
+       * The welcome screen draws the count at `beamer-hero` and the word
+       * underneath it, so `count` would put the number on the wall twice
+       * (issue #74).
+       */
+      word: (params: { n: number }) => pluralWordDeAT(params.n, 'Gruppe', 'Gruppen'),
       add: 'Gruppe hinzufügen',
       bulkAddLabel: 'Anzahl Gruppen',
       bulkAdd: 'Gruppen anlegen',
@@ -630,6 +638,14 @@ export const deAT = {
       many: 'Teams',
       numbered: (params: { n: number }) => `Team ${params.n}`,
       count: (params: { n: number }) => pluralizeDeAT(params.n, 'Team', 'Teams'),
+      /**
+       * The bare word in the right number — no figure in front of it.
+       *
+       * The welcome screen draws the count at `beamer-hero` and the word
+       * underneath it, so `count` would put the number on the wall twice
+       * (issue #74).
+       */
+      word: (params: { n: number }) => pluralWordDeAT(params.n, 'Team', 'Teams'),
       add: 'Team hinzufügen',
       bulkAddLabel: 'Anzahl Teams',
       bulkAdd: 'Teams anlegen',
@@ -653,6 +669,14 @@ export const deAT = {
       many: 'Spieler',
       numbered: (params: { n: number }) => `Spieler ${params.n}`,
       count: (params: { n: number }) => pluralizeDeAT(params.n, 'Spieler', 'Spieler'),
+      /**
+       * The bare word in the right number — no figure in front of it.
+       *
+       * The welcome screen draws the count at `beamer-hero` and the word
+       * underneath it, so `count` would put the number on the wall twice
+       * (issue #74).
+       */
+      word: (params: { n: number }) => pluralWordDeAT(params.n, 'Spieler', 'Spieler'),
       add: 'Spieler hinzufügen',
       bulkAddLabel: 'Anzahl Spieler',
       bulkAdd: 'Spieler anlegen',
@@ -1115,6 +1139,24 @@ export const deAT = {
     holdingNotice: 'Einen Moment bitte.',
 
     /**
+     * The `WELCOME` scene: the screen the room fills up in front of (issue #74).
+     *
+     * Three lines and a number. The number is the whole point — it is what the
+     * people still queueing at the registration table are watching climb — so
+     * the words around it stay out of its way: no sentence, no prose, and
+     * deliberately no group numbers, which are `GROUP_OVERVIEW`'s job.
+     */
+    welcome: {
+      /**
+       * Under the count. Takes the participant word alone rather than
+       * `count`, because the figure is already drawn above it.
+       */
+      atTheStart: (params: { participants: string }) => `${params.participants} am Start`,
+      /** The quiet line at the bottom: how much the hall is actually set up for. */
+      tables: (params: { tables: string }) => `${params.tables} bereit`,
+    },
+
+    /**
      * The `GROUP_OVERVIEW` scene: everyone who is playing (issue #14).
      *
      * Its heading is the participant wording — `Gruppen`, `Teams`, `Spieler` —
@@ -1350,6 +1392,7 @@ export const deAT = {
      */
     sceneName: {
       IDLE: 'Startbild',
+      WELCOME: 'Willkommen',
       BLACKOUT: 'Bildschirm aus',
       GROUP_OVERVIEW: 'Teilnehmerfeld',
       TABLE_OVERVIEW: 'Tische',

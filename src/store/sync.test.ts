@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { groupIdSchema, roundIdSchema } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
-import { midTournament } from '@/domain/testFixtures';
-import { setOpenedDocument } from '@/store/actions/document';
+import { midTournament, tournament } from '@/domain/testFixtures';
+import { setNewDocument, setOpenedDocument } from '@/store/actions/document';
+import { addGroups } from '@/store/actions/groups';
 import { blackout, setFrozen, showScene, skipAnimation } from '@/store/actions/scene';
 import { createBeamerStore } from '@/store/beamerStore';
 import { problemStore } from '@/store/problems';
@@ -85,6 +86,52 @@ describe('the host to beamer channel', () => {
     // draw animation in front of the room.
     expect(beamer.getState().animate).toBe(false);
     expect(beamer.getState().snapshot.tournament.groups).toHaveLength(2);
+  });
+});
+
+/**
+ * Issue #74's second acceptance criterion, end to end: "adding a group updates
+ * the beamer within one frame".
+ *
+ * There is no frame to measure in a test runner, so what is asserted is the
+ * property the criterion rests on — the count reaches the projector on the same
+ * commit that changed it, live, with no debounce and nothing for an action to
+ * remember to call.
+ */
+describe('the welcome count while the room fills up', () => {
+  it('is on the projector from the moment the tournament exists', async () => {
+    const { host, beamer } = await wiredPair();
+
+    setNewDocument(host, tournament({ name: 'Sommerturnier' }));
+
+    expect(beamer.getState().snapshot.scene).toEqual({ id: 'WELCOME' });
+    expect(beamer.getState().snapshot.tournament.name).toBe('Sommerturnier');
+  });
+
+  it('reaches the beamer on the commit that added the group, and live', async () => {
+    const { host, beamer } = await wiredPair();
+    setNewDocument(host, tournament());
+
+    addGroups(host, 1);
+    expect(beamer.getState().snapshot.tournament.groups).toHaveLength(1);
+    expect(beamer.getState().snapshot.delivery).toBe('live');
+
+    // And the bulk-add of issue #14 is one commit, so it is one delivery.
+    addGroups(host, 39);
+    expect(beamer.getState().snapshot.tournament.groups).toHaveLength(40);
+    expect(beamer.getState().snapshot.revision).toBe(host.getState().revision);
+  });
+
+  it('never re-animates the scene while the count climbs', async () => {
+    // `animate` is what makes a scene enter. Forty groups is forty snapshots,
+    // and the picture must not re-enter for any of them (issue #74's note).
+    const { host, beamer } = await wiredPair();
+    setNewDocument(host, tournament());
+
+    for (let index = 0; index < 40; index += 1) {
+      addGroups(host, 1);
+      expect(beamer.getState().animate).toBe(false);
+    }
   });
 });
 

@@ -183,7 +183,7 @@ niemand außer Ihnen.
 │  Turnierverlauf      wo das Turnier steht           │ [Bild einfrieren]    │
 │  Aktuelle Runde      die Partien, die gerade laufen ├──────────────────────┤
 │  Hoffnungsrunde      nur wenn sie gebraucht wird    │ Ansicht              │
-│  Namenserfassung     nur in der Namensphase         │  1 Startbild         │
+│  Namenserfassung     nur in der Namensphase         │  1 Willkommen        │
 │  Turnierbaum         nur in der Finalphase          │  2 Teilnehmerfeld    │
 │  Rundenverlauf       alle bisherigen Runden         │  3 Tische            │
 │  Turniereinstellungen                               │  4 Auslosung         │
@@ -386,7 +386,7 @@ der Tastatur — legt es auf die Leinwand:
 
 | Ziffer | Ansicht | Zeigt |
 | --- | --- | --- |
-| 1 | Startbild | Nur den Namen des Turniers. Das Bild vor dem Beginn. |
+| 1 | Willkommen | Den Namen des Turniers und die Zahl der angemeldeten Gruppen. Das Bild vor dem Beginn. |
 | 2 | Teilnehmerfeld | Alle Teilnehmenden mit Nummer. |
 | 3 | Tische | Welcher Tisch frei, belegt oder gesperrt ist. |
 | 4 | Auslosung | Die laufende Auslosung, Paarung für Paarung. |
@@ -1000,14 +1000,27 @@ Zwei Kürzel, die Sie sich merken sollten, wenn Sie sich nur zwei merken:
 So sind die neun Ansichten aufgebaut. Das hilft, wenn Sie im Voraus wissen wollen, was das
 Publikum zu sehen bekommt.
 
-### 1 — Startbild
+### 1 — Willkommen
 
 ```text
-                          WattMatt
-                           Bereit.
+                       Sommerturnier
+
+                            24
+
+                       Gruppen am Start
+                          6 Tische bereit
 ```
 
-Der Name des Turniers, sonst nichts. Das Bild vor dem Beginn und zwischen zwei Programmpunkten.
+Das Bild für die halbe Stunde, in der sich der Saal füllt: der Name des Turniers und die Zahl
+der angemeldeten Gruppen, groß genug für die letzte Reihe. Die Zahl wächst mit, während Sie
+Gruppen anlegen — sie zuckt kurz auf und der Rest des Bildes bleibt ruhig stehen.
+
+Diese Ansicht liegt von selbst auf der Leinwand, sobald ein Turnier angelegt ist und noch nicht
+gestartet wurde. Sie zeigt bewusst **keine** Gruppennummern; wer schon angemeldet ist, steht
+unter *Teilnehmerfeld* (Ziffer `2`).
+
+Solange kein Turnier geöffnet ist, steht statt des Turniernamens `WattMatt` und darunter eine
+Null.
 
 ### 2 — Teilnehmerfeld
 

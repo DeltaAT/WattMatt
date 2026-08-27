@@ -1,6 +1,7 @@
 import {
   BLACKOUT_SCENE,
   IDLE_SCENE,
+  WELCOME_SCENE,
   type BeamerScene,
   type BeamerSceneId,
 } from '@/domain/beamerScene';
@@ -41,14 +42,19 @@ export function stagedRound(tournament: Tournament): Round | null {
  * to whoever staged it: the draw stages its own sequence, and a host who put
  * the tree on the wall to talk about it keeps it there while results land.
  *
- * `SETUP` is `IDLE` rather than the field of participants: before the doors
- * open the host is working in a lit room, and a projector that switched itself
- * on because a tournament was created would be a surprise, not a service.
+ * `SETUP` is the welcome picture (issue #74). It used to be `IDLE`, on the
+ * grounds that a projector switching itself on because a tournament was created
+ * would surprise a host still working in a lit room — but the screen time it
+ * was protecting is the half hour in which the room fills up, and a wall that
+ * says nothing while people are registering is the waste the issue is about.
+ * `WELCOME` is still not a roster and still shows nobody's number, so it is
+ * safe to be wrong about: the worst case is a name and a count on a wall
+ * nobody is looking at yet.
  */
 export function sceneForPhase(tournament: Tournament): BeamerScene {
   switch (tournament.phase) {
     case 'SETUP':
-      return IDLE_SCENE;
+      return WELCOME_SCENE;
     case 'QUALIFYING':
     case 'ELIMINATION': {
       // The board, not the draw: the draw is a sequence the draw action stages
@@ -82,7 +88,16 @@ export function sceneForPhase(tournament: Tournament): BeamerScene {
  * place (docs/MOTION.md §4.6).
  */
 export const SCENE_ORDER: readonly BeamerSceneId[] = [
-  'IDLE',
+  /*
+   * `WELCOME` stands where `IDLE` stood (issue #74). The position is the
+   * shortcut, so the list has exactly nine entries and a tenth scene has to
+   * take one of them rather than be appended — and the one it takes is the
+   * picture it was written to replace. `IDLE` is still a scene the app stages
+   * on its own, for the moments no tournament is open at all; it is simply no
+   * longer anything the host would deliberately reach for, because `WELCOME`
+   * says everything it said and the count besides.
+   */
+  'WELCOME',
   'GROUP_OVERVIEW',
   'TABLE_OVERVIEW',
   'DRAW',
@@ -136,10 +151,16 @@ function sceneFor(id: BeamerSceneId, round: Round | null): BeamerScene | null {
       return round === null ? null : { id: 'DRAW', roundId: round.id };
     case 'ROUND_BOARD':
       return round === null ? null : { id: 'ROUND_BOARD', roundId: round.id };
+    // The two the switcher never asks for, kept because the switch is
+    // exhaustive over every id: `IDLE` is what the app stages for itself when
+    // no tournament is open (issue #74), and `BLACKOUT` has a control of its
+    // own that is always in the same place.
     case 'IDLE':
       return IDLE_SCENE;
     case 'BLACKOUT':
       return BLACKOUT_SCENE;
+    case 'WELCOME':
+      return WELCOME_SCENE;
     case 'GROUP_OVERVIEW':
       return { id: 'GROUP_OVERVIEW' };
     case 'TABLE_OVERVIEW':

@@ -12,6 +12,20 @@ import { bracketRoundSchema } from '@/domain/types';
  */
 export const beamerSceneSchema = z.discriminatedUnion('id', [
   z.object({ id: z.literal('IDLE') }),
+  /*
+   * The picture the room fills up in front of (issue #74).
+   *
+   * Carries nothing, like `NAMING` and for the same reason: what it draws is
+   * the tournament's name and how many are registered, and the snapshot already
+   * holds both. It is a count and never a roster — who is in is
+   * `GROUP_OVERVIEW`, which is a different question and a different screen.
+   *
+   * Its own id rather than a smarter `IDLE`, because the two say different
+   * things: `IDLE` is "nothing is set up yet" and belongs to a host who has not
+   * opened a tournament, and this one is "the evening is about to start, and
+   * here is how big it has got".
+   */
+  z.object({ id: z.literal('WELCOME') }),
   z.object({ id: z.literal('BLACKOUT') }),
   z.object({ id: z.literal('GROUP_OVERVIEW') }),
   z.object({ id: z.literal('TABLE_OVERVIEW') }),
@@ -67,6 +81,9 @@ export type BeamerSceneId = BeamerScene['id'];
 
 /** What the beamer shows before anything has been staged on it. */
 export const IDLE_SCENE: BeamerScene = { id: 'IDLE' };
+
+/** The welcome picture: what a tournament that has not started yet looks like. */
+export const WELCOME_SCENE: BeamerScene = { id: 'WELCOME' };
 
 /** The host's emergency "show nothing" (issue #28 wires the control). */
 export const BLACKOUT_SCENE: BeamerScene = { id: 'BLACKOUT' };

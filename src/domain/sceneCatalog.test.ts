@@ -30,10 +30,10 @@ describe('the round a scene is staged against', () => {
 });
 
 describe('the scene a phase implies', () => {
-  it('leaves the projector idle during setup', () => {
-    // A projector that switched itself on because a tournament was created
-    // would be a surprise: the host is still working in a lit room.
-    expect(sceneForPhase(tournament({ phase: 'SETUP' }))).toEqual({ id: 'IDLE' });
+  it('welcomes the room during setup', () => {
+    // The half hour in which people arrive and register is the longest stretch
+    // the projector is on, and the welcome count is what it is for (issue #74).
+    expect(sceneForPhase(tournament({ phase: 'SETUP' }))).toEqual({ id: 'WELCOME' });
   });
 
   it('shows the board of the round in play, not the draw of it', () => {
@@ -96,6 +96,24 @@ describe('the scene switcher', () => {
    */
   it('never lists the blackout among the numbered scenes', () => {
     expect(SCENE_ORDER).not.toContain<BeamerSceneId>('BLACKOUT');
+  });
+
+  /*
+   * Issue #74's last task: the welcome picture is reachable by hand at any
+   * time. It takes position 1 rather than a tenth one — the digits stop at 9
+   * (`useBeamerShortcuts`) — and `IDLE`, which it was written to replace, is
+   * the scene it takes it from. `IDLE` remains a descriptor the app stages on
+   * its own for the moments no tournament is open.
+   */
+  it('offers the welcome picture at position 1, in place of the idle one', () => {
+    expect(SCENE_ORDER[0]).toBe<BeamerSceneId>('WELCOME');
+    expect(SCENE_ORDER).not.toContain<BeamerSceneId>('IDLE');
+
+    const welcome = sceneChoices(null).find((choice) => choice.id === 'WELCOME');
+    expect(welcome?.shortcut).toBe(1);
+    // Reachable before a tournament is even open, like every scene that does
+    // not name a round (CLAUDE.md golden rule 3).
+    expect(welcome?.scene).toEqual({ id: 'WELCOME' });
   });
 
   it('points the two round scenes at the round the host means', () => {

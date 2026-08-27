@@ -180,6 +180,7 @@ The host does not send "screens", it sends a scene descriptor:
 ```ts
 type BeamerScene =
   | { id: 'IDLE' }
+  | { id: 'WELCOME' }
   | { id: 'BLACKOUT' }
   | { id: 'GROUP_OVERVIEW' }
   | { id: 'TABLE_OVERVIEW' }
@@ -190,6 +191,14 @@ type BeamerScene =
   | { id: 'BRACKET' }
   | { id: 'CEREMONY' };
 ```
+
+`WELCOME` is the picture of the whole setup phase: the tournament's name and a live count of
+how many are registered, at `beamer-hero`, updated on every commit like everything else
+(issue #74). It is a count and never a roster — who is in is `GROUP_OVERVIEW`, a different
+question with a different screen. It takes position 1 of `SCENE_ORDER` from `IDLE`, because the
+positions are the keyboard shortcuts and they stop at nine; `IDLE` survives as the descriptor
+the app stages for itself when no tournament is open at all, and is no longer anything the host
+reaches for.
 
 `REPECHAGE` deliberately carries no round: the phase is not one, and everything it shows lives
 in `tournament.repechage` (docs/OPEN-QUESTIONS.md #59).
