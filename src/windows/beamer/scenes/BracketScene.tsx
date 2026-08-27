@@ -1,18 +1,20 @@
 import {
   activeBracketRound,
   bracketColumns,
+  bracketNodeTableId,
   type BracketColumn,
   type BracketColumnState,
   type BracketSide,
 } from '@/domain/bracket';
-import type { GroupId } from '@/domain/ids';
+import type { GroupId, TableId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
-import type { BracketNode, BracketRound, Group, ParticipantLabel } from '@/domain/types';
+import type { BracketNode, BracketRound, Group, ParticipantLabel, Table } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
 import { chipKey, type BracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupLabel } from '@/windows/groupLabel';
+import { tableNumber } from '@/windows/tableLabel';
 
 import type { CSSProperties } from 'react';
 
@@ -44,6 +46,14 @@ import type { CSSProperties } from 'react';
  * **A result is never colour alone** (docs/STYLEGUIDE.md §1): the colour, the
  * icon and the German word travel together on the slot, and the test asserts
  * the board reads correctly with the colour classes stripped out.
+ *
+ * **A live match names its table** (issue #90). The round board carried that
+ * for the whole group phase and then the tree replaced it, so the room lost the
+ * one thing it needs to walk over and watch. It is a reference and not content:
+ * small, muted, in the node's top corner, and out of the flow entirely so the
+ * names keep every pixel they had. It appears only while the match is actually
+ * being played — `bracketNodeTableId` — because a decided node still remembers
+ * where it was played and that table is somebody else's by then.
  */
 export function BracketScene({
   tournament,
@@ -117,6 +127,8 @@ export function BracketScene({
     groups: byId,
     participant: tournament.participantLabel,
     type: NAME_TYPE[nameDensity(drawnField)],
+    tables: new Map(tournament.tables.map((table) => [table.id, table])),
+    tableType: TABLE_TYPE[nameDensity(drawnField)],
     advance,
     settled,
   };
@@ -270,13 +282,50 @@ function Node({
       data-bracket-node={node.id}
       data-node-round={node.round}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-wm-lg border-4 border-wm-border-strong bg-wm-surface px-4 py-3">
+      <div className="relative flex min-w-0 flex-1 flex-col gap-1 rounded-wm-lg border-4 border-wm-border-strong bg-wm-surface px-4 py-3">
+        <NodeTable node={node} chips={chips} />
         <Slot node={node} side="A" chips={chips} />
         <Slot node={node} side="B" chips={chips} />
       </div>
 
       {node.nextNodeId === null ? null : <Connector goesDown={revealSide(column, node) === 'A'} />}
     </li>
+  );
+}
+
+/**
+ * Where this match is being played, if it is being played (issue #90).
+ *
+ * **Absolutely positioned, and that is the whole design.** The issue's last
+ * task says the table must not squeeze the name field, and offers "above the
+ * node" as the fallback if it would. Out of the flow is better than either: the
+ * names keep every pixel they had, every node is exactly the height it was, and
+ * nothing on the board moves when a match starts or ends — which matters more
+ * here than anywhere, because the tree is the one scene that is on the wall for
+ * the whole final phase.
+ *
+ * It lands over the top-right of slot A, which is the box each slot reserves
+ * for `SIEGER` / `AUSGESCHIEDEN`. The two can never collide: that word appears
+ * only once the match is decided, and a decided match has no table to name.
+ *
+ * Nothing at all when there is no table — no placeholder, no dash, no `0`. A
+ * node without one is simply a node, which is what the issue means by "looks
+ * deliberate, not broken": there is nothing there to be broken.
+ */
+function NodeTable({ node, chips }: { node: BracketNode; chips: ChipContext }) {
+  const tableId = bracketNodeTableId(node);
+  const table = tableId === null ? null : (chips.tables.get(tableId) ?? null);
+  if (table === null) {
+    return null;
+  }
+
+  return (
+    <span
+      className={`wm-display wm-tnum pointer-events-none absolute top-1 right-4 font-bold text-wm-text-muted ${chips.tableType}`}
+      data-node-table=""
+    >
+      {tableNumber(table.label)}
+    </span>
   );
 }
 
@@ -396,6 +445,10 @@ interface ChipContext {
   groups: ReadonlyMap<GroupId, Group>;
   participant: ParticipantLabel;
   type: NameType;
+  /** Every table, to resolve the one a live node is on (issue #90). */
+  tables: ReadonlyMap<TableId, Table>;
+  /** The type step that table is drawn at — always under the names. */
+  tableType: string;
   advance: BracketAdvance;
   settled: boolean;
 }
@@ -477,6 +530,25 @@ const NAME_TYPE: Record<NameDensity, NameType> = {
   roomy: 'text-beamer-h2',
   normal: 'text-beamer-h3',
   dense: 'text-beamer-body',
+};
+
+/**
+ * How big the table number is (issue #90).
+ *
+ * One step under the names at every density, which is what "small and
+ * subordinate — the names are the content, the table is a reference" comes to
+ * in a ladder. It bottoms out at `beamer-caption`, the step the issue names and
+ * the one docs/STYLEGUIDE.md §2 otherwise reserves for persistent chrome — 24 px
+ * against 32 px names on a field of sixteen, which is as far apart as two things
+ * can be at that density without one of them being unreadable.
+ *
+ * The zoomed view gets the top of the ladder for free: the host zooms to the
+ * `Finale`, the drawn field is 2, and a 32 px table sits under 64 px names.
+ */
+const TABLE_TYPE: Record<NameDensity, string> = {
+  roomy: 'text-beamer-body',
+  normal: 'text-beamer-caption',
+  dense: 'text-beamer-caption',
 };
 
 /** How many rows of the drawn tree one node of a column spans. */

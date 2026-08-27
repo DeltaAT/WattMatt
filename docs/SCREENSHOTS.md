@@ -78,7 +78,7 @@ uses.
 | `beamer-5-round.png` | `ROUND_BOARD` | One `LÄUFT`, one `BEENDET` with a green winner box and a dimmed red loser box, a non-empty *Warteschlange*. Set the hall up with more tables than the round uses — since issue #87 the unused ones are not on the board, and the shot should show that. **Also save a greyscale copy** — issue #77's acceptance criterion is that the two are still tellable apart with the colour gone. |
 | `beamer-6-repechage.png` | `REPECHAGE` | A card in `GEZOGEN`, one `VERZICHTET`, places left on the counter. |
 | `beamer-7-naming.png` | `NAMING` | The holding picture. |
-| `beamer-8-bracket.png` | `BRACKET` | Full tree, round of 16 decided, `Spiel um Platz 3` visible. |
+| `beamer-8-bracket.png` | `BRACKET` | Full tree, round of 16 decided, `Spiel um Platz 3` visible. At least one match on a table, so the table number in the node corner is in the shot (issue #90), and at least one queued node beside it with none. |
 | `beamer-8-bracket-final.png` | `BRACKET` | Same tree zoomed to *Ab Halbfinale*. |
 | `beamer-9-ceremony.png` | `CEREMONY` | The finished podium. |
 

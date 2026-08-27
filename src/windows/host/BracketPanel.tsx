@@ -1,6 +1,11 @@
 import { useState } from 'react';
 
-import type { BracketBlocker, BracketColumn, BracketCorrection } from '@/domain/bracket';
+import {
+  bracketNodeTableId,
+  type BracketBlocker,
+  type BracketColumn,
+  type BracketCorrection,
+} from '@/domain/bracket';
 import { FINAL_PHASE_SIZE, MINIMUM_BRACKET_SIZE } from '@/domain/draw';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
 import type {
@@ -253,7 +258,7 @@ export function BracketPanel({
                       node={node}
                       groups={byId}
                       participant={participant}
-                      tableLabel={tableLabelOf(tables, node.tableId, node.winnerId)}
+                      tableLabel={tableLabelOf(tables, node)}
                       freeTables={freeTables}
                       since={occupiedSince(tables, node.id)}
                       now={now}
@@ -375,16 +380,19 @@ function FocusButton({
  * What the host calls the table a match is on — and nothing at all once it is
  * over.
  *
- * A decided node keeps its `tableId` as the record of where it was played
+ * *Whether* there is one to name is `bracketNodeTableId`'s (issue #90): a
+ * decided node keeps its `tableId` as the record of where it was played
  * (docs/OPEN-QUESTIONS.md #37), and printing that on a finished card would read
- * as a table that is still busy.
+ * as a table that is still busy. The rule lives in the domain because the
+ * projector asks the same question, and this panel and the wall must not
+ * disagree about which matches are still on a table.
+ *
+ * The fallback is this screen's own: an id that names no table is a table the
+ * host removed mid-match, and the word alone is more use to them than a blank.
  */
-function tableLabelOf(
-  tables: readonly Table[],
-  tableId: TableId | null,
-  winnerId: GroupId | null,
-): string | null {
-  if (tableId === null || winnerId !== null) {
+function tableLabelOf(tables: readonly Table[], node: BracketNode): string | null {
+  const tableId = bracketNodeTableId(node);
+  if (tableId === null) {
     return null;
   }
   return tables.find((table) => table.id === tableId)?.label ?? de.table.label;

@@ -5,6 +5,7 @@ import {
   assignBracketNode,
   bracketCorrection,
   bracketNodeState,
+  bracketNodeTableId,
   assignNextBracketNode,
   bracketBlockers,
   bracketColumns,
@@ -1162,6 +1163,71 @@ describe('bracketNodeState', () => {
 
     expect(bye === undefined ? null : bracketNodeState(bye)).toBe('BYE');
     expect(played === undefined ? null : bracketNodeState(played)).toBe('QUEUED');
+  });
+});
+
+/*
+ * Which table a node is *shown* on (issue #90). The stored `tableId` is not the
+ * answer: a decided node keeps it as the record of where it was played
+ * (docs/OPEN-QUESTIONS.md #37), while the table itself went back to the pool
+ * the moment the winner was marked.
+ */
+describe('bracketNodeTableId', () => {
+  /** A field of 8 with one table: `bn_1` is running, the rest are queued. */
+  const drawn = () =>
+    drawBracket(readyToDraw(8, { tables: [table(1)], nextTableNumber: 2 }), { at: FIXED_NOW });
+
+  const nodeOf = (document: Tournament, id: string) =>
+    bracketOf(document).nodes.find((candidate) => candidate.id === id);
+
+  it('names the table a match is being played on', () => {
+    const node = nodeOf(drawn(), 'bn_1');
+
+    expect(node?.tableId).not.toBeNull();
+    expect(node === undefined ? null : bracketNodeTableId(node)).toBe(node?.tableId);
+  });
+
+  it('names nothing for a match that is still waiting for a table', () => {
+    const node = nodeOf(drawn(), 'bn_2');
+
+    expect(node === undefined ? null : bracketNodeTableId(node)).toBeNull();
+  });
+
+  it('names nothing for a round nobody has reached', () => {
+    const node = nodeOf(drawn(), 'bn_5');
+
+    expect(node === undefined ? null : bracketNodeTableId(node)).toBeNull();
+  });
+
+  /*
+   * The issue's fourth task, and the one the stored field gets wrong on its
+   * own: the node still remembers where it was played, and the table is busy
+   * with somebody else by then.
+   */
+  it('forgets the table the moment the match is decided', () => {
+    const document = drawn();
+    const running = nodeOf(document, 'bn_1');
+    const decided = setBracketWinner(
+      document,
+      running?.id as BracketNodeId,
+      running?.slotA as GroupId,
+    );
+    const after = nodeOf(decided, 'bn_1');
+
+    // The record survives — that is deliberate (docs/OPEN-QUESTIONS.md #37).
+    expect(after?.tableId).toBe(running?.tableId);
+    // What the screens show does not.
+    expect(after === undefined ? null : bracketNodeTableId(after)).toBeNull();
+  });
+
+  it('names nothing for a Freilos, which never saw a table', () => {
+    const groups = Array.from({ length: 3 }, (_unused, index) =>
+      group(index + 1, { name: `${NAMED} ${index + 1}` }),
+    );
+    const bracket = buildBracket(groups, { rng: createRng('seed'), size: 4 });
+    const bye = bracket.nodes.find((node) => node.round === 'SEMI_FINAL' && node.slotB === null);
+
+    expect(bye === undefined ? null : bracketNodeTableId(bye)).toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { buildBracket, drawBracket, setBracketWinner } from '@/domain/bracket';
+import { assignBracketNode, buildBracket, drawBracket, setBracketWinner } from '@/domain/bracket';
 import type { BracketNodeId, GroupId } from '@/domain/ids';
 import { createRng } from '@/domain/rng';
 import { toTournamentSnapshot } from '@/domain/snapshot';
@@ -10,6 +10,7 @@ import type { Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { BracketScene } from '@/windows/beamer/scenes/BracketScene';
 import type { BracketAdvance } from '@/windows/beamer/useBracketAdvance';
+import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `BRACKET` (issue #25) — the picture the whole final phase is played in front
@@ -55,9 +56,61 @@ const scene = (document: Tournament, settled = true, advance: BracketAdvance = A
     />,
   );
 
+/** Every participant slot, with its outcome — the board's structure, without its paint. */
+function slotsOf(markup: string): string[] {
+  return [...markup.matchAll(/data-chip="([^"]+)" data-outcome="([^"]+)"/g)].map(
+    (found) => `${found[1] ?? ''}:${found[2] ?? ''}`,
+  );
+}
+
 /** Every colour class gone — what a red–green-deficient viewer effectively has. */
 function greyscale(markup: string): string {
   return markup.replace(/(?:border|bg|text)-wm-(?:win|lose|live|accent)[a-z-]*/g, '');
+}
+
+/** Plays every node that has both participants, in tree order. */
+function playRound(document: Tournament): Tournament {
+  let next = document;
+  for (const node of document.bracket?.nodes ?? []) {
+    if (node.slotA !== null && node.slotB !== null && node.winnerId === null) {
+      next = setBracketWinner(next, node.id, node.slotA);
+    }
+  }
+  return next;
+}
+
+/**
+ * A field of 8 played down to the last two matches, both on a table.
+ *
+ * The first round is seated by the draw; every later match is sent to a table
+ * by the host, one at a time (issue #26) — so the `Finale` and the `Spiel um
+ * Platz 3`, which §7 plays at the same moment, are assigned here by hand.
+ */
+function lastTwo(): Tournament {
+  const played = playRound(playRound(drawn(8, 2)));
+  let next = played;
+  for (const [index, node] of (played.bracket?.nodes ?? [])
+    .filter((candidate) => candidate.round === 'FINAL' || candidate.round === 'THIRD_PLACE')
+    .entries()) {
+    next = assignBracketNode(next, {
+      nodeId: node.id,
+      tableId: table(index + 1).id,
+      at: FIXED_NOW,
+    });
+  }
+  return next;
+}
+
+/** The table number each node draws, keyed by node id — absent when it draws none. */
+function tablesOn(markup: string): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const [, id, rest] of markup.matchAll(/data-bracket-node="([^"]+)"([\s\S]*?)<\/li>/g)) {
+    const table = /data-node-table="">([^<]*)</.exec(rest ?? '');
+    if (table !== null) {
+      found[id ?? ''] = table[1] ?? '';
+    }
+  }
+  return found;
 }
 
 /** The nodes of one round, in the order the tree draws them. */
@@ -258,6 +311,147 @@ describe('the zoom to a round (issue #26)', () => {
     expect(markup).toContain(de.bracket.round.SEMI_FINAL);
     // Two semi-finals, the final, and the third-place match.
     expect(markup.match(/data-bracket-node="/g)).toHaveLength(4);
+  });
+
+  /*
+   * Issue #90. The round board named the table for the whole group phase and
+   * then the tree replaced it, so the room lost the one thing it needs in order
+   * to walk over and watch a match.
+   */
+  describe('the table a match is on', () => {
+    it('names it on the nodes that are being played', () => {
+      const markup = scene(drawn(8, 2));
+
+      // Two tables, four quarter-finals: two running, two queued.
+      expect(Object.values(tablesOn(markup))).toEqual([
+        tableNumber(table(1).label),
+        tableNumber(table(2).label),
+      ]);
+    });
+
+    /*
+     * "A node whose match has not been scheduled shows nothing — no
+     * placeholder, no dash, and above all no `0`." A queued node and an empty
+     * one are simply nodes.
+     */
+    it('names nothing at all on a node that has no table', () => {
+      const markup = scene(drawn(8, 2));
+      const named = Object.keys(tablesOn(markup));
+
+      // 8 nodes drawn, 2 of them on a table.
+      expect(markup.match(/data-bracket-node="/g)).toHaveLength(8);
+      expect(named).toHaveLength(2);
+      expect(markup).not.toContain('data-node-table="">0<');
+      expect(markup).not.toContain('data-node-table="">–<');
+      expect(markup).not.toContain('data-node-table=""><');
+    });
+
+    it('names no table anywhere on a tree with no tables at all', () => {
+      expect(tablesOn(scene(drawn(8, 0)))).toEqual({});
+    });
+
+    /*
+     * The fourth task. A decided node keeps its `tableId` as the record of
+     * where it was played (docs/OPEN-QUESTIONS.md #37), and the table itself
+     * went back to the pool the moment the winner was marked — so printing the
+     * stored id would name a table that is somebody else's by then.
+     */
+    it('takes it off again once the match is decided', () => {
+      const document = drawn(8, 2);
+      const running = Object.keys(tablesOn(scene(document)));
+      const after = tablesOn(scene(playRound(document)));
+
+      expect(running).not.toHaveLength(0);
+      for (const id of running) {
+        expect(after[id], id).toBeUndefined();
+      }
+    });
+
+    /* "Also applies to the `Spiel um Platz 3` node." It is drawn under the
+     * tree rather than in it, so it is the one node that could be missed. */
+    it('names it on the Spiel um Platz 3 as well', () => {
+      // Quarter-finals, then semi-finals: the final and the third-place match
+      // are the two that are left, and §7 plays them at the same time.
+      const document = lastTwo();
+      const third = (document.bracket?.nodes ?? []).find((node) => node.round === 'THIRD_PLACE');
+
+      expect(third?.tableId).not.toBeNull();
+      expect(Object.keys(tablesOn(scene(document)))).toContain(String(third?.id));
+    });
+
+    /*
+     * "Must not squeeze the name field." Out of the flow is how: the table is
+     * absolutely positioned, so the slots are byte-for-byte the markup they
+     * were before a table was assigned, and nothing on the board moves when a
+     * match starts.
+     */
+    it('costs the names nothing', () => {
+      const withTables = scene(drawn(8, 2));
+      const without = scene(drawn(8, 0));
+
+      expect(slotsOf(withTables)).toEqual(slotsOf(without));
+      expect(withTables).toMatch(/class="[^"]*absolute[^"]*"\s+data-node-table/);
+    });
+
+    /*
+     * Small and subordinate: the names are the content, the table is a
+     * reference. One step under the names at every density, bottoming out at
+     * `beamer-caption` — which is the step the issue asks for.
+     */
+    it('is drawn under the names at every field size', () => {
+      for (const [size, expected] of [
+        [4, 'text-beamer-body'],
+        [8, 'text-beamer-caption'],
+        [16, 'text-beamer-caption'],
+      ] as const) {
+        const markup = scene(drawn(size, 2));
+        const badge = /class="([^"]*)"\s+data-node-table/.exec(markup)?.[1] ?? '';
+
+        expect(badge, `field of ${String(size)}`).toContain(expected);
+      }
+    });
+
+    /* "Zoomed-to-round view shows the table numbers at a comfortable size."
+     * The zoom draws two matches, so the ladder hands it the top step. */
+    it('is comfortable in the zoomed view', () => {
+      const markup = renderToStaticMarkup(
+        <BracketScene
+          tournament={toTournamentSnapshot(lastTwo())}
+          settled
+          focus="FINAL"
+          advance={AT_REST}
+        />,
+      );
+      const badge = /class="([^"]*)"\s+data-node-table/.exec(markup)?.[1] ?? '';
+
+      expect(badge).toContain('text-beamer-body');
+    });
+
+    /*
+     * "A 16-slot bracket with 40-character names still fits, with table
+     * numbers, inside the safe area." Nothing is dropped and nothing is
+     * counted; `useFitToStage` scales whatever is left (issue #55).
+     */
+    it('draws every node of a field of 16 with the longest names allowed', () => {
+      const long = 'M'.repeat(40);
+      const document = drawBracket(
+        tournament({
+          phase: 'NAMING',
+          groups: Array.from({ length: 16 }, (_unused, index) =>
+            group(index + 1, { name: `${long}${String(index)}`.slice(0, 40) }),
+          ),
+          nextGroupNumber: 17,
+          tables: Array.from({ length: 4 }, (_unused, index) => table(index + 1)),
+          nextTableNumber: 5,
+        }),
+        { at: FIXED_NOW },
+      );
+      const markup = scene(document);
+
+      expect(markup.match(/data-bracket-node="/g)).toHaveLength(16);
+      expect(Object.keys(tablesOn(markup))).toHaveLength(4);
+      expect(markup).toContain('beamer-fit');
+    });
   });
 
   /*

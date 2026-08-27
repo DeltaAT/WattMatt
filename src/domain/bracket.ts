@@ -763,6 +763,29 @@ export function bracketNodeState(node: BracketNode): BracketNodeState {
 }
 
 /**
+ * The table a node should be *shown* on, or null (issue #90).
+ *
+ * Not the same question as `node.tableId`, and the difference is the whole of
+ * the issue's fourth task. A decided node keeps its `tableId` for good — it
+ * *was* played there, and the log and the host's history read that field
+ * afterwards (docs/OPEN-QUESTIONS.md #37) — but the table itself was handed
+ * back the moment the winner was marked. A screen that printed the stored id
+ * would name a table that is busy with the next match, or with nothing at all.
+ *
+ * So the answer is `RUNNING` and nothing else: both participants in, no winner
+ * yet, and a table under them. Everything else shows no table, which on the
+ * projector means no placeholder, no dash and above all no `0`.
+ *
+ * Here rather than in either screen because both ask it. The host's panel
+ * carried its own copy of the rule until this existed, and two copies of "is
+ * this match still on a table" would eventually disagree in front of a room
+ * where one of the two is on the wall.
+ */
+export function bracketNodeTableId(node: BracketNode): TableId | null {
+  return bracketNodeState(node) === 'RUNNING' ? node.tableId : null;
+}
+
+/**
  * Whether the host may end the final phase — *Finale abschließen* (issue #26).
  *
  * The transition `BRACKET → CEREMONY` of §1, gated on the tree actually being
