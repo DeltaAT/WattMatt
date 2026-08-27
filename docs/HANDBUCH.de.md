@@ -659,18 +659,39 @@ der Trostrunden-Karte als *belegt* — dort können Sie ihn nicht vergeben, und 
 Wird ein Tisch frei, entscheiden **Sie**, welche Karte ihn bekommt: drücken Sie
 *Nächste Partie starten* auf der Karte, aus der die nächste Partie kommen soll.
 
-> **Tipp für den Raum.** Sagen Sie am Anfang der Trostrunde, welche Tische dafür gedacht sind
-> („Trostrunde an den beiden hinteren Tischen"), und vergeben Sie sie dann auch so. Das erspart
-> Ihnen den ganzen Abend Nachfragen.
+**Sagen Sie es einmal, statt den ganzen Abend.** Sobald die Trostrunde läuft, steht auf jeder
+Zeile unter **Tische** ein Feld *Reserviert für* mit drei Antworten: **Beide** (die Voreinstellung),
+**Hauptfeld** und **Trostrunde**. Was Sie dem Saal ohnehin ansagen — „Trostrunde an den beiden
+hinteren Tischen" — tragen Sie hier einmal ein, und die Auslosung hält sich daran:
+
+- Ein reservierter Tisch wird nur noch von *seiner* Runde belegt. **Beide** bleibt für alle
+  anderen die richtige Antwort.
+- Eine Reservierung gilt **ab der nächsten Partie**. Eine laufende Partie bleibt stehen, wo sie
+  ist — genau wie beim Sperren eines Tisches.
+- Sie können jederzeit umstellen, auch mitten in einer Runde.
+- Auf beiden Runden-Karten steht bei einem reservierten Tisch daneben, für wen er reserviert ist.
+
+Reservieren Sie **nicht alle** Tische für eine Runde: die andere hat dann keinen Platz mehr,
+alle ihre Partien warten, und über der Warteschlange steht dann auch genau das —
+*Alle bespielbaren Tische sind für die andere Runde reserviert.* Kaputt geht nichts; Sie ändern
+eine Reservierung und es geht weiter.
 
 *Rückgängig* wirkt immer nur auf den Strang, in dem Sie gerade etwas gemacht haben. Ein Ergebnis
 im Hauptfeld zurückzunehmen rührt die Trostrunde nicht an, und umgekehrt.
 
 ### 9.5 Auf die Leinwand
 
-Beide Karten haben ihren eigenen Knopf *auf den Beamer*. Die Leinwand zeigt immer **eine**
-Runde — die, die Sie zuletzt hingelegt haben. Wechseln Sie ruhig hin und her; das Publikum sieht
-an der Überschrift, was es gerade anschaut (*Runde 3* oder *Trostrunde 2*).
+Beide Karten haben ihren eigenen Knopf *auf den Beamer*. Normalerweise zeigt die Leinwand
+**eine** Runde — die, die Sie zuletzt hingelegt haben. Wechseln Sie ruhig hin und her; das
+Publikum sieht an der Überschrift, was es gerade anschaut (*Runde 3* oder *Trostrunde 2*).
+
+Solange in **beiden** Strängen eine Runde läuft, steht in der Beamer-Spalte zusätzlich
+**Beide Runden zeigen**. Damit wird die Leinwand geteilt: links das Hauptfeld, rechts die
+Trostrunde, jede mit eigener Überschrift und eigenem Zähler. *Nur eine Runde zeigen* nimmt die
+zweite Hälfte wieder weg. Der Knopf ist nur da, solange es zwei Runden zu zeigen gibt.
+
+Bei vielen Partien wird auf der geteilten Leinwand alles kleiner — sehen Sie einmal von hinten
+nach, ob die Zahlen noch lesbar sind, und schalten Sie sonst wieder auf eine Runde um.
 
 ---
 

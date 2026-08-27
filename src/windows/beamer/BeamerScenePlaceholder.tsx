@@ -122,6 +122,17 @@ export function BeamerScenePlaceholder({
      * against it, and the *next* round's pairings under the previous round's
      * heading is the one picture that must never appear.
      */
+    /*
+     * And both tracks at once when the host has asked for it and there are two
+     * to show (issue #79). The flag is the host's decision and nothing else's
+     * (golden rule 3), but a split of one board is not a split — so a scene
+     * left staged as split after the side event closed falls back to the single
+     * board rather than putting an empty half on the wall.
+     */
+    if (scene.split === true && tournament.consolationRound !== null) {
+      return <SplitRoundBoard tournament={tournament} settled={settled} delivery={delivery} />;
+    }
+
     return (
       <RoundBoardScene
         tournament={stageRound(tournament, scene.roundId)}
@@ -206,6 +217,53 @@ export function BeamerScenePlaceholder({
     >
       <h1 className="wm-display text-beamer-h1">{de.beamer.idleTitle}</h1>
       <p className="text-beamer-body text-wm-text-muted">{de.beamer.scenePending}</p>
+    </div>
+  );
+}
+
+/**
+ * Both tracks side by side (issue #79, docs/TOURNAMENT-RULES.md §10).
+ *
+ * Two boards rather than one board of everything, because they are two
+ * tournaments: the pairings, the queue and the progress count are each per
+ * track, and a merged board would tell the room a `Trostrunde` pair is one
+ * result away from the bracket.
+ *
+ * Each half is the same `RoundBoardScene` the whole wall shows, handed a
+ * snapshot staged to its own round — so a split half and a full board cannot
+ * disagree about what a round looks like, and every rule the board already
+ * follows (the result flip, the fit-to-stage, the reserved-table marker) comes
+ * with it for free.
+ *
+ * `min-w-0` on both halves is load-bearing: a grid track's minimum is `auto`,
+ * so without it a wide board would push the other one off the stage instead of
+ * scaling inside its own half (`fit.ts` makes the same point about columns).
+ */
+function SplitRoundBoard({
+  tournament,
+  settled,
+  delivery,
+}: {
+  tournament: TournamentSnapshot;
+  settled: boolean;
+  delivery: SnapshotDelivery;
+}) {
+  return (
+    <div className="grid h-full grid-cols-2 gap-6" data-scene-split="">
+      <div className="min-w-0" data-split-track="MAIN">
+        <RoundBoardScene tournament={tournament} settled={settled} delivery={delivery} />
+      </div>
+      <div className="min-w-0" data-split-track="CONSOLATION">
+        <RoundBoardScene
+          tournament={{
+            ...tournament,
+            matches: tournament.consolationMatches,
+            round: tournament.consolationRound,
+          }}
+          settled={settled}
+          delivery={delivery}
+        />
+      </div>
     </div>
   );
 }

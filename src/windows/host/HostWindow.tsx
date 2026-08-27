@@ -349,9 +349,11 @@ export function HostWindow() {
               groups={document.state.tournament.groups}
               participant={groups.participant}
               now={now}
+              canReserve={tables.canReserve}
               onAdd={tables.add}
               onRename={tables.rename}
               onMove={tables.move}
+              onReserve={tables.reserve}
               onDisable={tables.disable}
               onEnable={tables.enable}
               onRemove={tables.remove}

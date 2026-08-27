@@ -59,6 +59,9 @@ export function table(n: number, overrides: Partial<Table> = {}): Table {
     status: 'FREE',
     currentMatchId: null,
     occupiedSince: null,
+    // Serving both tracks, which is what a table means unless a test says
+    // otherwise (issue #79).
+    reservedFor: null,
     ...overrides,
   };
 }

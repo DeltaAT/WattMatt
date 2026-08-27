@@ -59,6 +59,7 @@ function fullHouse(): TournamentSnapshot {
       status: 'OCCUPIED' as const,
       currentMatchId: match.id,
       occupiedSince: '2026-08-23T10:00:00+02:00',
+      reservedFor: null,
     })),
     matches,
     // Issue #25 sends the `Turnierbaum` too, and this is the heaviest one there

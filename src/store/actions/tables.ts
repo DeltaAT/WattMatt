@@ -1,6 +1,6 @@
 import type { TableId } from '@/domain/ids';
 import * as tables from '@/domain/tables';
-import type { Tournament } from '@/domain/types';
+import type { RoundTrack, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
 
@@ -105,6 +105,41 @@ export function enableTable(store: TournamentStore, tableId: TableId): void {
     (document) => ({
       undoLabel: de.undo.action.tableEnabled({ label: labelOf(document, tableId) }),
       log: { action: 'TABLE_ENABLED', payload: { tableId } },
+    }),
+  );
+}
+
+/**
+ * Reserves a table for one track, or hands it back to both (issue #79).
+ *
+ * One action for both directions, because the host means the same thing either
+ * way — *this table serves that half of the evening now* — and two actions
+ * would put two different sentences on the undo button for one decision. The
+ * label still says which: releasing is the step a host takes back most often,
+ * having reserved the wrong table.
+ *
+ * A reservation that changes nothing writes nothing: `reserveTable` hands the
+ * tournament back untouched for a table that already serves that track, and
+ * `change` commits only a document that actually moved — so a stale click does
+ * not bury the undo stack under a step that did nothing (golden rule 6).
+ */
+export function reserveTable(
+  store: TournamentStore,
+  tableId: TableId,
+  track: RoundTrack | null,
+): void {
+  change(
+    store,
+    (document) => tables.reserveTable(document, tableId, track),
+    (_before, after) => ({
+      undoLabel:
+        track === null
+          ? de.undo.action.tableReleased({ label: labelOf(after, tableId) })
+          : de.undo.action.tableReserved({
+              label: labelOf(after, tableId),
+              track: de.table.reservation[track],
+            }),
+      log: { action: 'TABLE_RESERVED', payload: { tableId, track } },
     }),
   );
 }

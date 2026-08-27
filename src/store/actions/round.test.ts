@@ -402,6 +402,7 @@ describe('closeRound', () => {
             status: 'OCCUPIED',
             currentMatchId: stranded.id,
             occupiedSince: FIXED_NOW,
+            reservedFor: null,
           },
         ],
         rounds: [round(1, { state: 'RUNNING', matches: [stranded] })],

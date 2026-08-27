@@ -17,6 +17,7 @@ import {
   currentRound,
   freeTables,
   roundsOfTrack,
+  servesTrack,
   undecidedMatches,
 } from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
@@ -422,7 +423,7 @@ export function drawRound(
     rngCursor: rng.cursor,
   };
 
-  return settle(fillTables(withRound, matches, at), round.id);
+  return settle(fillTables(withRound, matches, at, track), round.id);
 }
 
 /** What the next draw would produce, without producing it (issue #72). */
@@ -527,22 +528,30 @@ export function forcedRematches(tournament: Tournament, round: Round): readonly 
 }
 
 /**
- * Sends the front of the draw onto the tables that are free, in the host's
- * table order (`freeTables`, `@/domain/selectors`).
+ * Sends the front of the draw onto the tables that are free **and this track's
+ * to use**, in the host's table order (`freeTables`, `@/domain/selectors`).
  *
  * Byes are skipped rather than counted: a bye must never occupy a table, both
  * because nobody is playing on it and because doing so would push a real pair
  * into the queue behind an empty table (§9 case 1).
  *
  * A `DISABLED` table is not free and is never filled here — that is the whole
- * point of taking one out of service (docs/TOURNAMENT-RULES.md §0).
+ * point of taking one out of service (docs/TOURNAMENT-RULES.md §0). Nor is a
+ * table the host has reserved for the other track (issue #79): that reservation
+ * is the standing version of the decision they would otherwise make table by
+ * table all evening, and a draw that ignored it would undo it in one press.
  *
  * A match starts the moment it lands on a table: `occupyTable` moves it to
  * `RUNNING` and stamps the table with `occupiedSince`, so `READY` is a status
  * the file format allows and nothing produces (docs/OPEN-QUESTIONS.md #48).
  */
-function fillTables(tournament: Tournament, matches: readonly Match[], at: Timestamp): Tournament {
-  const free = freeTables(tournament);
+function fillTables(
+  tournament: Tournament,
+  matches: readonly Match[],
+  at: Timestamp,
+  track: RoundTrack,
+): Tournament {
+  const free = freeTables(tournament, track);
   let next = tournament;
   let slot = 0;
 
@@ -624,6 +633,18 @@ export function assignMatch(
 
   const match = round.matches.find((candidate) => candidate.id === matchId);
   if (match === undefined || match.tableId !== null || match.winnerId !== null) {
+    return tournament;
+  }
+
+  /*
+   * And refused for a table the host has reserved for the other track
+   * (issue #79). The panel does not offer the button, so this is the guard
+   * against a stale click — a host who pressed *Nächste Partie starten* just as
+   * the reservation changed under them gets nothing rather than a `Trostrunde`
+   * pair on the table they had just set aside for the main field.
+   */
+  const table = tournament.tables.find((candidate) => candidate.id === tableId);
+  if (table === undefined || !servesTrack(table, round.track)) {
     return tournament;
   }
 

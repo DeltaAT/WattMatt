@@ -1,5 +1,6 @@
 import { queuedMatches, roundOutcome } from '@/domain/draw';
 import type { GroupId, RoundId } from '@/domain/ids';
+import { tablesForTrack, usableTables } from '@/domain/selectors';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Match, Round, Table, Tournament } from '@/domain/types';
 
@@ -66,7 +67,30 @@ export interface RoundBoard {
   /** Decided, in draw order. Byes are here from the moment they are drawn. */
   decided: readonly Match[];
   progress: RoundProgress;
+  /**
+   * Why this round's queue cannot move at all, or null when it can
+   * (issue #79).
+   *
+   * Not the same question as "is a table free right now" — a queue behind three
+   * busy tables is working exactly as §3 intends and needs no explanation. This
+   * answers the one the host asks when nothing is *going to* happen: there is
+   * no table this round could ever be played on.
+   *
+   * Two ways to get there, and the host needs to be told which. Every table out
+   * of service is a room problem; every table reserved for the other track is a
+   * decision they took themselves and can take back in one click, and a panel
+   * that said only "no free table" would send them looking at the furniture.
+   */
+  stalled: RoundStall;
 }
+
+/** Why a round's queue cannot move (issue #79). */
+export type RoundStall =
+  /** No usable table at all: none exists, or every one is `gesperrt`. */
+  | 'NO_USABLE_TABLE'
+  /** Usable tables exist, and every one of them is reserved for the other track. */
+  | 'RESERVED_ELSEWHERE'
+  | null;
 
 export function roundBoard(tournament: Tournament, round: Round): RoundBoard {
   return {
@@ -78,7 +102,25 @@ export function roundBoard(tournament: Tournament, round: Round): RoundBoard {
     queued: queuedMatches(round),
     decided: round.matches.filter((match) => match.winnerId !== null),
     progress: roundProgress(round),
+    stalled: roundStall(tournament, round),
   };
+}
+
+/**
+ * Whether this round has anywhere at all to be played, and if not, why not.
+ *
+ * Answered only when something is actually waiting: a round whose every match
+ * is decided has an empty queue, and telling the host their tables are all
+ * reserved elsewhere at that moment would be true and useless.
+ */
+function roundStall(tournament: Tournament, round: Round): RoundStall {
+  if (queuedMatches(round).length === 0) {
+    return null;
+  }
+  if (tablesForTrack(tournament, round.track).length > 0) {
+    return null;
+  }
+  return usableTables(tournament).length === 0 ? 'NO_USABLE_TABLE' : 'RESERVED_ELSEWHERE';
 }
 
 /**

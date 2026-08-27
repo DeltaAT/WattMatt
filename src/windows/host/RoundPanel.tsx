@@ -271,6 +271,18 @@ export function RoundPanel({
               board.queued.length === 0 ? null : de.round.queueCount({ n: board.queued.length })
             }
           >
+            {/*
+              Why the queue cannot move at all, when it cannot (issue #79). Not
+              shown while tables are merely busy — that is the tournament
+              working, and a warning on every round would be one the host
+              learns to read past.
+            */}
+            {board.stalled === null ? null : (
+              <p className="text-host-sm text-wm-lose" data-round-stalled={board.stalled}>
+                {de.round.stalled[board.stalled]}
+              </p>
+            )}
+
             {board.queued.length === 0 ? (
               <p className="text-host-sm text-wm-text-faint" data-round-queue="empty">
                 {de.round.queueEmpty}
@@ -398,6 +410,18 @@ function TableColumn({
         {slot.match === null ? (
           <span className="text-wm-text-faint">{emptySlotLabel(slot)}</span>
         ) : null}
+        {/*
+          Which track this table serves, on both boards (issue #79). Without it
+          the host reads a free table beside a waiting queue and has no way to
+          tell whether the app is stuck or doing what they told it to.
+        */}
+        {slot.table.reservedFor === null ? null : (
+          <span className="ml-auto text-wm-accent" data-table-reserved={slot.table.reservedFor}>
+            {de.table.reservation.badge({
+              track: de.table.reservation[slot.table.reservedFor],
+            })}
+          </span>
+        )}
       </p>
 
       {slot.match === null ? null : <ul className="flex flex-col gap-2">{children}</ul>}

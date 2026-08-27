@@ -278,15 +278,31 @@ From the moment the side event is started, the main field's rounds and its own r
 parallel**. Every round carries a `track` — `MAIN` or `CONSOLATION` — and "the open round" is a
 question asked of one track at a time.
 
-- **Tables are one pool.** Both tracks draw from the `FREE` tables of §3 and a table is never
-  handed to a second match while it carries one. Which tables a track *may* use is a separate
-  question the host answers by reserving them, and it is issue #79's.
+- **Tables are one pool, and the host may divide it.** Both tracks draw from the `FREE` tables
+  of §3 and a table is never handed to a second match while it carries one. Every table also
+  carries a **reservation** — `MAIN`, `CONSOLATION`, or none:
+
+  - A draw fills only the tables its track may use. An unreserved table serves either, and that
+    is the default and the ordinary arrangement.
+  - A reservation says what happens **next**. Reserving a table that a match of the other track
+    is already on does not take that match off it, exactly as taking a table out of service
+    does not (§0). The pair are playing and the room is watching.
+  - Reservations are changed at any moment, like every other table property. A table that has
+    become unreachable for its track is not an error state: everything queues, and the round
+    board says which of the two reasons it is — every table out of service, or every table the
+    other track's.
+  - If a track ends up with no table it may use, nothing is drawn onto one and nothing breaks.
+    The round exists, its pairings exist, and they wait.
+
 - **Queues are per track.** A freed table is offered the next waiting pair of the track the
   host points it at.
 - **Undo does not cross tracks.** An action on one track does not touch the other, so taking it
   back cannot either.
-- **The beamer shows one track at a time**, and which one is the host's decision like every
-  other scene (§0, CLAUDE.md golden rule 3).
+- **The beamer shows one track, or both.** The single board is the default; when both tracks
+  have a live round the host may split the wall in two, one board per track. Never a merged
+  board — they are two tournaments, and a shared progress count would tell the room a
+  `Trostrunde` pair is one result away from the bracket. Which of the two is on is the host's
+  decision like every other scene (§0, CLAUDE.md golden rule 3).
 
 ### Ceremony
 

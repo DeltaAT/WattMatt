@@ -40,7 +40,11 @@ function handlers() {
     onDisable: vi.fn(),
     onEnable: vi.fn(),
     onRemove: vi.fn(),
+    onReserve: vi.fn(),
     onShowOnBeamer: vi.fn(),
+    // The common case: no side event, so no reservation column. The tests that
+    // are about reserving turn it on themselves.
+    canReserve: false,
   };
 }
 
@@ -222,6 +226,69 @@ describe('the table panel', () => {
     fireEvent.click(screen.getByText(de.table.showOnBeamer));
 
     expect(spies.onShowOnBeamer).toHaveBeenCalled();
+  });
+
+  /**
+   * Reserving a table for a track (issue #79,
+   * docs/TOURNAMENT-RULES.md §10).
+   *
+   * The column is only there when there are two tracks to choose between, and
+   * the sentence above it is the rule hosts get wrong — a reservation does not
+   * clear the match on the table.
+   */
+  describe('reservations', () => {
+    it('shows no reservation control while there is only one track', () => {
+      setup();
+
+      expect(screen.queryAllByLabelText(de.table.reservation.label)).toHaveLength(0);
+      expect(screen.queryByText(de.table.reservation.hint)).toBeNull();
+    });
+
+    it('offers a reservation for each table once there are two tracks', () => {
+      const spies = handlers();
+      render(
+        <TablePanel
+          board={occupancyBoard(
+            RUNNING.tables,
+            RUNNING.rounds.flatMap((r) => r.matches),
+          )}
+          groups={RUNNING.groups}
+          participant="GROUP"
+          now={FIXED_NOW}
+          {...spies}
+          canReserve
+        />,
+      );
+
+      const pickers = screen.getAllByLabelText(de.table.reservation.label);
+      expect(pickers).toHaveLength(RUNNING.tables.length);
+      expect(screen.getByText(de.table.reservation.hint)).toBeTruthy();
+
+      fireEvent.change(pickers[0]!, { target: { value: 'CONSOLATION' } });
+      expect(spies.onReserve).toHaveBeenCalledWith(RUNNING.tables[0]!.id, 'CONSOLATION');
+    });
+
+    /* `null` and not the string a `<select>` hands back: releasing is a real
+     * answer and the domain reads it as one. */
+    it('releases a reservation as null rather than as a track', () => {
+      const spies = handlers();
+      render(
+        <TablePanel
+          board={occupancyBoard([{ ...RUNNING.tables[0]!, reservedFor: 'MAIN' }], [])}
+          groups={RUNNING.groups}
+          participant="GROUP"
+          now={FIXED_NOW}
+          {...spies}
+          canReserve
+        />,
+      );
+
+      const picker = screen.getAllByLabelText(de.table.reservation.label)[0]!;
+      expect((picker as HTMLSelectElement).value).toBe('MAIN');
+
+      fireEvent.change(picker, { target: { value: 'BOTH' } });
+      expect(spies.onReserve).toHaveBeenCalledWith(RUNNING.tables[0]!.id, null);
+    });
   });
 
   it('says so when there is no table at all', () => {

@@ -18,6 +18,7 @@ import {
   moveTable,
   removeTable,
   renameTable,
+  reserveTable,
 } from '@/store/actions/tables';
 import {
   createTournamentStore,
@@ -207,6 +208,69 @@ describe('moveTable', () => {
     const before = store.getState();
 
     moveTable(store, tableId(1), -1);
+
+    expect(store.getState()).toBe(before);
+  });
+});
+
+describe('reserveTable', () => {
+  it('reserves a table for a track and says so on the undo button', () => {
+    const store = setup();
+
+    reserveTable(store, tableId(2), 'CONSOLATION');
+
+    expect(documentOf(store).tables[1]?.reservedFor).toBe('CONSOLATION');
+    expect(nextUndo(store.getState().history)?.label).toBe(
+      de.undo.action.tableReserved({
+        label: documentOf(store).tables[1]!.label,
+        track: de.table.reservation.CONSOLATION,
+      }),
+    );
+    expect(lastLog(store)).toMatchObject({
+      action: 'TABLE_RESERVED',
+      payload: { tableId: tableId(2), track: 'CONSOLATION' },
+    });
+  });
+
+  it('reads differently on the undo button when it releases one', () => {
+    const store = setup();
+    reserveTable(store, tableId(2), 'CONSOLATION');
+
+    reserveTable(store, tableId(2), null);
+
+    expect(documentOf(store).tables[1]?.reservedFor).toBeNull();
+    expect(nextUndo(store.getState().history)?.label).toBe(
+      de.undo.action.tableReleased({ label: documentOf(store).tables[1]!.label }),
+    );
+  });
+
+  /*
+   * The issue's fourth test. Not merely "the field is back": every other table
+   * and the match on this one have to be exactly what they were, because a
+   * reservation is the one table change a host makes *while* a round is running.
+   */
+  it('undoes to exactly the tournament that was there before', () => {
+    const store = setup();
+    const before = restored(store);
+
+    reserveTable(store, tableId(1), 'MAIN');
+    expect(restored(store)).not.toEqual(before);
+
+    store.undo();
+
+    // Everything but the append-only log and the timestamp that moves with it
+    // — the running match on `tbl_1` included, which is the field a reservation
+    // is most likely to disturb (docs/FILE-FORMAT.md rule 6).
+    expect(restored(store)).toEqual(before);
+  });
+
+  /* A step on the stack that undoes nothing is worse than a button that did
+   * not react (the same rule `moveTable` follows above). */
+  it('does not put a reservation that changed nothing on the undo stack', () => {
+    const store = setup();
+    const before = store.getState();
+
+    reserveTable(store, tableId(1), null);
 
     expect(store.getState()).toBe(before);
   });

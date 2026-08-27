@@ -70,7 +70,8 @@ Eine Seite. Ausdrucken, abhaken, dann anfangen. Das Handbuch steht in
 - [ ] Sie wissen, wo **Strg+Z** ist, und dass es jeden Fehlklick zurücknimmt.
 - [ ] Sie haben entschieden, ob es an diesem Abend eine **Trostrunde** gibt, und — falls ja —
       welche **Tische** dafür gedacht sind. WattMatt fragt danach, sobald die Hoffnungsrunde
-      abgeschlossen ist.
+      abgeschlossen ist. Die Tische tragen Sie dann unter *Tische* bei *Reserviert für* ein —
+      einmal, nicht die ganze Zeit. Nie **alle** Tische auf dieselbe Runde.
 - [ ] Sie wissen, dass **B** die Leinwand sofort schwarz macht.
 
 ---

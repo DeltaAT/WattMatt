@@ -340,6 +340,7 @@ function exampleFile(): RawTournamentFile {
         status: 'FREE',
         currentMatchId: null,
         occupiedSince: null,
+        reservedFor: null,
       },
     ],
     nextTableNumber: 2,

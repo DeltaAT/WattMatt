@@ -175,6 +175,27 @@ export const tableSchema = z
      * watching that match for twenty minutes whichever table it sits on.
      */
     occupiedSince: timestampSchema.nullable(),
+    /**
+     * Which track this table serves, or null for "either" (issue #79,
+     * docs/TOURNAMENT-RULES.md §10).
+     *
+     * What the host says to the room once — *"Trostrunde an den beiden hinteren
+     * Tischen"* — written down, so it does not have to be re-decided on every
+     * table for the rest of the evening. Null is the default and stays the
+     * common case: a tournament with no side event never sets this, and a table
+     * that serves both tracks is the ordinary arrangement even in one that has.
+     *
+     * It is a rule about **what happens next**, never about what is happening.
+     * Reserving a table that a match of the other track is already on does not
+     * take that match off it, for the same reason disabling a table does not
+     * (issue #13, rules §0): the pair are playing, and the room is watching.
+     *
+     * Independent of `status`, which is why it is a field of its own rather
+     * than a fourth `TableStatus`. A table can be reserved and free, reserved
+     * and busy, reserved and out of service; those are three different
+     * questions and a single enum could only answer one of them at a time.
+     */
+    reservedFor: roundTrackSchema.nullable(),
   })
   /**
    * The three fields move together or not at all (issue #13 owns the table

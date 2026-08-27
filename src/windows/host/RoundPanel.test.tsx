@@ -8,6 +8,7 @@ import { rematchIds } from '@/domain/history';
 import type { MatchId } from '@/domain/ids';
 import { roundBoard, roundSummary } from '@/domain/round';
 import { currentRound } from '@/domain/selectors';
+import { reserveTable } from '@/domain/tables';
 import {
   FIXED_NOW,
   group,
@@ -642,5 +643,57 @@ describe('a round loaded mid-tournament', () => {
     expect(
       window.document.querySelectorAll('[data-round-decided="list"] [data-match-id]'),
     ).toHaveLength(1);
+  });
+});
+
+/**
+ * Reserved tables on the round board (issue #79,
+ * docs/TOURNAMENT-RULES.md §10).
+ *
+ * The host reads this board when nothing is starting, so it has to answer the
+ * question they are actually asking: is the app stuck, or is it doing what I
+ * told it to? Two things do that — the badge on the table, and the sentence
+ * over the queue when nothing is going to happen at all.
+ */
+describe('a table reserved for the other track', () => {
+  it('says so on the table it is reserved for', () => {
+    const document = reserveTable(drawn(4, 2), tableId(1), 'CONSOLATION');
+    setup(document);
+
+    const badge = window.document.querySelector('[data-table-reserved]');
+    expect(badge?.getAttribute('data-table-reserved')).toBe('CONSOLATION');
+    expect(badge?.textContent).toBe(
+      de.table.reservation.badge({ track: de.table.reservation.CONSOLATION }),
+    );
+  });
+
+  it('says nothing on a table that serves both', () => {
+    setup(drawn(4, 2));
+
+    expect(window.document.querySelector('[data-table-reserved]')).toBeNull();
+  });
+
+  /*
+   * The issue's "the host is told why". Reserving the tables *after* the draw
+   * is the case that matters: the pairings are already queued, and a host who
+   * had no explanation would go looking at the furniture.
+   */
+  it('explains a queue that cannot move at all', () => {
+    let document = drawn(6, 2);
+    for (const entry of document.tables) {
+      document = reserveTable(document, entry.id, 'CONSOLATION');
+    }
+    setup(document);
+
+    expect(screen.getByText(de.round.stalled.RESERVED_ELSEWHERE)).toBeTruthy();
+  });
+
+  /* A queue behind busy tables is the tournament working as §3 intends, and a
+   * warning on every round is one the host learns to read past. */
+  it('says nothing while the tables are simply busy', () => {
+    setup(drawn(6, 2));
+
+    expect(screen.queryByText(de.round.stalled.RESERVED_ELSEWHERE)).toBeNull();
+    expect(screen.queryByText(de.round.stalled.NO_USABLE_TABLE)).toBeNull();
   });
 });

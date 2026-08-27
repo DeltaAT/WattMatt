@@ -38,7 +38,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
 ```jsonc
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -65,8 +65,13 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
     // are set exactly while the table is OCCUPIED — the schema checks the three
     // together, and a match moved to another table carries its start time with
     // it, because the room has been watching it for that long either way.
+    //
+    // reservedFor: MAIN | CONSOLATION | null. Which track's draw may use this
+    // table; null is "either" and is the default (rules §10, issue #79). It is
+    // a separate axis from `status` on purpose — a table can be reserved and
+    // free, reserved and busy, or reserved and out of service.
     { "id": "tbl_1", "label": "Tisch 1", "status": "OCCUPIED", "currentMatchId": "mt_3",
-      "occupiedSince": "2026-08-22T19:12:40+02:00" }
+      "occupiedSince": "2026-08-22T19:12:40+02:00", "reservedFor": null }
   ],
 
   // The number the next table gets. A counter, not tables.length + 1: it only
@@ -258,6 +263,14 @@ second, v2 → v3, and #20 the third, v3 → v4.
    exists for, so the host is asked rather than handed a candidate the app invented. No
    released build ever wrote a repechage, so in practice every v3 file says `null` here and
    the step does nothing at all.
+
+   **v5 → v6** (issue #79) gives every table a `reservedFor`, and every v5 table comes back
+   **null**. Like `round.track` in v4 → v5 and unlike the repechage pool, that is a
+   reconstruction rather than a default: the build that wrote a v5 file had no way to reserve
+   a table, so every table in it served both tracks, and null says exactly that. Guessing
+   `MAIN` would have been the damaging direction — it would silently lock the `Trostrunde`
+   out of every table in a reopened file, and the host would find out when a draw queued
+   everything.
 
    Three things happen when a file is opened (`openTournamentAt` in
    `src/store/persistence.ts`), and the order is the whole design.

@@ -75,9 +75,16 @@ describe('v1 → v2', () => {
     expect(repaired).toMatchObject({ status: 'DISABLED', currentMatchId: null });
   });
 
-  it('produces tables the v2 schema accepts', () => {
+  /*
+   * A v2 table is not yet a current one — v5 → v6 adds `reservedFor` (issue #79)
+   * and the runner chains the steps, which `fixtures.test.ts` proves end to end.
+   * What *this* step owes is a table that is correct in every field v2 knew
+   * about, so the later fields are supplied here rather than asserted away.
+   */
+  it('produces tables the later steps carry to the current schema', () => {
     for (const entry of migratedTables(v1File([OCCUPIED, FREE, DISABLED]))) {
-      expect(tableSchema.safeParse(entry).success, JSON.stringify(entry)).toBe(true);
+      const current = { ...(entry as Record<string, unknown>), reservedFor: null };
+      expect(tableSchema.safeParse(current).success, JSON.stringify(current)).toBe(true);
     }
   });
 

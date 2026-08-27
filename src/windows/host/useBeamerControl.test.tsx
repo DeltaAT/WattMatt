@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { round, roundId, tournament } from '@/domain/testFixtures';
+import { group, match, round, roundId, table, tournament } from '@/domain/testFixtures';
 import { closeDocument, setOpenedDocument } from '@/store/actions/document';
 import { setTournamentName } from '@/store/actions/settings';
 import { tournamentStore } from '@/store/session';
@@ -219,5 +219,105 @@ describe('the shortcuts and the host typing', () => {
     press('?', window, { shiftKey: true });
 
     expect(onShowShortcuts).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Both tracks on the wall at once (issue #79, docs/TOURNAMENT-RULES.md §10).
+ *
+ * A flag on the staged `ROUND_BOARD` rather than a scene of its own, because
+ * the nine switcher positions are the digits the host's hand has learned. What
+ * matters here is that the control is offered exactly while it can do something
+ * — two live rounds, and a round board staged — and that using it is an
+ * ordinary manual choice, undo stack and auto-follow included.
+ */
+describe('the split round board', () => {
+  /** A tournament with an open round on each track. */
+  function twoTracks() {
+    return tournament({
+      phase: 'QUALIFYING',
+      groups: Array.from({ length: 4 }, (_unused, index) => group(index + 1)),
+      nextGroupNumber: 5,
+      tables: [table(1)],
+      nextTableNumber: 2,
+      consolation: { state: 'RUNNING', winnerId: null },
+      rounds: [
+        round(1, { state: 'RUNNING', matches: [match(1)] }),
+        round(2, {
+          state: 'RUNNING',
+          kind: 'CONSOLATION',
+          track: 'CONSOLATION',
+          label: 'Trostrunde 1',
+          matches: [match(2)],
+        }),
+      ],
+    });
+  }
+
+  it('is not offered while only one track is live', () => {
+    const { result } = mounted();
+    act(() => {
+      result.current.show({ id: 'ROUND_BOARD', roundId: roundId(1) });
+    });
+
+    expect(result.current.canSplit).toBe(false);
+  });
+
+  it('is offered once both tracks have a round and a board is staged', () => {
+    closeDocument(tournamentStore);
+    setOpenedDocument(tournamentStore, twoTracks(), PATH);
+    const { result } = mounted();
+
+    // Not before a round board is what is on the wall: there is nothing to
+    // split until the host has staged one.
+    act(() => {
+      result.current.show({ id: 'GROUP_OVERVIEW' });
+    });
+    expect(result.current.canSplit).toBe(false);
+
+    act(() => {
+      result.current.show({ id: 'ROUND_BOARD', roundId: roundId(1) });
+    });
+    expect(result.current.canSplit).toBe(true);
+    expect(result.current.isSplit).toBe(false);
+  });
+
+  it('stages the split and takes it back off again', () => {
+    closeDocument(tournamentStore);
+    setOpenedDocument(tournamentStore, twoTracks(), PATH);
+    const { result } = mounted();
+    act(() => {
+      result.current.show({ id: 'ROUND_BOARD', roundId: roundId(1) });
+    });
+
+    act(() => {
+      result.current.toggleSplit();
+    });
+    expect(tournamentStore.getState().scene).toEqual({
+      id: 'ROUND_BOARD',
+      roundId: roundId(1),
+      split: true,
+    });
+    expect(result.current.isSplit).toBe(true);
+
+    act(() => {
+      result.current.toggleSplit();
+    });
+    expect(result.current.isSplit).toBe(false);
+  });
+
+  /* It is not a scene, so it must not do anything when no board is staged. */
+  it('does nothing at all when the wall is showing something else', () => {
+    const { result } = mounted();
+    act(() => {
+      result.current.show({ id: 'GROUP_OVERVIEW' });
+    });
+    const before = tournamentStore.getState();
+
+    act(() => {
+      result.current.toggleSplit();
+    });
+
+    expect(tournamentStore.getState()).toBe(before);
   });
 });

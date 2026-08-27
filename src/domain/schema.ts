@@ -45,7 +45,7 @@ import { tournamentSchema } from '@/domain/types';
  * for, and a guess about which half of the evening a round belongs to is a
  * guess made in front of an audience.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
