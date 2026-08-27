@@ -16,6 +16,8 @@ import {
   drawBracket,
   finishBracket,
   finalStandings,
+  finalStandingsOf,
+  hasThirdPlace,
   isBracketComplete,
   nextQueuedBracketNode,
   queuedBracketNodes,
@@ -837,6 +839,55 @@ describe('finalStandings', () => {
     expect(finalStandings(document)?.first).toBe(semis[0]?.slotA);
     expect(finalStandings(document)?.third).toBeNull();
     expect(isBracketComplete(document)).toBe(false);
+  });
+
+  /*
+   * The beamer reads the podium off a tree with no tournament around it
+   * (issue #69): the `Siegerehrung` is handed a snapshot, and one derivation of
+   * who came where is the only way the wall and the host can agree about it.
+   */
+  it('reads the same three places off the tree alone', () => {
+    let document = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), { at: FIXED_NOW });
+    const semis = nodesOf(bracketOf(document), 'SEMI_FINAL');
+    const winners = semis.map((node) => node.slotA as GroupId);
+    const losers = semis.map((node) => node.slotB as GroupId);
+
+    for (const [index, node] of semis.entries()) {
+      document = setBracketWinner(document, node.id, winners[index] as GroupId);
+    }
+    document = setBracketWinner(document, 'bn_4' as BracketNodeId, winners[0] as GroupId);
+    document = setBracketWinner(document, 'bn_3' as BracketNodeId, losers[1] as GroupId);
+
+    expect(finalStandingsOf(bracketOf(document))).toEqual(finalStandings(document));
+    expect(finalStandingsOf(bracketOf(document))).toEqual({
+      first: winners[0],
+      second: winners[1],
+      third: losers[1],
+    });
+  });
+});
+
+/*
+ * docs/TOURNAMENT-RULES.md §9 case 10: the bracket adapts down to a field of 2,
+ * and at 2 there is no `Spiel um Platz 3`. The `Siegerehrung` has to know the
+ * difference between a bronze nobody has won *yet* and a bronze that will never
+ * exist, because only the second one takes a step off the podium.
+ */
+describe('hasThirdPlace', () => {
+  it('is false for a final phase that starts at 2', () => {
+    const document = drawBracket(readyToDraw(2, { tables: [table(1)] }), { at: FIXED_NOW });
+
+    expect(hasThirdPlace(bracketOf(document))).toBe(false);
+    expect(finalStandingsOf(bracketOf(document)).third).toBeNull();
+  });
+
+  it('is true from a field of 4 up, decided or not', () => {
+    const document = drawBracket(readyToDraw(4, { tables: [table(1), table(2)] }), {
+      at: FIXED_NOW,
+    });
+
+    expect(hasThirdPlace(bracketOf(document))).toBe(true);
+    expect(hasThirdPlace(buildBracket(named(16), { rng: createRng('seed') }))).toBe(true);
   });
 });
 

@@ -758,12 +758,18 @@ vermutlich gerade eine Rede.
 
 Zwei Knöpfe:
 
-- **Siegerehrung starten** legt das Podest auf die Leinwand.
-- **Nächsten Platz zeigen** ist für den Fall, dass Sie Platz für Platz aufbauen und jeden
-  Namen vorher aussprechen wollen.
+- **Siegerehrung starten** legt das Podest auf die Leinwand und baut es von selbst auf:
+  zuerst Bronze, eine halbe Sekunde später Silber, dann Gold.
+- **Nächsten Platz zeigen** überlässt das Tempo Ihnen. Jeder Druck stellt genau einen
+  Platz dazu, in derselben Reihenfolge — Bronze, Silber, Gold. Sprechen Sie den Namen aus,
+  dann drücken Sie. Nach Gold passiert nichts mehr; das Podest ist vollständig.
+
+Die Knöpfe lassen sich mischen: Sie können den Aufbau starten und mit **Nächsten Platz
+zeigen** dort übernehmen, wo er gerade steht.
 
 Auf dem Podest steht Gold in der Mitte, Silber und Bronze daneben. Der dritte Platz ist die
-Siegerin oder der Sieger des **Spiels um Platz 3**.
+Siegerin oder der Sieger des **Spiels um Platz 3**. Bei genau zwei Teilnehmenden gibt es
+kein Spiel um Platz 3 — das Podest hat dann zwei Stufen, und der erste Druck zeigt Silber.
 
 Ein bewährter Ablauf:
 

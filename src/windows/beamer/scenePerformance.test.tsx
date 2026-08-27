@@ -66,6 +66,9 @@ const ANIMATION_CLASSES = [
   'wm-repechage-arrive',
   'wm-repechage-decline',
   'wm-bracket-node',
+  'wm-podium-rise',
+  'wm-podium-name',
+  'wm-podium-gold',
   'wm-blackout-veil',
 ] as const;
 

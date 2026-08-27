@@ -671,6 +671,99 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * The Siegerehrung (issues #27 and #69, docs/MOTION.md §4.5).
+ *
+ * "Bronze → silver → gold, 500 ms apart. Each podium block rises with
+ * `translateY(40px) → 0` plus `opacity` … the name arrives 150 ms after its
+ * block." The 500 ms between the places is *not* here: which places are up is
+ * state the host owns and can step through by hand (§8), so it lives in
+ * `useCeremonyReveal` and reaches the scene as a step. What is here is the
+ * arrival of one block, which is the same whether the host pressed the button
+ * or the sequence did.
+ *
+ * The keyframes therefore carry no delay of their own. A block wears the class
+ * only from the render in which it is revealed, so the animation starts when
+ * the place does — and a podium that is simply standing there wears none of
+ * this at all.
+ *
+ * No `will-change` on the rise, for the reason `wm-bracket-advance` gives in
+ * reverse: three blocks is not a number that needs a promised layer, and the
+ * hint would outlive the 600 ms it was for.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-podium-rise {
+  0% {
+    opacity: 0;
+    /* §4.5 names 40 px. Written as a rem on the 8 px grid so it scales with the
+     * projector's root size rather than staying 40 device pixels at 4K. */
+    transform: translateY(2.5rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes wm-podium-name {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@utility wm-podium-rise {
+  /* The gold glow below hangs off this box. */
+  position: relative;
+  animation: wm-podium-rise var(--dur-reveal) var(--ease-dramatic) both;
+}
+
+@utility wm-podium-name {
+  animation: wm-podium-name var(--dur-reveal) var(--ease-out) both;
+  /* §4.5's "150 ms after its block", as the nearest token: every duration on
+   * the beamer resolves through one, which is what lets performance mode halve
+   * the delay along with the animation it is offsetting (docs/MOTION.md §6).
+   * The block and the name would otherwise drift apart in the cheap mode. */
+  animation-delay: var(--dur-fast);
+}
+
+/* Gold's 1200 ms bloom (§4.5), as a ring that fades rather than a `box-shadow`
+ * that grows — §1 law 3 bans animating the shadow itself, and the block sits
+ * under a name and a caption that would repaint with it. `--dur-story` is the
+ * 1200 ms token, and performance mode's `--wm-fx-glow-spread: 0px` leaves a
+ * ring of no spread, which paints nothing. */
+@utility wm-podium-gold {
+  position: relative;
+}
+
+.wm-podium-gold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 var(--wm-fx-glow-spread) var(--wm-gold);
+  opacity: 0;
+  pointer-events: none;
+  animation: wm-glow-in var(--dur-story) var(--ease-dramatic) both;
+}
+
+/* docs/MOTION.md §6: the block still arrives, it simply no longer travels — and
+ * it still ends where it belongs, because `both` holds the last frame. The
+ * glow stays for the reason the draw's ring does: it is opacity on a fixed
+ * shadow, and it is how the room sees which step is the winner's. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-podium-rise {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * The blackout (issue #28, docs/MOTION.md §4.6).
  *
  * "A hard 200 ms fade to `--wm-bg` — when the host wants the screen gone, they
