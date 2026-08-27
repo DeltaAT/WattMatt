@@ -73,7 +73,7 @@ uses.
 | `beamer-1-welcome.png` | `WELCOME` | Before the doors open, with a couple of dozen registered so the count is on the wall. |
 | `beamer-2-groups.png` | `GROUP_OVERVIEW` | 40 participants, so the dense grid is what the reader sees. |
 | `beamer-3-tables.png` | `TABLE_OVERVIEW` | A mix of occupied, free and `gesperrt`. |
-| `beamer-4-draw.png` | `DRAW` | Mid-sequence: some pairings revealed, pool still filling, one *Wartet auf Tisch*. |
+| `beamer-4-draw.png` | `DRAW` | Mid-sequence: about half the slots filled, the rest still empty and dashed, one *Wartet auf Tisch*. |
 | `beamer-4-draw-bye.png` | `DRAW` | The `Freilos` reveal (odd field — the 13-group run). |
 | `beamer-5-round.png` | `ROUND_BOARD` | One `LÄUFT`, one `BEENDET` with `SIEGER`/`AUSGESCHIEDEN`, a non-empty *Warteschlange*. |
 | `beamer-6-repechage.png` | `REPECHAGE` | A card in `GEZOGEN`, one `VERZICHTET`, places left on the counter. |

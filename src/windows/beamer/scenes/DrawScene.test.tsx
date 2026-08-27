@@ -13,15 +13,23 @@ import {
   tournament,
 } from '@/domain/testFixtures';
 import { de } from '@/i18n';
-import { DrawScene } from '@/windows/beamer/scenes/DrawScene';
+import { fitColumns } from '@/windows/beamer/fit';
+import { DrawScene, EMPTY_SLOT_TEXT } from '@/windows/beamer/scenes/DrawScene';
 
 /**
- * The `DRAW` scene (issue #18).
+ * The `DRAW` scene (issue #18, redesigned by issue #76).
  *
  * The board is a pure function of `step`, so every acceptance criterion about
  * what the audience sees can be asked here directly, with no timer involved.
  * The timing itself is `drawSequence.test.ts`'s; the skip is
  * `useDrawSequence.test.tsx`'s.
+ *
+ * Issue #76's central claim is a *negative* one — "nothing has moved after it
+ * appeared" — and jsdom has no layout to measure it with. So what is pinned
+ * here is everything that decides the layout: how many slots there are, how
+ * many columns they sit in, and which type step they are drawn at. All three
+ * are computed from the final pairing count, so all three must be identical at
+ * step 0 and at the last step. If they are, no card can have moved.
  */
 
 function drawnTournament({ pairs, bye = false }: { pairs: number; bye?: boolean }) {
@@ -53,8 +61,24 @@ function scene(snapshot: TournamentSnapshot, step: number, settled = false): str
   return renderToStaticMarkup(<DrawScene tournament={snapshot} step={step} settled={settled} />);
 }
 
+/** The pairings actually on the board — an empty slot carries no match id. */
 const cards = (markup: string) => markup.match(/data-match-id="/g) ?? [];
-const poolChips = (markup: string) => markup.match(/data-pool-group-id="/g) ?? [];
+
+/** Every slot, drawn or not: this is the number that must never change. */
+const slots = (markup: string) => markup.match(/<li /g) ?? [];
+
+/** The three things that decide where a card ends up. */
+function layout(markup: string) {
+  return {
+    slots: slots(markup).length,
+    columns: /grid-template-columns:([^"]*)"/.exec(markup)?.[1],
+    type: /text-beamer-(?:hero|h1|h2)/.exec(markup)?.[0],
+  };
+}
+
+/** A pairing slot that is still waiting: both its lines hold the blank. */
+const blankPairings = (markup: string) =>
+  markup.match(new RegExp(`data-pairing=""><span>${EMPTY_SLOT_TEXT}</span>`, 'g')) ?? [];
 
 describe('the draw scene', () => {
   it('shows nothing drawn at step zero', () => {
@@ -71,16 +95,57 @@ describe('the draw scene', () => {
   });
 
   /*
-   * "Drawn numbers are removed from the pool so the audience can follow the
-   * shrinking field" — the thing that makes a draw legible from the back of a
-   * room.
+   * Issue #76's second acceptance criterion. The pool that used to stand on the
+   * wall from the first frame told the room every number that was still coming;
+   * the board now starts genuinely empty, and an undrawn slot says nothing at
+   * all — not even in markup nobody can see.
    */
-  it('takes each drawn pairing out of the pool', () => {
+  it('shows no group number before it is drawn', () => {
     const snapshot = drawnTournament({ pairs: 4 });
 
-    expect(poolChips(scene(snapshot, 0))).toHaveLength(8);
-    expect(poolChips(scene(snapshot, 2))).toHaveLength(4);
-    expect(scene(snapshot, 4)).toContain(de.beamer.draw.poolEmpty);
+    expect(blankPairings(scene(snapshot, 0))).toHaveLength(4);
+    expect(blankPairings(scene(snapshot, 2))).toHaveLength(2);
+    expect(blankPairings(scene(snapshot, 4))).toHaveLength(0);
+  });
+
+  /*
+   * Issue #76's central requirement, and the one jsdom cannot measure directly:
+   * "nothing has moved after it appeared". What decides that is the three
+   * numbers below — how many slots, how many columns, which type step — and all
+   * three are computed from the final pairing count. If none of them changes
+   * between the empty board and the full one, no card can have moved.
+   */
+  it('reserves the whole grid before the first pairing lands', () => {
+    for (const pairs of [1, 8, 16, 32]) {
+      const snapshot = drawnTournament({ pairs });
+      const empty = layout(scene(snapshot, 0));
+
+      expect(empty.slots, `${String(pairs)} pairings`).toBe(pairs);
+      expect(empty.columns, `${String(pairs)} pairings`).toBe(
+        `repeat(${String(fitColumns(pairs, 2))}, minmax(0, 1fr))`,
+      );
+
+      for (const step of [1, Math.ceil(pairs / 2), pairs]) {
+        expect(
+          layout(scene(snapshot, step)),
+          `${String(pairs)} pairings @ ${String(step)}`,
+        ).toEqual(empty);
+      }
+    }
+  });
+
+  /*
+   * The other half of the same guarantee: every pairing has a slot from the
+   * start, so the last card lands in a space that was always reserved for it
+   * and nothing is pushed off the stage at any field size.
+   */
+  it('keeps a slot for every pairing at every field size', () => {
+    for (const pairs of [1, 8, 16, 32]) {
+      const snapshot = drawnTournament({ pairs });
+
+      expect(slots(scene(snapshot, 0)), `${String(pairs)} pairings`).toHaveLength(pairs);
+      expect(cards(scene(snapshot, pairs, true)), `${String(pairs)} pairings`).toHaveLength(pairs);
+    }
   });
 
   /*
@@ -142,7 +207,6 @@ describe('the draw scene', () => {
 
     expect(live).toContain('wm-draw-reveal');
     expect(caughtUp).not.toContain('wm-draw-reveal');
-    expect(caughtUp).not.toContain('wm-draw-pool-number');
     expect(caughtUp).toContain('data-settled="true"');
   });
 
@@ -155,14 +219,17 @@ describe('the draw scene', () => {
     expect(markup.match(/wm-draw-reveal/g)).toHaveLength(1);
   });
 
-  /* The shuffling slot exists only while a pairing is in flight. A caught-up
-   * beamer has nothing being drawn, and neither has a finished board. */
-  it('shows the shuffling slot only while the draw is running', () => {
+  /*
+   * The slot machine is gone (issue #76). A pairing simply appears — there is
+   * no cycling slot, and nothing on the board is in flight between beats.
+   */
+  it('has no shuffling slot to show', () => {
     const snapshot = drawnTournament({ pairs: 3 });
 
-    expect(scene(snapshot, 1, false)).toContain('data-draw-slot');
-    expect(scene(snapshot, 3, false)).not.toContain('data-draw-slot');
-    expect(scene(snapshot, 1, true)).not.toContain('data-draw-slot');
+    for (const step of [0, 1, 3]) {
+      expect(scene(snapshot, step)).not.toContain('data-draw-slot');
+      expect(scene(snapshot, step)).not.toContain('data-draw-pool');
+    }
   });
 
   it('counts the progress for the room', () => {

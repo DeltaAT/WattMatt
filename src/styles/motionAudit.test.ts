@@ -321,10 +321,12 @@ describe('docs/MOTION.md §6: reduced motion is answered for every beamer animat
   });
 
   it('answers the two motions JavaScript owns', () => {
-    // The shuffle tick (#18) and the bracket FLIP (#25) are not keyframes and
-    // no media query can reach them, so they read the setting themselves.
+    // The draw's pace (#18, retimed by #76) and the bracket FLIP (#25) are not
+    // keyframes and no media query can reach them, so they read the setting
+    // themselves. The draw's is a `setTimeout` interval and lives in the hook
+    // that owns the timers, not in the scene that owns the picture.
     for (const file of [
-      'src/windows/beamer/scenes/DrawScene.tsx',
+      'src/windows/beamer/useDrawSequence.ts',
       'src/windows/beamer/useBracketAdvance.ts',
     ]) {
       expect(code(file), `${file} ignores prefers-reduced-motion`).toMatch(/useReducedMotion/);

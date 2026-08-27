@@ -1171,19 +1171,13 @@ export const deAT = {
      * The `DRAW` scene: the auslosung, live in front of the room (issue #18).
      *
      * The heading is the round's own label (`Runde 1`), which the draw action
-     * already wrote — so what is left here is the pool caption, the two things
-     * a pairing can say instead of a table, and the word for a `Freilos` reveal.
+     * already wrote — so what is left here is the two things a pairing can say
+     * instead of a table, and the word for a `Freilos` reveal. The pool caption
+     * went with the pool itself (issue #76): the board starts empty now, and
+     * nothing on it says what is still to come.
      */
     draw: {
       title: 'Auslosung',
-      /** Over the grid of numbers still to be drawn. */
-      poolTitle: 'Noch zu ziehen',
-      /**
-       * The pool once it is empty — the draw is over and the board is complete.
-       * Said rather than left blank, so an empty half of the screen reads as
-       * finished rather than broken.
-       */
-      poolEmpty: 'Alle gezogen.',
       /**
        * A pairing that has been drawn but has no table yet
        * (docs/TOURNAMENT-RULES.md §3). The room needs to know the match exists

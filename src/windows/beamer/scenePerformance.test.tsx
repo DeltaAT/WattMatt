@@ -59,7 +59,6 @@ const RENDER_BUDGET_MS = 120;
 const ANIMATION_CLASSES = [
   'wm-count-pulse',
   'wm-draw-reveal',
-  'wm-draw-pool-number',
   'wm-result-win',
   'wm-result-lose',
   'wm-repechage-lift',
@@ -330,13 +329,17 @@ describe('the round board, which is where the count would run away', () => {
   });
 });
 
-describe('the draw pool, which is the other one', () => {
+describe('the draw, which is the other one', () => {
   const drawScene: BeamerScene = { id: 'DRAW', roundId: roundIdSchema.parse('round-1') };
 
-  it('pulses the pool as one container rather than one number at a time', () => {
-    // The pool at the start of a 64-group draw is 64 elements. §6 says to
-    // animate the container above sixty, so exactly one thing pulses.
+  /*
+   * The pool of 64 numbers that used to breathe here is gone (issue #76), and
+   * what replaced it animates less rather than more: every slot is on screen
+   * from the first frame and exactly one of them — the pairing that has just
+   * landed — is playing anything.
+   */
+  it('animates one card at a time, whatever the field size', () => {
     const view = draw(drawScene, { settled: false, delivery: 'live' });
-    expect(view.container.querySelectorAll('.wm-draw-pool-number')).toHaveLength(1);
+    expect(view.container.querySelectorAll('.wm-draw-reveal').length).toBeLessThanOrEqual(1);
   });
 });
