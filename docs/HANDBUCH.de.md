@@ -1058,20 +1058,27 @@ steht Ihr eigener Name dafür da.
 ```text
    Auslosung                                6 von 8 gezogen
 
-        1                           │  Noch zu ziehen
-    4        9                      │
-                                    │   [ 1] [ 5]
-        2                           │   [11] [16]
-    2        7                      │
-                                    │
-   Wartet auf Tisch                 │
-    3       12                      │
+   ┌──────────┐  ┌──────────┐  ┌──────────┐
+   │    1     │  │    2     │  │  Wartet  │
+   │  4    9  │  │  2    7  │  │  3   12  │
+   └──────────┘  └──────────┘  └──────────┘
+
+   ┌──────────┐  ┌┄┄┄┄┄┄┄┄┄┄┐  ┌┄┄┄┄┄┄┄┄┄┄┐
+   │  Wartet  │  ┄          ┄  ┄          ┄
+   │  1   11  │  ┄          ┄  ┄          ┄
+   └──────────┘  └┄┄┄┄┄┄┄┄┄┄┘  └┄┄┄┄┄┄┄┄┄┄┘
 ```
 
-Links wachsen die Paarungen, rechts leert sich der Topf. Jede Karte hat oben klein den Tisch
-— nur seine Nummer — oder **Wartet auf Tisch**, und darunter groß die beiden Gruppennummern.
-Ein Freilos bekommt eine eigene Farbe und das Wort *Freilos — steigt auf*. Ist alles gezogen,
-steht rechts **Alle gezogen.**
+Alle Plätze stehen von Anfang an da — leer und gestrichelt. Etwa jede halbe Sekunde füllt sich
+einer davon: die Paarung erscheint einfach, ohne Zahlenrattern, und danach bewegt sich diese
+Karte nie wieder. Bei 32 Paarungen dauert die ganze Auslosung rund 16 Sekunden.
+
+Auf jeder Karte steht oben klein der Tisch — nur seine Nummer — oder **Wartet auf Tisch**, und
+darunter groß die beiden Gruppennummern. Ein Freilos bekommt eine eigene Farbe und das Wort
+*Freilos — steigt auf*.
+
+Vor der Ziehung ist **keine** Nummer zu sehen: der Saal erfährt jede Paarung in dem Moment, in
+dem sie fällt. Mit der **Leertaste** springen Sie sofort auf das fertige Bild.
 
 ### 5 — Runde
 

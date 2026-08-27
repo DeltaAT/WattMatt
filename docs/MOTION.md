@@ -72,15 +72,40 @@ physical world appears out of nothing.
 
 ### 4.1 Auslosung — the draw (the signature moment)
 
+One beat, repeated. A pairing appears in a slot that was already there; half a second later the
+next one does. That is the whole choreography (issue #76).
+
 | Beat | Duration | What happens |
 | --- | --- | --- |
-| Anticipation | 600 ms | All eligible group numbers fade in on a grid and pulse gently. Audience sees the pool. |
-| Shuffle | ~1200 ms | Numbers cycle in the pairing slot, `linear`, ~60 ms per tick, decelerating over the last 400 ms. |
-| Reveal | 500 ms | The drawn number lands: `scale 0.94 → 1.04 → 1`, spring `bounce 0.25`, accent glow pulse, drawn number removed from the pool grid. |
-| Placement | 400 ms | The completed match card slides to its table slot, `--ease-in-out`. |
+| Interval | 500 ms | The gap between two pairings landing. The pace of the draw, and the one number to change if a room finds it too fast. |
+| Reveal | 240 ms `--ease-out` | The card appears: `opacity 0 → 1`, `scale 0.94 → 1`. Nothing else moves. |
 
-Maximum 3 s per pairing. Pairings are drawn sequentially, not all at once — the sequence *is*
-the entertainment. `Space` skips to the fully drawn board.
+**The reveal must finish well inside the interval** — 240 ms against 500 is half of it, so a card
+is visibly at rest before the next arrives. `drawSequence.test.ts` pins that relationship; a
+reveal that overran would leave the previous card still growing as the next lands, and over 32
+pairings that is a board in permanent motion.
+
+At 32 pairings the whole draw is about 16 seconds. `Space` skips to the fully drawn board, and
+the skipped board is identical to the one that finished on its own.
+
+**The grid is reserved before the first card lands.** Columns, density and the `useFitToStage`
+scale are all derived from the *final* pairing count, and every slot is on screen from the first
+frame holding a non-breaking space. This is not a markup detail: a grid that grew as pairings
+arrived would re-lay-out and rescale every already-revealed card every 500 ms, and the audience
+would be reading a screen that never stops moving. Reserve the space, then fill it. An undrawn
+slot says nothing about what is coming — no number, not even an invisible one.
+
+Performance mode and `prefers-reduced-motion` both drop the interval to 200 ms; the reveal
+shortens with them because it is `--dur-base` and the mode redefines the tokens. Reduced motion
+additionally drops the scale, leaving the opacity ramp — the pairing still arrives visibly, it
+simply no longer grows. The interval is a `setTimeout` and no media query can shorten one, so
+`useDrawSequence` reads the setting itself.
+
+**What this replaced.** The original spec had four beats over 2.1 s per pairing: an anticipation
+grid showing every undrawn number, a 1.2 s slot-machine cycle, a 500 ms landing with an accent
+glow, and a 400 ms slide to the table slot. The pool told the room what was coming and took the
+width the pairings needed; the cycling was a second of a thing that never meant anything; and
+the slide moved a card the audience had already read. All three are gone.
 
 ### 4.2 Result flip
 
@@ -181,8 +206,9 @@ just because its class was applied a second time.
 - Maximum ~60 simultaneously animated elements on the beamer. Above that, animate a container.
   The budget is spent **on mount**, when every animation class is applied at once — a field of
   64 is where a per-card animation stops being free. Two scenes are shaped by this: the draw
-  pulses its *pool grid* rather than each of its 64 numbers, and the round board flips only the
-  result the window watched land (`useResultFlip`) rather than every decided side it was handed.
+  animates exactly one card at a time — the pairing that has just landed, never the board — and
+  the round board flips only the result the window watched land (`useResultFlip`) rather than
+  every decided side it was handed.
   `src/windows/beamer/scenePerformance.test.tsx` renders every scene at 64 groups on 32 tables
   and fails the build on either count.
 - `will-change` only during an animation; remove it afterwards. A class cannot express

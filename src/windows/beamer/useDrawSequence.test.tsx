@@ -2,17 +2,33 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { drawSchedule } from '@/domain/drawSequence';
+import { drawSchedule, DRAW_BEATS, QUICK_INTERVAL } from '@/domain/drawSequence';
 import { roundIdSchema, type RoundId } from '@/domain/ids';
 import { useDrawSequence, type DrawSequence } from '@/windows/beamer/useDrawSequence';
 
 /**
- * The draw timeline (issue #18).
+ * The draw timeline (issue #18, retimed by issue #76).
  *
  * What each step shows is `drawSequence.test.ts`'s; this is only about *when*
  * the step advances, and about the three ways the sequence can reach its end
  * having to agree — run to completion, skipped, or caught up.
  */
+
+/**
+ * jsdom has no `matchMedia`, and the hook reads it: an unstubbed run counts as
+ * "animate", which is the accessible default (`reducedMotion.ts`).
+ */
+function stubReducedMotion(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })),
+  );
+}
 
 const round = (value: string): RoundId => roundIdSchema.parse(value);
 
@@ -62,7 +78,7 @@ describe('running the sequence', () => {
     expect(probe.current.isComplete).toBe(false);
   });
 
-  it('reveals nothing until the anticipation beat is over', () => {
+  it('starts the board empty and reveals nothing before the first interval', () => {
     const probe = mount({
       roundId: round('r1'),
       pairings: 4,
@@ -71,7 +87,7 @@ describe('running the sequence', () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(599);
+      vi.advanceTimersByTime((drawSchedule(4, false)[0] ?? 0) - 1);
     });
     expect(probe.current.step).toBe(0);
   });
@@ -112,9 +128,10 @@ describe('running the sequence', () => {
     expect(probe.current.isComplete).toBe(true);
   });
 
-  /* Performance mode halves every duration (docs/MOTION.md §6), so the whole
-   * draw is over in half the time — the CSS tokens do the same thing. */
-  it('runs at half the length in performance mode', () => {
+  /* Performance mode drops the gap to the quick interval (issue #76). The CSS
+   * reveal shortens with it, because it is a token and the mode redefines the
+   * tokens — so the reveal still finishes inside the shorter gap. */
+  it('runs at the quick pace in performance mode', () => {
     const probe = mount({
       roundId: round('r1'),
       pairings: 4,
@@ -123,10 +140,51 @@ describe('running the sequence', () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(FULL_SEQUENCE / 2);
+      vi.advanceTimersByTime(QUICK_INTERVAL * 4);
     });
 
     expect(probe.current.step).toBe(4);
+  });
+
+  /*
+   * The other half of the same rule (issue #76): the machine's own setting
+   * takes the same shortcut as the host's. No media query can shorten a
+   * `setTimeout`, so the hook reads `prefers-reduced-motion` itself — and a
+   * sequence still pacing at 500 ms while its reveals ran at half speed would
+   * spend most of every gap doing nothing.
+   */
+  it('runs at the quick pace under prefers-reduced-motion too', () => {
+    stubReducedMotion(true);
+    const probe = mount({
+      roundId: round('r1'),
+      pairings: 4,
+      settled: false,
+      performanceMode: false,
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(QUICK_INTERVAL * 4);
+    });
+    expect(probe.current.step).toBe(4);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the full pace when nothing has asked for less motion', () => {
+    stubReducedMotion(false);
+    const probe = mount({
+      roundId: round('r1'),
+      pairings: 4,
+      settled: false,
+      performanceMode: false,
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(DRAW_BEATS.interval * 4 - 1);
+    });
+    expect(probe.current.step).toBe(3);
+
+    vi.unstubAllGlobals();
   });
 });
 

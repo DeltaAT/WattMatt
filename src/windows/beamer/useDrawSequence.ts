@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { drawSchedule } from '@/domain/drawSequence';
 import type { RoundId } from '@/domain/ids';
+import { useReducedMotion } from '@/windows/beamer/reducedMotion';
 
 /**
- * Drives the draw sequence forward (issue #18, docs/MOTION.md §4.1).
+ * Drives the draw sequence forward (issue #18, retimed by issue #76,
+ * docs/MOTION.md §4.1).
  *
  * What each step *shows* is `@/domain/drawSequence`'s. This owns only when the
  * step advances, which is the part that needs a timer and therefore cannot be
@@ -59,6 +61,15 @@ export function useDrawSequence({
   settled: boolean;
   performanceMode: boolean;
 }): DrawSequence {
+  /*
+   * Both shortcuts land on the same pace (issue #76): the host's decision about
+   * a weak projector, and the machine's own setting. Read here rather than left
+   * to the CSS, because the interval is a timer and no media query can shorten
+   * one — and a sequence still pacing itself at 500 ms while its reveals run at
+   * half speed is a board that spends most of every gap doing nothing.
+   */
+  const reducedMotion = useReducedMotion();
+  const quick = performanceMode || reducedMotion;
   const [progress, setProgress] = useState<{ roundId: RoundId | null; step: number }>(() => ({
     roundId,
     step: settled ? pairings : 0,
@@ -121,7 +132,7 @@ export function useDrawSequence({
     // Every dependency here is stable for the life of a round, so the timers
     // are armed once and never re-armed — re-arming would restart the schedule
     // from the current moment and replay pairings already on the wall.
-    const timers = drawSchedule(pairings, performanceMode).map((at, index) =>
+    const timers = drawSchedule(pairings, quick).map((at, index) =>
       setTimeout(() => advanceTo(index + 1), at),
     );
 
@@ -130,7 +141,7 @@ export function useDrawSequence({
         clearTimeout(timer);
       }
     };
-  }, [roundId, pairings, startedSettled, performanceMode, advanceTo]);
+  }, [roundId, pairings, startedSettled, quick, advanceTo]);
 
   return { step, isComplete: step >= pairings, startedSettled, skip };
 }

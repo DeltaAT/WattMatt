@@ -53,7 +53,6 @@ const REPLAYS = [
   'wm-repechage-decline',
   'wm-repechage-lift',
   'wm-draw-reveal',
-  'wm-draw-pool-number',
 ] as const;
 
 /**

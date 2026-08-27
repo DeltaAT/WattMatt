@@ -1,26 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  beatDuration,
   DRAW_BEATS,
-  drawPool,
+  drawDuration,
+  drawInterval,
   drawSchedule,
   drawStepCount,
   isDrawComplete,
-  PAIRING_CEILING,
-  PAIRING_DURATION,
-  participantsOf,
+  QUICK_INTERVAL,
   revealedMatches,
 } from '@/domain/drawSequence';
 import { group, groupId, match, round } from '@/domain/testFixtures';
 import type { Group, Round } from '@/domain/types';
 
 /**
- * The draw sequence as arithmetic (issue #18, docs/MOTION.md §4.1).
+ * The draw sequence as arithmetic (issue #18, redesigned by issue #76,
+ * docs/MOTION.md §4.1).
  *
  * Everything the acceptance criteria say about the *board* is asked here, with
- * no timer involved: what is revealed after n beats, what is left in the pool,
- * and whether skipping lands on the same picture as waiting.
+ * no timer involved: what is revealed after n beats, how long the whole thing
+ * takes, and whether skipping lands on the same picture as waiting.
  */
 
 /** A round of `pairs` normal matches, optionally followed by a bye. */
@@ -43,31 +42,32 @@ function drawnRound({ pairs, bye = false }: { pairs: number; bye?: boolean }): {
 }
 
 describe('the beat table', () => {
-  it('matches docs/MOTION.md §4.1', () => {
-    expect(DRAW_BEATS).toEqual({
-      anticipation: 600,
-      shuffle: 1200,
-      reveal: 500,
-      placement: 400,
-    });
+  it('is one interval and one reveal, as docs/MOTION.md §4.1 now says', () => {
+    expect(DRAW_BEATS).toEqual({ interval: 500, reveal: 240 });
   });
 
   /*
-   * The issue's own arithmetic: 32 pairings at 3 s is already 90 seconds in
-   * front of an audience. A pairing that crept over the ceiling would not fail
-   * anything visibly — it would just make every large draw slower than the
-   * design was signed off at.
+   * The rule the whole redesign hangs on (issue #76). A reveal that overran its
+   * gap would leave the previous card still growing when the next one lands,
+   * and over 32 pairings that is a board in permanent motion rather than a
+   * board being filled — which is exactly the failure the issue is fixing.
    */
-  it('keeps a pairing inside the 3 s ceiling', () => {
-    expect(PAIRING_DURATION).toBe(2100);
-    expect(PAIRING_DURATION).toBeLessThanOrEqual(PAIRING_CEILING);
+  it('finishes a reveal well inside the gap before the next pairing', () => {
+    expect(DRAW_BEATS.reveal).toBeLessThan(DRAW_BEATS.interval);
+    // "Well inside", not merely inside: half the gap leaves the card visibly
+    // at rest before the next one arrives.
+    expect(DRAW_BEATS.reveal).toBeLessThanOrEqual(DRAW_BEATS.interval / 2);
   });
 
-  it('halves every beat in performance mode, as the CSS tokens do', () => {
-    for (const beat of ['anticipation', 'shuffle', 'reveal', 'placement'] as const) {
-      expect(beatDuration(beat, true), beat).toBe(DRAW_BEATS[beat] / 2);
-      expect(beatDuration(beat, false), beat).toBe(DRAW_BEATS[beat]);
-    }
+  /*
+   * Performance mode and reduced motion both take the same shortcut. The reveal
+   * shortens with them because it is a CSS token and the mode redefines the
+   * tokens, so the rule above still holds at the quicker pace.
+   */
+  it('drops to the quick interval when less motion is asked for', () => {
+    expect(drawInterval(false)).toBe(DRAW_BEATS.interval);
+    expect(drawInterval(true)).toBe(QUICK_INTERVAL);
+    expect(QUICK_INTERVAL).toBeLessThan(DRAW_BEATS.interval);
   });
 });
 
@@ -116,85 +116,6 @@ describe('revealedMatches', () => {
   });
 });
 
-describe('drawPool', () => {
-  it('starts with everyone who is being drawn', () => {
-    const { round: drawn, groups } = drawnRound({ pairs: 4 });
-    expect(drawPool(drawn, groups, 0)).toHaveLength(8);
-  });
-
-  it('removes both participants of each revealed pairing', () => {
-    const { round: drawn, groups } = drawnRound({ pairs: 4 });
-
-    expect(drawPool(drawn, groups, 1)).toHaveLength(6);
-    expect(drawPool(drawn, groups, 4)).toEqual([]);
-  });
-
-  /* A bye takes one number out of the pool, not two. */
-  it('removes only the one group of a bye', () => {
-    const { round: drawn, groups } = drawnRound({ pairs: 2, bye: true });
-
-    expect(drawPool(drawn, groups, 2)).toHaveLength(1);
-    expect(drawPool(drawn, groups, 3)).toEqual([]);
-  });
-
-  /*
-   * The pool is on the wall from the anticipation beat onward. If it were laid
-   * out in match order, anyone watching could read the next pairing off the
-   * grid before it was drawn — the sequence is the entertainment, and this is
-   * what stops it spoiling itself.
-   */
-  it('is ordered by participant number, never by draw order', () => {
-    const matches = [
-      match(1, { a: groupId(6), b: groupId(2) }),
-      match(2, { a: groupId(4), b: groupId(1) }),
-      match(3, { a: groupId(5), b: groupId(3) }),
-    ];
-    const groups = Array.from({ length: 6 }, (_, index) => group(index + 1));
-
-    expect(drawPool(round(1, { matches }), groups, 0).map((entry) => entry.number)).toEqual([
-      1, 2, 3, 4, 5, 6,
-    ]);
-  });
-
-  it('stays in number order as the field shrinks', () => {
-    // Every group plays, as in a real qualifying round, so the shrinking is
-    // the only thing changing the grid.
-    const matches = [
-      match(1, { a: groupId(6), b: groupId(2) }),
-      match(2, { a: groupId(4), b: groupId(1) }),
-      match(3, { a: groupId(5), b: groupId(3) }),
-    ];
-    const groups = Array.from({ length: 6 }, (_, index) => group(index + 1));
-    const drawn = round(1, { matches });
-
-    expect(drawPool(drawn, groups, 1).map((entry) => entry.number)).toEqual([1, 3, 4, 5]);
-    expect(drawPool(drawn, groups, 2).map((entry) => entry.number)).toEqual([3, 5]);
-  });
-
-  /* The grid shows who is being drawn, not who exists — an eliminated group
-   * from an earlier round must not sit in the pool of this one. */
-  it('leaves out a group that is not in this round', () => {
-    const matches = [match(1, { a: groupId(1), b: groupId(2) })];
-    const groups = [group(1), group(2), group(3, { status: 'ELIMINATED' })];
-
-    expect(drawPool(round(1, { matches }), groups, 0).map((entry) => entry.number)).toEqual([1, 2]);
-  });
-
-  it('does not mutate the array it is given', () => {
-    const groups = [group(3), group(1), group(2)];
-    const before = groups.map((entry) => entry.number);
-    drawPool(round(1, { matches: [match(1, { a: groupId(3), b: groupId(1) })] }), groups, 0);
-    expect(groups.map((entry) => entry.number)).toEqual(before);
-  });
-});
-
-describe('participantsOf', () => {
-  it('includes the lone group of a bye', () => {
-    const { round: drawn } = drawnRound({ pairs: 1, bye: true });
-    expect(participantsOf(drawn).size).toBe(3);
-  });
-});
-
 describe('isDrawComplete', () => {
   it('is false until every pairing is out', () => {
     const { round: drawn } = drawnRound({ pairs: 3 });
@@ -210,22 +131,38 @@ describe('isDrawComplete', () => {
 });
 
 describe('drawSchedule', () => {
-  it('lands the first pairing after the anticipation beat', () => {
+  it('starts the board empty and lands the first pairing one interval in', () => {
     const { round: drawn } = drawnRound({ pairs: 3 });
-    expect(drawSchedule(drawStepCount(drawn), false)[0]).toBe(600 + 2100);
+
+    // A card that was already there when the scene appeared is a card the room
+    // did not watch being drawn (issue #76).
+    expect(drawSchedule(drawStepCount(drawn), false)[0]).toBe(DRAW_BEATS.interval);
   });
 
-  it('spaces the rest one pairing apart', () => {
+  it('lands one pairing every interval, with no drift', () => {
     const { round: drawn } = drawnRound({ pairs: 3 });
-    expect(drawSchedule(drawStepCount(drawn), false)).toEqual([2700, 4800, 6900]);
+
+    expect(drawSchedule(drawStepCount(drawn), false)).toEqual([500, 1000, 1500]);
   });
 
-  it('halves the whole schedule in performance mode', () => {
+  it('uses the quick interval when less motion is asked for', () => {
     const { round: drawn } = drawnRound({ pairs: 3 });
-    expect(drawSchedule(drawStepCount(drawn), true)).toEqual([1350, 2400, 3450]);
+
+    expect(drawSchedule(drawStepCount(drawn), true)).toEqual([200, 400, 600]);
   });
 
-  it('is empty for a round with no matches', () => {
+  it('schedules nothing for a round with no matches', () => {
     expect(drawSchedule(drawStepCount(round(1)), false)).toEqual([]);
+  });
+
+  /*
+   * The issue's own arithmetic, and the number a host plans the evening around:
+   * "32 pairings: total draw ≈ 16 s". The old choreography took 68 seconds for
+   * the same board.
+   */
+  it('draws the worst-case field in about sixteen seconds', () => {
+    expect(drawDuration(32, false)).toBe(16_000);
+    expect(drawDuration(32, true)).toBe(6_400);
+    expect(drawDuration(0, false)).toBe(0);
   });
 });
