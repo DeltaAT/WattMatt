@@ -121,6 +121,15 @@ Bronze → silver → gold, 500 ms apart. Each podium block rises with
 block. Gold gets a 1200 ms glow bloom and a confetti burst capped at **150 particles**,
 auto-stopping after 6 s. Triggered manually by the host — never automatically.
 
+Built in issue #69. *Which* places are up is the host's, so it is not in the keyframes: the
+step lives in the scene descriptor, `useCeremonyReveal` turns it into a place that is
+arriving, and `wm-podium-rise` is the arrival of one block. `--ease-dramatic` stands in for
+the spring, as it does for the tree's advancement in §4.4, and the name's 150 ms is
+`--dur-fast` so performance mode halves the offset along with the animation it offsets. The
+confetti is still the placeholder layer #27 left — `data-particles`, suppressed by
+performance mode and by reduced motion, and now drawn only from gold's arrival, because a
+burst over an empty podium celebrates a winner the room has not been told.
+
 ### 4.6 Scene transitions
 
 Crossfade 400 ms `--ease-out`, outgoing `translateY(-8px)`, incoming `translateY(8px) → 0`,

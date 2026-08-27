@@ -253,7 +253,7 @@ export function HostWindow() {
                 onShowCeremony={(mode: 'AUTO' | 'STEP', step = 0) =>
                   bracket.showCeremony(mode, step)
                 }
-                onShowCeremonyStep={(next: number) => bracket.showCeremonyStep(next)}
+                onShowCeremonyStep={bracket.showCeremonyStep}
               />
             ) : null}
 

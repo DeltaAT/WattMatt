@@ -88,7 +88,7 @@ export function BracketPanel({
   // New: phase and ceremony controls
   phase?: string;
   onShowCeremony?: (mode: 'AUTO' | 'STEP', step?: number) => void;
-  onShowCeremonyStep?: (next: number) => void;
+  onShowCeremonyStep?: () => void;
 }) {
   /**
    * The one decided match the host has opened up for correction.
@@ -140,7 +140,7 @@ export function BracketPanel({
               <button
                 type="button"
                 className={SECONDARY_CLASS}
-                onClick={() => onShowCeremonyStep?.(0)}
+                onClick={() => onShowCeremonyStep?.()}
               >
                 {de.bracket.revealNext}
               </button>

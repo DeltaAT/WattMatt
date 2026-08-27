@@ -8,6 +8,7 @@ import {
   bracketNodeState,
   canDrawBracket,
   canFinishBracket,
+  hasThirdPlace,
   type BracketBlocker,
   type BracketColumn,
   type BracketCorrection,
@@ -88,8 +89,8 @@ export interface BracketHandle {
    * for the host to step through the podium.
    */
   showCeremony: (mode: 'AUTO' | 'STEP', step?: number) => void;
-  /** Moves the stepped ceremony on to the next place. */
-  showCeremonyStep: (step: number) => void;
+  /** Moves the stepped ceremony on to the next place, bronze first (§8). */
+  showCeremonyStep: () => void;
 }
 
 /** What a window with no tournament open reads: there is no bracket. */
@@ -132,16 +133,35 @@ export function useBracket(): BracketHandle {
   }, []);
 
   const showCeremony = useCallback((mode: 'AUTO' | 'STEP', step = 0) => {
-    const scene: BeamerScene = { id: 'CEREMONY', reveal: { mode, step } } as BeamerScene;
+    const scene: BeamerScene = { id: 'CEREMONY', reveal: { mode, step } };
     showScene(tournamentStore, scene);
   }, []);
 
-  const showCeremonyStep = useCallback((nextStep: number) => {
-    const scene: BeamerScene = {
-      id: 'CEREMONY',
-      reveal: { mode: 'STEP', step: nextStep },
-    } as BeamerScene;
-    showScene(tournamentStore, scene);
+  /**
+   * The next place, read off the scene the projector is on right now.
+   *
+   * Read at click time rather than captured, for the reason the correction
+   * preview is: the step the podium stands at is a fact about the moment the
+   * host presses the button, and a captured one would send the room back to
+   * bronze every time (issue #69 — this is the half of "the reveal does
+   * nothing" that lived on the host's side).
+   */
+  const showCeremonyStep = useCallback(() => {
+    const state = tournamentStore.getState();
+    const scene = state.scene;
+    const current = scene.id === 'CEREMONY' ? (scene.reveal?.step ?? -1) : -1;
+    const bracket = state.document?.bracket ?? null;
+    // §9 case 10: a field of 2 has no `Spiel um Platz 3`, so its podium is two
+    // places and its last step is 1.
+    const last = bracket !== null && hasThirdPlace(bracket) ? 2 : 1;
+    if (current >= last) {
+      // Everybody is already up. Nothing to show, and nothing to put on the
+      // undo stack for a press that changes no picture.
+      return;
+    }
+
+    const next: BeamerScene = { id: 'CEREMONY', reveal: { mode: 'STEP', step: current + 1 } };
+    showScene(tournamentStore, next);
   }, []);
 
   const actions = {

@@ -216,3 +216,72 @@ describe('the bracket handle', () => {
     expect(result.current.isActive).toBe(true);
   });
 });
+
+/*
+ * docs/TOURNAMENT-RULES.md §8: the podium is revealed bronze → silver → gold on
+ * the host's timing. The button used to send step 0 on every press, so the
+ * second press put the room back at bronze — the host's half of "the reveal
+ * does nothing" (issue #69).
+ */
+describe('stepping through the Siegerehrung', () => {
+  function ceremony(result: { current: BracketHandle }): void {
+    act(() => {
+      result.current.draw();
+    });
+    act(() => {
+      for (const node of result.current.bracket?.nodes ?? []) {
+        if (node.round === 'SEMI_FINAL') {
+          result.current.setWinner(node.id, node.slotA as GroupId);
+        }
+      }
+    });
+    act(() => {
+      for (const node of result.current.bracket?.nodes ?? []) {
+        if (node.round === 'FINAL' || node.round === 'THIRD_PLACE') {
+          result.current.setWinner(node.id, node.slotA as GroupId);
+        }
+      }
+    });
+    act(() => {
+      result.current.finish();
+    });
+  }
+
+  const staged = () => tournamentStore.getState().scene;
+
+  it('advances one place per press and stops at gold', () => {
+    const { result } = mounted();
+    ceremony(result);
+
+    for (const step of [0, 1, 2]) {
+      act(() => {
+        result.current.showCeremonyStep();
+      });
+      expect(staged()).toEqual({ id: 'CEREMONY', reveal: { mode: 'STEP', step } });
+    }
+
+    const settled = tournamentStore.getState().revision;
+    act(() => {
+      result.current.showCeremonyStep();
+    });
+
+    // The podium is complete: nothing to show, and nothing to put on the undo
+    // stack for a press that changes no picture.
+    expect(staged()).toEqual({ id: 'CEREMONY', reveal: { mode: 'STEP', step: 2 } });
+    expect(tournamentStore.getState().revision).toBe(settled);
+  });
+
+  it('takes over from the automatic reveal at the place it had reached', () => {
+    const { result } = mounted();
+    ceremony(result);
+
+    act(() => {
+      result.current.showCeremony('AUTO', 0);
+    });
+    act(() => {
+      result.current.showCeremonyStep();
+    });
+
+    expect(staged()).toEqual({ id: 'CEREMONY', reveal: { mode: 'STEP', step: 1 } });
+  });
+});

@@ -22,6 +22,8 @@ export {
   canDrawBracket,
   drawBracket,
   finalStandings,
+  finalStandingsOf,
+  hasThirdPlace,
   isBracketComplete,
   nextQueuedBracketNode,
   queuedBracketNodes,

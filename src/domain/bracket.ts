@@ -498,11 +498,19 @@ export interface FinalStandings {
  * put a podium up while the third-place match is still being played.
  */
 export function finalStandings(tournament: Tournament): FinalStandings | null {
-  const bracket = tournament.bracket;
-  if (bracket === null) {
-    return null;
-  }
+  return tournament.bracket === null ? null : finalStandingsOf(tournament.bracket);
+}
 
+/**
+ * The same three places, read off a tree on its own (issue #69).
+ *
+ * The beamer is handed a `TournamentSnapshot` and not a `Tournament`, and the
+ * `Siegerehrung` is the one scene whose whole content is this answer. Deriving
+ * it a second time inside the scene is how the podium came to have silver and
+ * bronze the wrong way round in the first place: two derivations of one fact,
+ * only one of which anybody tested.
+ */
+export function finalStandingsOf(bracket: Bracket): FinalStandings {
   const final = bracket.nodes.find((node) => node.round === 'FINAL');
   const third =
     bracket.thirdPlaceNodeId === null ? undefined : findNode(bracket, bracket.thirdPlaceNodeId);
@@ -512,6 +520,18 @@ export function finalStandings(tournament: Tournament): FinalStandings | null {
     second: final === undefined ? null : loserOf(final),
     third: third?.winnerId ?? null,
   };
+}
+
+/**
+ * Whether this tree has a `Spiel um Platz 3` at all (§9 case 10).
+ *
+ * A final phase that starts at 2 is a single match, so there is no bronze to
+ * award and the podium has two steps rather than three. Distinct from a third
+ * place that is merely still being played, which is a `null` in
+ * `FinalStandings` and keeps its step on the podium.
+ */
+export function hasThirdPlace(bracket: Bracket): boolean {
+  return bracket.thirdPlaceNodeId !== null;
 }
 
 /**
