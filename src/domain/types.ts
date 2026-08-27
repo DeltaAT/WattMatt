@@ -51,8 +51,36 @@ export const phaseSchema = z.enum([
 ]);
 export type Phase = z.infer<typeof phaseSchema>;
 
-export const roundKindSchema = z.enum(['QUALIFYING', 'REPECHAGE', 'ELIMINATION', 'BRACKET']);
+export const roundKindSchema = z.enum([
+  'QUALIFYING',
+  'REPECHAGE',
+  'ELIMINATION',
+  'BRACKET',
+  /** One round of the `Trostrunde` side event (issue #73, §10). */
+  'CONSOLATION',
+]);
 export type RoundKind = z.infer<typeof roundKindSchema>;
+
+/**
+ * Which of the two tournaments a round belongs to
+ * (issue #73, docs/TOURNAMENT-RULES.md §10).
+ *
+ * Until the `Trostrunde` existed exactly one round was ever open, so "the
+ * current round" was a question with one answer. It now has two: the main
+ * field's elimination rounds and the side event run at the same time, in the
+ * same room, out of the same pool of tables. Every function that used to mean
+ * "the open round" takes a track and means "the open round of this track".
+ *
+ * Stored beside `kind` rather than derived from it, and the two are not the
+ * same axis. `kind` is what the round is *called* — it names the German label
+ * and the rules it was drawn under. `track` is what it is *scheduled* against:
+ * which queue a freed table serves, which board the host reads, and which half
+ * of the tournament an undo is allowed to touch. A second side event would add
+ * a kind without adding a track, and a `Trostrunde` that one day ran its own
+ * bracket would add a kind on the track it already has.
+ */
+export const roundTrackSchema = z.enum(['MAIN', 'CONSOLATION']);
+export type RoundTrack = z.infer<typeof roundTrackSchema>;
 
 /**
  * `DRAWN` — pairs exist, nothing has been played.
@@ -72,8 +100,23 @@ export type MatchStatus = z.infer<typeof matchStatusSchema>;
 export const tableStatusSchema = z.enum(['FREE', 'OCCUPIED', 'DISABLED']);
 export type TableStatus = z.infer<typeof tableStatusSchema>;
 
-/** A group leaves `ACTIVE` by losing, or by declining a repechage slot (§4). */
-export const groupStatusSchema = z.enum(['ACTIVE', 'ELIMINATED']);
+/**
+ * Where a group stands: in the main field, in the side event, or out
+ * (docs/TOURNAMENT-RULES.md §3, §4, §10).
+ *
+ * `CONSOLATION` is a third state rather than a flag beside `ACTIVE`, and that
+ * is the whole reason the `Trostrunde` cannot leak into a main-field draw: the
+ * main field is `activeGroups`, which is `status === 'ACTIVE'` and nothing
+ * else, so a group that has dropped into the side event is invisible to every
+ * count, pairing and bracket the main tournament makes (issue #73). A boolean
+ * `inConsolation` beside `ACTIVE` would have encoded the impossible state of
+ * being in both (CLAUDE.md §6).
+ *
+ * A group leaves `ACTIVE` by losing or by declining a repechage slot (§4). It
+ * leaves `CONSOLATION` by losing a `Trostrunde` round — or not at all, which is
+ * what being the `Trostrunde` winner means.
+ */
+export const groupStatusSchema = z.enum(['ACTIVE', 'CONSOLATION', 'ELIMINATED']);
 export type GroupStatus = z.infer<typeof groupStatusSchema>;
 
 /**
@@ -172,8 +215,17 @@ export type Match = z.infer<typeof matchSchema>;
 
 export const roundSchema = z.object({
   id: roundIdSchema,
+  /**
+   * Which round of its **track** this is — `Runde 3`, `Trostrunde 2`.
+   *
+   * Per track rather than across the file, because it is what the label says
+   * out loud and the two tracks are counted separately in the room. Round ids
+   * stay global; only the number the host and the audience read is per track.
+   */
   index: z.number().int().positive(),
   kind: roundKindSchema,
+  /** Which of the two parallel tournaments this round belongs to (§10). */
+  track: roundTrackSchema,
   label: z.string().min(1),
   state: roundStateSchema,
   matches: z.array(matchSchema),
@@ -220,6 +272,40 @@ export const repechageSchema = z.object({
   fallbackUsed: repechageFallbackSchema.nullable(),
 });
 export type Repechage = z.infer<typeof repechageSchema>;
+
+/**
+ * How far the `Trostrunde` has got — the side event of
+ * docs/TOURNAMENT-RULES.md §10 (issue #73).
+ *
+ * `DECLINED` is a real answer and not the absence of one. The host is asked
+ * once, when the `Hoffnungsrunde` closes, whether the evening has a side event
+ * at all; a null `consolation` means they have not been asked yet, and a panel
+ * that could not tell the two apart would keep offering a decision the host has
+ * already made.
+ *
+ * There is no `pool` here, unlike `Repechage`. The field is not drawn out of a
+ * pot at one position of the RNG stream — it is simply everyone the
+ * `Hoffnungsrunde` left behind, which is written on the groups themselves as
+ * `status === 'CONSOLATION'` and survives a reload without anything having to
+ * remember a shuffle (docs/FILE-FORMAT.md §"Schema (v5)").
+ */
+export const consolationStateSchema = z.enum(['DECLINED', 'RUNNING', 'FINISHED']);
+export type ConsolationState = z.infer<typeof consolationStateSchema>;
+
+export const consolationSchema = z.object({
+  state: consolationStateSchema,
+  /**
+   * The last group standing, once one is — set when the round that leaves it
+   * alone is closed, and null before that and for a declined side event.
+   *
+   * Stored rather than derived from "the only group still in `CONSOLATION`",
+   * because the two stop agreeing the moment the ceremony is reached: the
+   * winner is the answer to a question the host asked an hour earlier, and a
+   * derived one would change if a later correction moved a group's status.
+   */
+  winnerId: groupIdSchema.nullable(),
+});
+export type Consolation = z.infer<typeof consolationSchema>;
 
 export const bracketNodeSchema = z.object({
   id: bracketNodeIdSchema,
@@ -311,6 +397,14 @@ export const tournamentSchema = z.object({
 
   /** Null when the phase was skipped, which is the common case (§4). */
   repechage: repechageSchema.nullable(),
+  /**
+   * The `Trostrunde`, or null while the host has not been asked about it (§10).
+   *
+   * Null for the whole of a tournament whose host declines to run one before
+   * the question is put — which is every tournament played before issue #73,
+   * and what the v4 → v5 migration writes.
+   */
+  consolation: consolationSchema.nullable(),
   /** Null until the final phase is reached. */
   bracket: bracketSchema.nullable(),
 

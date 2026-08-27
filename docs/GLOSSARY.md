@@ -39,6 +39,10 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Final | Finale |
 | Third-place match | Spiel um Platz 3 |
 | Award ceremony | Siegerehrung |
+| Consolation round | Trostrunde | The side event for the first-round losers (rules §10, issue #73) |
+| Track | Turnierstrang | Which of the two parallel tournaments a round belongs to (`MAIN` / `CONSOLATION`) |
+| Main field | Hauptfeld | The tournament the phases above describe — the one with the bracket |
+| Consolation winner | Sieger der Trostrunde | The last group standing in the side event; never rejoins the main field |
 
 ## States and actions
 
@@ -102,6 +106,9 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | To accept the place | Nimmt an | One of the two answers to a draw |
 | To decline the place | Verzichtet | The other; a decision, not a pass |
 | Candidates still in the field | Im Feld | The winners column, on both screens |
+| To start the consolation round | Trostrunde starten | The host's *Ja* to the one question §10 asks |
+| To decline the consolation round | Keine Trostrunde | The *Nein*; recorded, so the panel stops asking |
+| Still in the consolation round | Noch im Rennen | How many the side event has left |
 | Places still open | Plätze frei | The counter the whole `REPECHAGE` scene is about |
 | To hand out byes (§4 fallback 1) | Freilose vergeben | Always available, so the phase can always be left |
 | A repeated pairing | Wiederholung | Two groups drawn together who have already played (issue #72) |

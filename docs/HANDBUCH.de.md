@@ -24,16 +24,17 @@ Ausdrucken gedacht.
 6. [Der Beamer](#6-der-beamer)
 7. [Qualifikationsrunde](#7-qualifikationsrunde)
 8. [Hoffnungsrunde](#8-hoffnungsrunde)
-9. [Ausscheidungsrunden](#9-ausscheidungsrunden)
-10. [Namenserfassung](#10-namenserfassung)
-11. [Turnierbaum](#11-turnierbaum)
-12. [Siegerehrung](#12-siegerehrung)
-13. [Rückgängig machen](#13-rückgängig-machen)
-14. [Speichern, Sicherung, Wiederherstellung](#14-speichern-sicherung-wiederherstellung)
-15. [Tastenkürzel](#15-tastenkürzel)
-16. [Die Beamer-Ansichten im Einzelnen](#16-die-beamer-ansichten-im-einzelnen)
-17. [Wo WattMatt seine Dateien ablegt](#17-wo-wattmatt-seine-dateien-ablegt)
-18. [Begriffe](#18-begriffe)
+9. [Trostrunde](#9-trostrunde)
+10. [Ausscheidungsrunden](#10-ausscheidungsrunden)
+11. [Namenserfassung](#11-namenserfassung)
+12. [Turnierbaum](#12-turnierbaum)
+13. [Siegerehrung](#13-siegerehrung)
+14. [Rückgängig machen](#14-rückgängig-machen)
+15. [Speichern, Sicherung, Wiederherstellung](#15-speichern-sicherung-wiederherstellung)
+16. [Tastenkürzel](#16-tastenkürzel)
+17. [Die Beamer-Ansichten im Einzelnen](#17-die-beamer-ansichten-im-einzelnen)
+18. [Wo WattMatt seine Dateien ablegt](#18-wo-wattmatt-seine-dateien-ablegt)
+19. [Begriffe](#19-begriffe)
 
 ---
 
@@ -593,7 +594,85 @@ nicht, sondern kommen unmittelbar weiter."
 
 ---
 
-## 9. Ausscheidungsrunden
+## 9. Trostrunde
+
+Sobald die Hoffnungsrunde abgeschlossen ist, fragt WattMatt einmal:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Trostrunde spielen?                                         │
+│                                                             │
+│ 8 sind ausgeschieden und könnten eine eigene Trostrunde      │
+│ spielen. Der Sieger der Trostrunde kommt nicht ins           │
+│ Hauptfeld zurück.                                            │
+│                                                             │
+│ [ Trostrunde starten ]  [ Keine Trostrunde ]                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Die Trostrunde ist **freiwillig**. Sagen Sie *Keine Trostrunde*, läuft der Abend genau so
+weiter wie bisher. Die Frage verschwindet dann; falls Sie es sich anders überlegen, machen Sie
+die Entscheidung mit *Rückgängig* wieder auf (Abschnitt 14).
+
+### 9.1 Der Satz für das Publikum
+
+> „Wer in Runde 1 ausgeschieden ist und nicht nachgerückt ist, spielt jetzt die Trostrunde —
+> ein eigenes kleines Turnier. Der Sieger der Trostrunde kommt **nicht** mehr ins Hauptfeld,
+> aber er nimmt einen Titel mit nach Hause."
+
+Sagen Sie den zweiten Halbsatz wirklich. Er ist die einzige Stelle, an der es Missverständnisse
+gibt.
+
+### 9.2 Wer dabei ist
+
+Alle, die in Runde 1 verloren haben — **auch die, die in der Hoffnungsrunde verzichtet haben**.
+Ein Verzicht bedeutet: nicht ins Hauptfeld. Er bedeutet nicht: nach Hause.
+
+Nicht dabei ist, wer in der Hoffnungsrunde nachgerückt ist. Der spielt im Hauptfeld weiter.
+
+Sind am Ende **weniger als zwei** übrig — weil die Hoffnungsrunde fast alle zurückgeholt hat —,
+fragt WattMatt gar nicht erst. Eine Trostrunde mit einer einzigen Gruppe gibt es nicht.
+
+### 9.3 Ablauf
+
+Genau wie eine gewöhnliche Runde (Abschnitt 7): auslosen, Partien an die Tische, Sieger
+festlegen, Runde abschließen. Bei ungerader Anzahl gibt es ein Freilos. Zwei Gruppen, die schon
+einmal gegeneinander gespielt haben, werden auch hier nicht noch einmal gegeneinander gelost.
+
+Das wiederholt sich, bis **eine** Gruppe übrig ist. Die ist der Sieger der Trostrunde, und
+WattMatt schreibt das oben in die Trostrunden-Karte.
+
+Es gibt hier keine zweite Hoffnungsrunde, keinen Turnierbaum, kein Spiel um Platz 3 — und
+**keine Namenserfassung**: die Trostrunde bleibt bis zum Schluss bei Nummern. Wenn der Sieger
+bei der Siegerehrung mit Namen genannt werden soll, sagen Sie den Namen einfach an.
+
+### 9.4 Zwei Turniere gleichzeitig
+
+Das ist der Teil, der Aufmerksamkeit braucht: ab jetzt laufen **zwei Runden gleichzeitig** —
+das Hauptfeld und die Trostrunde. Beide haben ihre eigene Karte im Steuerfenster, untereinander,
+beide mit eigenem *Auslosen*, eigener Warteschlange und eigenem *Runde abschließen*.
+
+Die **Tische teilen sich beide**. Ein Tisch, auf dem eine Partie des Hauptfelds läuft, steht in
+der Trostrunden-Karte als *belegt* — dort können Sie ihn nicht vergeben, und das ist Absicht.
+Wird ein Tisch frei, entscheiden **Sie**, welche Karte ihn bekommt: drücken Sie
+*Nächste Partie starten* auf der Karte, aus der die nächste Partie kommen soll.
+
+> **Tipp für den Raum.** Sagen Sie am Anfang der Trostrunde, welche Tische dafür gedacht sind
+> („Trostrunde an den beiden hinteren Tischen"), und vergeben Sie sie dann auch so. Das erspart
+> Ihnen den ganzen Abend Nachfragen.
+
+*Rückgängig* wirkt immer nur auf den Strang, in dem Sie gerade etwas gemacht haben. Ein Ergebnis
+im Hauptfeld zurückzunehmen rührt die Trostrunde nicht an, und umgekehrt.
+
+### 9.5 Auf die Leinwand
+
+Beide Karten haben ihren eigenen Knopf *auf den Beamer*. Die Leinwand zeigt immer **eine**
+Runde — die, die Sie zuletzt hingelegt haben. Wechseln Sie ruhig hin und her; das Publikum sieht
+an der Überschrift, was es gerade anschaut (*Runde 3* oder *Trostrunde 2*).
+
+---
+
+## 10. Ausscheidungsrunden
 
 Nach der Hoffnungsrunde ist das Feld eine Zahl, die sich sauber halbieren lässt. Ab jetzt
 wiederholt sich immer dasselbe:
@@ -607,7 +686,7 @@ Auslosung starten → Partien spielen → Sieger festlegen → Runde abschließe
 Das läuft genau wie in Abschnitt 7. Freilose gibt es hier normalerweise keine mehr, und auch
 hier werden zwei Gruppen nicht zweimal gegeneinander gelost.
 
-### 9.1 Wenn *Wiederholte Paarungen* erscheint
+### 10.1 Wenn *Wiederholte Paarungen* erscheint
 
 Sehr selten ist das Feld so klein und so weit gespielt, dass jede mögliche Paarung eine
 Wiederholung wäre. Dann fragt WattMatt nach, **bevor** die Auslosung auf die Leinwand geht:
@@ -653,7 +732,7 @@ Beamer** legt eine alte Runde auf die Leinwand; an der laufenden Runde ändert d
 
 ---
 
-## 10. Namenserfassung
+## 11. Namenserfassung
 
 Sinkt das Feld auf die eingestellte Feldgröße (voreingestellt 16), erscheint der Bereich
 **Namenserfassung**.
@@ -698,9 +777,9 @@ verlassen.
 
 ---
 
-## 11. Turnierbaum
+## 12. Turnierbaum
 
-### 11.1 Auslosen
+### 12.1 Auslosen
 
 Sind alle Namen erfasst, erscheint **Turnierbaum auslosen**. Ein Klick verteilt die
 Teilnehmenden zufällig auf die Plätze im Baum.
@@ -725,7 +804,7 @@ dazu, steht **Wiederholung** auf der Partie, und Sie können es im Saal ansagen.
 Die beiden Verlierer des Halbfinales spielen das **Spiel um Platz 3**. Es hängt als eigener
 Knoten unter dem Baum und wird zur selben Zeit angesetzt wie das Finale.
 
-### 11.2 Partien starten und entscheiden
+### 12.2 Partien starten und entscheiden
 
 Jede Partie im Baum bekommt einen Tisch, nach denselben Regeln wie in jeder Runde davor. Auf
 jeder Karte steht, was sie gerade tut:
@@ -744,7 +823,7 @@ in Gang setzen könnten.
 
 Den Sieger legen Sie fest wie in jeder Runde: Klick auf die Karte der Gewinnerin.
 
-### 11.3 Ein Ergebnis im Baum ändern
+### 12.3 Ein Ergebnis im Baum ändern
 
 Das ist der einzige Ort, an dem eine Korrektur etwas kostet. Wenn Sie im Achtelfinale den
 falschen Sieger eingetragen haben und das Viertelfinale schon gespielt ist, kann das
@@ -767,7 +846,7 @@ WattMatt sagt Ihnen deshalb vorher genau, was verloren geht:
 Lesen Sie die Liste, bevor Sie bestätigen. Und keine Sorge: Auch das lässt sich mit
 **Rückgängig** wieder zurücknehmen, verworfene Ergebnisse eingeschlossen.
 
-### 11.4 Was die Leinwand zeigt
+### 12.4 Was die Leinwand zeigt
 
 Unter **Beamer** im Turnierbaum-Bereich wählen Sie, wie viel vom Baum zu sehen ist:
 
@@ -778,7 +857,7 @@ Unter **Beamer** im Turnierbaum-Bereich wählen Sie, wie viel vom Baum zu sehen 
 Für die letzten beiden Partien lohnt sich das: Zwei Karten auf einer Leinwand sind deutlich
 eindrucksvoller als sechzehn.
 
-### 11.5 Finale abschließen
+### 12.5 Finale abschließen
 
 Sind alle Partien entschieden — Finale und Spiel um Platz 3 —, ist **Finale abschließen**
 verfügbar. Ist noch etwas offen, steht der Grund am Knopf: *Es sind noch Partien offen.
@@ -786,7 +865,7 @@ Entscheiden Sie zuerst alle Partien.*
 
 ---
 
-## 12. Siegerehrung
+## 13. Siegerehrung
 
 Das Podest kommt **nie** von selbst. Sie entscheiden, wann es erscheint — Sie halten
 vermutlich gerade eine Rede.
@@ -814,7 +893,7 @@ Ein bewährter Ablauf:
 
 ---
 
-## 13. Rückgängig machen
+## 14. Rückgängig machen
 
 Direkt unter der Kopfzeile stehen zwei Knöpfe, und sie sagen immer, **was** sie zurücknehmen:
 
@@ -838,9 +917,9 @@ nur zurücknehmen lassen sie sich dann nicht mehr.
 
 ---
 
-## 14. Speichern, Sicherung, Wiederherstellung
+## 15. Speichern, Sicherung, Wiederherstellung
 
-### 14.1 WattMatt speichert selbst
+### 15.1 WattMatt speichert selbst
 
 **Sie müssen während des Turniers nicht speichern.** WattMatt schreibt nach jeder Entscheidung
 von selbst auf die Festplatte, einen Sekundenbruchteil später.
@@ -857,7 +936,7 @@ In der Kopfzeile steht, wie es steht:
 **Turnier speichern** schreibt sofort. **Speichern unter…** legt eine Kopie an einem anderen
 Ort ab — etwa auf einem USB-Stick am Ende des Abends.
 
-### 14.2 Sicherungen
+### 15.2 Sicherungen
 
 Vor jedem Speichern rückt WattMatt die alten Stände weiter: Neben Ihrer Turnierdatei liegen bis
 zu drei Sicherungen mit den Endungen `.bak1`, `.bak2` und `.bak3`. `.bak1` ist die jüngste.
@@ -866,7 +945,7 @@ Diese Dateien öffnen sich **nicht** per Doppelklick. Wenn WattMatt eine Turnier
 lesen kann, bietet es Ihnen von sich aus **Letzte Sicherung öffnen** an — das ist der Weg
 dorthin.
 
-### 14.3 Nach einem Absturz
+### 15.3 Nach einem Absturz
 
 Stürzt der Laptop mitten im Turnier ab oder geht der Strom aus, starten Sie WattMatt einfach
 neu. Es meldet sich mit:
@@ -881,7 +960,7 @@ neu. Es meldet sich mit:
 Ein Klick, und Sie sind zurück — mit allen entschiedenen Partien der laufenden Runde. Es geht
 höchstens die eine Entscheidung verloren, die im Moment des Absturzes gefallen ist.
 
-### 14.4 Turnier schließen
+### 15.4 Turnier schließen
 
 **Turnier schließen** beendet nur das Turnier, nicht das Programm. Gibt es ungespeicherte
 Änderungen, fragt WattMatt vorher:
@@ -891,7 +970,7 @@ höchstens die eine Entscheidung verloren, die im Moment des Absturzes gefallen 
 
 ---
 
-## 15. Tastenkürzel
+## 16. Tastenkürzel
 
 Diese Kürzel gelten im ganzen Steuerfenster. **Während Sie in ein Textfeld tippen, sind sie
 abgeschaltet** — sonst würde ein `B` in einem Namen die Leinwand schwarz machen.
@@ -916,7 +995,7 @@ Zwei Kürzel, die Sie sich merken sollten, wenn Sie sich nur zwei merken:
 
 ---
 
-## 16. Die Beamer-Ansichten im Einzelnen
+## 17. Die Beamer-Ansichten im Einzelnen
 
 So sind die neun Ansichten aufgebaut. Das hilft, wenn Sie im Voraus wissen wollen, was das
 Publikum zu sehen bekommt.
@@ -1065,7 +1144,7 @@ Das Podest: Gold in der Mitte, höher als die beiden anderen.
 
 ---
 
-## 17. Wo WattMatt seine Dateien ablegt
+## 18. Wo WattMatt seine Dateien ablegt
 
 Alles liegt unter `%APPDATA%\WattMatt`. Diesen Pfad können Sie im Explorer oben in die
 Adresszeile eintippen.
@@ -1084,7 +1163,7 @@ Ein Turnier weiterzugeben heißt: die `.wattmatt`-Datei kopieren. Mehr braucht e
 
 ---
 
-## 18. Begriffe
+## 19. Begriffe
 
 | Wort | Bedeutung |
 | --- | --- |

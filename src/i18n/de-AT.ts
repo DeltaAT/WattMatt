@@ -73,6 +73,14 @@ export const deAT = {
       roundClosed: (params: { round: string }) => `Runde abgeschlossen: ${params.round}`,
       sceneShown: 'Beamer-Ansicht gewechselt',
 
+      /**
+       * Die Trostrunde (issue #73). Beide Antworten stehen im Verlauf, weil
+       * beide Entscheidungen sind: Der Host wird einmal gefragt, und ein „Nein“,
+       * das man nicht zurücknehmen kann, wäre eine Entscheidung ohne Rückweg.
+       */
+      consolationStarted: (params: { n: number }) => `Trostrunde gestartet: ${params.n} dabei`,
+      consolationDeclined: 'Trostrunde abgelehnt',
+
       /** Tables (issue #13). Each names the table, because a host taking a step
        * back needs to know which piece of furniture is about to move. */
       tablesAdded: (params: { n: number }) =>
@@ -885,6 +893,55 @@ export const deAT = {
       `Die Hoffnungsrunde entfällt: ${params.target} kommen weiter, das ist bereits eine Zweierpotenz.`,
   },
 
+  /**
+   * Die Trostrunde (issue #73, docs/TOURNAMENT-RULES.md §10).
+   *
+   * Ein eigenes Turnier neben dem Hauptfeld, für alle, die in der ersten Runde
+   * verloren haben und die Hoffnungsrunde nicht zurückgeholt hat. Die Texte
+   * sagen an zwei Stellen ausdrücklich, dass es *kein* Weg zurück ist: bei der
+   * Frage, ob sie überhaupt läuft, und beim Sieger. Ein Host, der das falsch
+   * ansagt, korrigiert es vor fünfzig Leuten.
+   */
+  consolation: {
+    label: 'Trostrunde',
+    /** `Trostrunde 2` — pro Strang gezählt, nicht über das ganze Turnier. */
+    title: (params: { n: number }) => `Trostrunde ${params.n}`,
+    sectionLabel: 'Trostrunde',
+
+    /** Die einmalige Frage, sobald die Hoffnungsrunde abgeschlossen ist. */
+    offerTitle: 'Trostrunde spielen?',
+    offer: (params: { n: number }) =>
+      `${params.n} sind ausgeschieden und könnten eine eigene Trostrunde spielen. Der Sieger der Trostrunde kommt nicht ins Hauptfeld zurück.`,
+    start: 'Trostrunde starten',
+    decline: 'Keine Trostrunde',
+    declined: 'Es wird keine Trostrunde gespielt.',
+
+    /** Auf dem abgeblendeten Startknopf, mit dem Grund dort, wo geklickt wurde. */
+    blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
+    blocker: {
+      qualifyingOpen: 'Die Qualifikationsrunde ist noch nicht abgeschlossen.',
+      repechageOpen: 'Die Hoffnungsrunde läuft noch. Sie entscheidet erst, wer übrig bleibt.',
+      alreadyAnswered: 'Über die Trostrunde ist bereits entschieden.',
+      fieldTooSmall: 'Es sind zu wenige übrig für eine Trostrunde.',
+    },
+
+    draw: 'Trostrunde auslosen',
+    close: 'Trostrunde-Runde abschließen',
+    showOnBeamer: 'Trostrunde auf den Beamer',
+
+    /** Der laufende Stand, neben den Partien. */
+    standing: (params: { n: number }) => `${params.n} noch im Rennen`,
+    /**
+     * Der Sieger. Die Trostrunde bleibt bis zuletzt bei Nummern — Namen werden
+     * nur im Hauptfeld erfasst (§6). Wenn er bei der Siegerehrung genannt
+     * werden soll, tippt der Host den Namen dort einmal ein.
+     */
+    winner: (params: { participant: string }) => `Sieger der Trostrunde: ${params.participant}`,
+    winnerHint: 'Der Sieger der Trostrunde kommt nicht ins Hauptfeld zurück.',
+    /** Zwischen zwei Runden der Trostrunde. */
+    none: 'Es ist keine Trostrunden-Partie offen. Losen Sie die nächste aus.',
+  },
+
   draw: {
     label: 'Auslosung',
     action: 'auslosen',
@@ -903,6 +960,8 @@ export const deAT = {
      */
     finalPhaseReached:
       'Das Feld ist bereits vollständig für die Finalphase. Wechseln Sie in die nächste Phase.',
+    /** The `CONSOLATION` track with no side event running (issue #73, §10). */
+    consolationNotRunning: 'Es läuft keine Trostrunde, für die ausgelost werden könnte.',
 
     /**
      * Wiederholte Paarungen (issue #72, docs/TOURNAMENT-RULES.md §3).

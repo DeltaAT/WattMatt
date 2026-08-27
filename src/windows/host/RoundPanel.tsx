@@ -27,7 +27,47 @@ import { RematchDialog, type RematchPair } from '@/windows/host/RematchDialog';
  *
  * Presentational. Every decision comes in as a callback from `useRound`, which
  * is what lets the whole panel be rendered in a test without a store.
+ *
+ * It draws **either** track (issue #73, docs/TOURNAMENT-RULES.md §10). The
+ * `Trostrunde` is the ordinary round of §3 repeated, so the host runs it with
+ * the same board — the same tables, the same queue, the same two-step
+ * correction — and only the four words around it change. A second panel would
+ * have been a copy that drifted, and a host running two tournaments at once is
+ * exactly the person who cannot afford two different boards to read.
  */
+
+/** The four strings that differ between the two tracks. */
+export interface RoundPanelCopy {
+  /** The heading, and the section's accessible name. */
+  sectionLabel: string;
+  /** The draw button. */
+  drawAction: string;
+  /** The button that puts this board on the projector. */
+  beamerAction: string;
+  /** The button that closes the open round of this track. */
+  closeAction: string;
+  /** What is shown between two rounds of this track. */
+  none: string;
+}
+
+/** The main field — what the panel said before there was a second track. */
+export const MAIN_ROUND_COPY: RoundPanelCopy = {
+  sectionLabel: de.round.sectionLabel,
+  drawAction: de.draw.start,
+  beamerAction: de.round.showOnBeamer,
+  closeAction: de.round.close,
+  none: de.round.none,
+};
+
+/** The `Trostrunde` (issue #73). */
+export const CONSOLATION_ROUND_COPY: RoundPanelCopy = {
+  sectionLabel: de.consolation.sectionLabel,
+  drawAction: de.consolation.draw,
+  beamerAction: de.consolation.showOnBeamer,
+  closeAction: de.consolation.close,
+  none: de.consolation.none,
+};
+
 export function RoundPanel({
   round,
   board,
@@ -41,6 +81,7 @@ export function RoundPanel({
   canClose,
   undecided,
   rematches,
+  copy = MAIN_ROUND_COPY,
   onPreviewDraw,
   onDraw,
   onSetWinner,
@@ -61,6 +102,8 @@ export function RoundPanel({
   closeBlockers: readonly CloseRoundBlocker[];
   canClose: boolean;
   undecided: number;
+  /** Which track's words the board is drawn in. Defaults to the main field. */
+  copy?: RoundPanelCopy;
   /** The matches of this round that repeat an earlier meeting (issue #72). */
   rematches: ReadonlySet<MatchId>;
   /**
@@ -145,10 +188,10 @@ export function RoundPanel({
   );
 
   return (
-    <section className="relative flex flex-col gap-3" aria-label={de.round.sectionLabel}>
+    <section className="relative flex flex-col gap-3" aria-label={copy.sectionLabel}>
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="wm-display text-host-lg font-bold">
-          {round === null ? de.round.sectionLabel : round.label}
+          {round === null ? copy.sectionLabel : round.label}
         </h2>
 
         {round === null ? null : (
@@ -173,7 +216,7 @@ export function RoundPanel({
             disabled={round === null}
             data-round-action="beamer"
           >
-            {de.round.showOnBeamer}
+            {copy.beamerAction}
           </button>
 
           <button
@@ -185,11 +228,11 @@ export function RoundPanel({
             // pointer and the screen reader (the pre-start panel does the same).
             title={drawReason === undefined ? undefined : de.draw.blocked({ reason: drawReason })}
             aria-label={
-              drawReason === undefined ? de.draw.start : de.draw.blocked({ reason: drawReason })
+              drawReason === undefined ? copy.drawAction : de.draw.blocked({ reason: drawReason })
             }
             data-round-action="draw"
           >
-            {de.draw.start}
+            {copy.drawAction}
           </button>
         </div>
       </header>
@@ -199,7 +242,7 @@ export function RoundPanel({
         // never will be in this phase — and the second is the more useful thing
         // to read (docs/OPEN-QUESTIONS.md #49).
         <p className="text-host-sm text-wm-text-muted" data-round-none="">
-          {drawReason ?? de.round.none}
+          {drawReason ?? copy.none}
         </p>
       ) : (
         <>
@@ -270,12 +313,12 @@ export function RoundPanel({
               }
               aria-label={
                 closeReason === undefined
-                  ? de.round.close
+                  ? copy.closeAction
                   : de.round.closeBlocked({ reason: closeReason })
               }
               data-round-action="close"
             >
-              {de.round.close}
+              {copy.closeAction}
             </button>
 
             {closeReason === undefined ? null : (
@@ -353,9 +396,7 @@ function TableColumn({
       <p className="wm-label flex items-baseline gap-2">
         <span className="wm-display text-host-sm text-wm-text">{slot.table.label}</span>
         {slot.match === null ? (
-          <span className="text-wm-text-faint">
-            {slot.table.status === 'DISABLED' ? de.table.disabled : de.table.free}
-          </span>
+          <span className="text-wm-text-faint">{emptySlotLabel(slot)}</span>
         ) : null}
       </p>
 
@@ -462,6 +503,22 @@ function Chips({
   );
 }
 
+/**
+ * What a table with none of *this* board's matches on it is doing.
+ *
+ * Three answers rather than two since issue #73. A table can now be `OCCUPIED`
+ * by the other track's match, and the board the host is reading has no card for
+ * it — calling that `frei` would invite them to send a pair to a table with two
+ * people already sitting at it. The engine would refuse, but the host would
+ * have said it out loud first (docs/TOURNAMENT-RULES.md §10).
+ */
+function emptySlotLabel(slot: TableSlot): string {
+  if (slot.table.status === 'DISABLED') {
+    return de.table.disabled;
+  }
+  return slot.table.status === 'OCCUPIED' ? de.table.occupied : de.table.free;
+}
+
 /** The German for a draw blocker, in the wording this tournament uses. */
 function drawBlockerText(blocker: DrawBlocker, participant: ParticipantLabel): string {
   switch (blocker) {
@@ -475,6 +532,8 @@ function drawBlockerText(blocker: DrawBlocker, participant: ParticipantLabel): s
       return de.draw.qualifyingAlreadyDrawn;
     case 'FINAL_PHASE_REACHED':
       return de.draw.finalPhaseReached;
+    case 'CONSOLATION_NOT_RUNNING':
+      return de.draw.consolationNotRunning;
   }
 }
 

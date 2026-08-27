@@ -153,6 +153,21 @@ export const tournamentSnapshotSchema = z.object({
    */
   round: roundSnapshotSchema.nullable(),
   /**
+   * The open `Trostrunde` round and its matches, or null and empty (issue #73).
+   *
+   * A second pair of fields rather than a list of open rounds, because that is
+   * what the beamer actually has to answer: `ROUND_BOARD` and `DRAW` name one
+   * round, and the projector has to be able to find it whichever of the two
+   * tracks it is on (docs/TOURNAMENT-RULES.md §10). Keeping the main field in
+   * `round` and `matches` means every scene written before the side event
+   * existed keeps drawing exactly what it drew.
+   *
+   * The two lists never share a match: a match belongs to one round, and the
+   * two rounds are on different tracks by construction.
+   */
+  consolationRound: roundSnapshotSchema.nullable(),
+  consolationMatches: z.array(matchSchema),
+  /**
    * The running `Hoffnungsrunde`, or null (issue #21).
    *
    * Sent for the same reason `round` is: the `REPECHAGE` scene draws it, and
@@ -255,6 +270,10 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   matches: [],
   // Nothing has been drawn, so there is no round to name.
   round: null,
+  // Nothing is open on the side event's track either, and for most of an
+  // evening there is no side event at all (docs/TOURNAMENT-RULES.md §10).
+  consolationRound: null,
+  consolationMatches: [],
   // The common case for a real tournament too: the phase is skipped whenever
   // the qualifying round leaves a power of two standing.
   repechage: null,
@@ -276,6 +295,7 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
  */
 export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot {
   const round = currentRound(tournament);
+  const consolationRound = currentRound(tournament, 'CONSOLATION');
   const repechage = repechageState(tournament);
 
   return {
@@ -293,6 +313,11 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
     // layer serialises, and Zod's inferred array type is a mutable one.
     matches: round === null ? [...matchesOnTables(tournament)] : [...round.matches],
     round: round === null ? null : withoutMatches(round),
+    // Only the open one. A closed `Trostrunde` round travels in `history` with
+    // every other closed round, which is what the projector already reaches
+    // into when the host points it at a past board (issue #22).
+    consolationRound: consolationRound === null ? null : withoutMatches(consolationRound),
+    consolationMatches: consolationRound === null ? [] : [...consolationRound.matches],
     // Copied out of the readonly projection for the same reason `matches` is:
     // what crosses the channel is a value the sync layer serialises, and the
     // schema's inferred arrays are mutable ones.

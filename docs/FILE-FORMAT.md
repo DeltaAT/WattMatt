@@ -34,11 +34,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v4)
+## Schema (v5)
 
 ```jsonc
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -76,7 +76,11 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "nextTableNumber": 2,
 
   "groups": [
-    // name is null until the naming phase. status: ACTIVE | ELIMINATED
+    // name is null until the naming phase.
+    // status: ACTIVE | CONSOLATION | ELIMINATED. CONSOLATION means the group is
+    // playing in the Trostrunde, the side event of docs/TOURNAMENT-RULES.md §10
+    // — in it, and therefore not in the main field, which is what keeps it out
+    // of every main-field draw and count.
     { "id": "grp_1", "number": 1, "name": null, "status": "ACTIVE" }
   ],
 
@@ -89,8 +93,15 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "rounds": [
     {
       "id": "rnd_1",
+      // Counted per track, not across the file: the Trostrunde's first round is
+      // "Trostrunde 1" however many main-field rounds have been played.
       "index": 1,
-      "kind": "QUALIFYING",         // QUALIFYING | REPECHAGE | ELIMINATION | BRACKET
+      // QUALIFYING | REPECHAGE | ELIMINATION | BRACKET | CONSOLATION
+      "kind": "QUALIFYING",
+      // MAIN | CONSOLATION — which of the two parallel tournaments this round
+      // belongs to (docs/TOURNAMENT-RULES.md §10). Two rounds can be open at
+      // once, one per track, and this is what tells them apart.
+      "track": "MAIN",
       "label": "Runde 1",
       "state": "RUNNING",           // DRAWN | RUNNING | CLOSED
       "matches": [
@@ -115,6 +126,17 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
     "pool": [ "grp_4", "grp_11" ],
     "draws": [ { "groupId": "grp_9", "accepted": true } ],  // accepted null = not yet answered
     "fallbackUsed": null            // null | BYES | REOPEN_DECLINED — the last one taken
+  },
+
+  // The Trostrunde (docs/TOURNAMENT-RULES.md §10). null while the host has not
+  // been asked, which is the whole of every tournament up to the close of the
+  // Hoffnungsrunde — and stays null for a file written before v5.
+  // state: DECLINED | RUNNING | FINISHED. There is no pool here, unlike the
+  // repechage: the field is not drawn out of a pot, it is simply every group
+  // whose status is CONSOLATION.
+  "consolation": {
+    "state": "RUNNING",
+    "winnerId": null                // the last group standing, once there is one
   },
 
   "bracket": {

@@ -449,7 +449,7 @@ export async function runDryRun(spec: DryRunSpec, hooks: DryRunHooks = {}): Prom
       }
       await act(
         'MATCH_ASSIGNED',
-        () => startNextMatch(store, table.id, clock),
+        () => startNextMatch(store, table.id, 'MAIN', clock),
         `table ${table.label}`,
       );
     }
@@ -526,7 +526,7 @@ export async function runDryRun(spec: DryRunSpec, hooks: DryRunHooks = {}): Prom
 
   const runRound = async (): Promise<void> => {
     clock.advance(timing.drawMs);
-    await act('ROUND_DRAWN', () => drawRound(store, clock), 'draw blockers');
+    await act('ROUND_DRAWN', () => drawRound(store, 'MAIN', clock), 'draw blockers');
     await playRound();
     await act('ROUND_CLOSED', () => closeRound(store), 'close blockers');
   };

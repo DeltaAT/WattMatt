@@ -43,6 +43,22 @@ export {
   type FinalStandings,
 } from '@/domain/bracket';
 export {
+  canStartConsolation,
+  closeConsolationRound,
+  consolationBlockers,
+  consolationField,
+  consolationSummary,
+  declineConsolation,
+  drawConsolationRound,
+  isConsolationOffered,
+  isConsolationRunning,
+  settleConsolation,
+  startConsolation,
+  MINIMUM_CONSOLATION_FIELD,
+  type ConsolationBlocker,
+  type ConsolationSummary,
+} from '@/domain/consolation';
+export {
   assignMatch,
   assignNextQueuedMatch,
   byesOwed,
@@ -191,8 +207,10 @@ export {
 } from '@/domain/schema';
 export {
   activeGroups,
+  consolationGroups,
   currentRound,
   freeTables,
+  roundsOfTrack,
   undecidedMatches,
   usableTables,
 } from '@/domain/selectors';
@@ -262,7 +280,10 @@ export {
   repechageDrawSchema,
   repechageFallbackSchema,
   repechageSchema,
+  consolationSchema,
+  consolationStateSchema,
   roundKindSchema,
+  roundTrackSchema,
   roundSchema,
   roundStateSchema,
   settingsSchema,
@@ -285,7 +306,10 @@ export {
   type RepechageDraw,
   type RepechageFallback,
   type Round,
+  type Consolation,
+  type ConsolationState,
   type RoundKind,
+  type RoundTrack,
   type RoundState,
   type Settings,
   type Table,

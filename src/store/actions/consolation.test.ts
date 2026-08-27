@@ -1,0 +1,317 @@
+import { describe, expect, it } from 'vitest';
+
+import { consolationField } from '@/domain/consolation';
+import { closeRound as closeRoundIn, drawRound as drawRoundIn, setWinner } from '@/domain/draw';
+import { consolationGroups, currentRound, roundsOfTrack } from '@/domain/selectors';
+import { FIXED_NOW, fixedClock, group, table, tournament } from '@/domain/testFixtures';
+import type { Round, Tournament } from '@/domain/types';
+import { de } from '@/i18n';
+import { declineConsolation, startConsolation } from '@/store/actions/consolation';
+import { closeRound, drawRound, setMatchWinner, startNextMatch } from '@/store/actions/round';
+import {
+  createTournamentStore,
+  INITIAL_TOURNAMENT_STATE,
+  type TournamentStore,
+} from '@/store/tournamentStore';
+import { nextUndo } from '@/store/undo';
+
+/**
+ * The `Trostrunde` through the store (issue #73,
+ * docs/TOURNAMENT-RULES.md §10).
+ *
+ * The rules are `@/domain/consolation`'s and are tested there. What is checked
+ * here is what the store adds: the German the undo button reads, the audit
+ * entry the file keeps, that the round actions really do run the side event's
+ * track — and the property the issue names last and cares about most, that an
+ * undo in one track leaves the other one exactly as it was.
+ */
+
+const CLOCK = fixedClock();
+
+/** `groups` participants played through the qualifying round: half through, half out. */
+function afterQualifying(groups = 16, tables = 4): Tournament {
+  const ready = tournament({
+    phase: 'QUALIFYING',
+    groups: Array.from({ length: groups }, (_unused, index) => group(index + 1)),
+    nextGroupNumber: groups + 1,
+    tables: Array.from({ length: tables }, (_unused, index) => table(index + 1)),
+    nextTableNumber: tables + 1,
+  });
+
+  const drawn = drawRoundIn(ready, { at: FIXED_NOW, label: (index) => `Round ${index}` });
+  let next = drawn;
+  for (const match of currentRound(next)?.matches ?? []) {
+    if (match.b !== null) {
+      next = setWinner(next, match.id, match.a);
+    }
+  }
+  return closeRoundIn(next);
+}
+
+function setup(document: Tournament = afterQualifying()): TournamentStore {
+  return createTournamentStore(
+    { ...INITIAL_TOURNAMENT_STATE, document, file: { status: 'saved', path: 'C:\\T.wattmatt' } },
+    { clock: CLOCK },
+  );
+}
+
+const documentOf = (store: TournamentStore): Tournament => {
+  const document = store.getState().document;
+  if (document === null) {
+    throw new Error('no tournament open');
+  }
+  return document;
+};
+
+const lastLog = (store: TournamentStore) => documentOf(store).log.at(-1);
+
+const trackOf = (document: Tournament, track: 'MAIN' | 'CONSOLATION'): readonly Round[] =>
+  roundsOfTrack(document, track);
+
+describe('startConsolation', () => {
+  it('moves the field across and records the decision in one commit', () => {
+    const store = setup();
+    const field = consolationField(documentOf(store));
+
+    startConsolation(store);
+
+    expect(consolationGroups(documentOf(store))).toHaveLength(field.length);
+    expect(documentOf(store).consolation).toEqual({ state: 'RUNNING', winnerId: null });
+    expect(nextUndo(store.getState().history)?.label).toBe(
+      de.undo.action.consolationStarted({ n: field.length }),
+    );
+  });
+
+  it('writes who was in it when the host said yes', () => {
+    const store = setup();
+    const field = consolationField(documentOf(store));
+
+    startConsolation(store);
+
+    expect(lastLog(store)).toMatchObject({
+      action: 'CONSOLATION_STARTED',
+      payload: { field: field.map((entry) => entry.id), size: field.length },
+    });
+  });
+
+  it('commits nothing when a blocker is standing', () => {
+    // Started once, so the second press is answering a question that has been
+    // answered — the guard that makes a stale click during a live event free.
+    const store = setup();
+    startConsolation(store);
+    const revision = store.getState().revision;
+
+    startConsolation(store);
+
+    expect(store.getState().revision).toBe(revision);
+  });
+
+  it('commits nothing with no tournament open', () => {
+    const store = createTournamentStore(INITIAL_TOURNAMENT_STATE, { clock: CLOCK });
+
+    startConsolation(store);
+
+    expect(store.getState().revision).toBe(INITIAL_TOURNAMENT_STATE.revision);
+  });
+});
+
+describe('declineConsolation', () => {
+  it('records the answer so the panel stops asking', () => {
+    const store = setup();
+
+    declineConsolation(store);
+
+    expect(documentOf(store).consolation).toEqual({ state: 'DECLINED', winnerId: null });
+    expect(nextUndo(store.getState().history)?.label).toBe(de.undo.action.consolationDeclined);
+    expect(lastLog(store)).toMatchObject({ action: 'CONSOLATION_DECLINED' });
+  });
+
+  it('is undoable, so a host who changes their mind is not stuck', () => {
+    const store = setup();
+    declineConsolation(store);
+
+    store.undo();
+
+    expect(documentOf(store).consolation).toBeNull();
+  });
+});
+
+describe('the round actions on the CONSOLATION track', () => {
+  function running(): TournamentStore {
+    const store = setup();
+    startConsolation(store);
+    return store;
+  }
+
+  it('draws a Trostrunde round and stages it on the beamer', () => {
+    const store = running();
+
+    drawRound(store, 'CONSOLATION');
+
+    const drawn = currentRound(documentOf(store), 'CONSOLATION');
+    expect(drawn?.kind).toBe('CONSOLATION');
+    expect(drawn?.track).toBe('CONSOLATION');
+    expect(drawn?.label).toBe(de.consolation.title({ n: 1 }));
+    expect(store.getState().scene).toEqual({ id: 'DRAW', roundId: drawn?.id });
+  });
+
+  it('leaves the main field with nothing open', () => {
+    const store = running();
+
+    drawRound(store, 'CONSOLATION');
+
+    expect(currentRound(documentOf(store), 'MAIN')).toBeNull();
+  });
+
+  it('records which track a match was started on', () => {
+    const store = running();
+    drawRound(store, 'CONSOLATION');
+    const free = documentOf(store).tables.find((seat) => seat.status === 'FREE');
+    if (free === undefined) {
+      return;
+    }
+
+    startNextMatch(store, free.id, 'CONSOLATION');
+
+    expect(lastLog(store)).toMatchObject({
+      action: 'MATCH_ASSIGNED',
+      payload: { track: 'CONSOLATION' },
+    });
+  });
+
+  it('records the winner and the loser of a closed Trostrunde round', () => {
+    const store = running();
+    drawRound(store, 'CONSOLATION');
+    playOutOpen(store, 'CONSOLATION');
+
+    closeRound(store, 'CONSOLATION');
+
+    expect(lastLog(store)).toMatchObject({
+      action: 'ROUND_CLOSED',
+      payload: { track: 'CONSOLATION' },
+    });
+  });
+
+  it('records the winner the moment the last round leaves one group standing', () => {
+    const store = running();
+    // 8 in the side event: 4, then 2, then 1.
+    for (let round = 0; round < 3; round += 1) {
+      drawRound(store, 'CONSOLATION');
+      playOutOpen(store, 'CONSOLATION');
+      closeRound(store, 'CONSOLATION');
+    }
+
+    const document = documentOf(store);
+    expect(document.consolation?.state).toBe('FINISHED');
+    expect(document.consolation?.winnerId).toBe(consolationGroups(document)[0]?.id);
+    expect(trackOf(document, 'CONSOLATION')).toHaveLength(3);
+  });
+
+  /*
+   * The close and the winner are one commit, not two. An undo that took the
+   * close back but left the side event decided would offer the host a draw with
+   * one group in the pot (CLAUDE.md golden rule 6).
+   */
+  it('takes the winner back with the close it came from', () => {
+    const store = running();
+    for (let round = 0; round < 3; round += 1) {
+      drawRound(store, 'CONSOLATION');
+      playOutOpen(store, 'CONSOLATION');
+      closeRound(store, 'CONSOLATION');
+    }
+
+    store.undo();
+
+    expect(documentOf(store).consolation?.state).toBe('RUNNING');
+    expect(documentOf(store).consolation?.winnerId).toBeNull();
+    expect(currentRound(documentOf(store), 'CONSOLATION')).not.toBeNull();
+  });
+});
+
+describe('undo across the two tracks', () => {
+  /**
+   * Both tracks live: the main field in an elimination round, the side event in
+   * its first. 16 groups is the smallest field that reaches this — 8 through,
+   * 8 out — with the phase moved on by hand, because §5's transition is issue
+   * #22's and not what is under test here.
+   */
+  function bothLive(): TournamentStore {
+    // 64 groups: 32 through, 32 out. Already a power of two, so §4 is skipped
+    // (§9 case 2), and 32 is still above the final phase, so §5 has an
+    // elimination round left to deal — the only state in which both tracks are
+    // genuinely live at the same time.
+    const store = setup(afterQualifying(64));
+    startConsolation(store);
+    // The phase moves on by hand: §5's transition is issue #22's and not what
+    // is under test here.
+    const advanced: Tournament = { ...documentOf(store), phase: 'ELIMINATION' };
+    store.commit(() => ({ document: advanced }), { undoLabel: de.phase.eliminationRound });
+    drawRound(store, 'MAIN');
+    drawRound(store, 'CONSOLATION');
+    return store;
+  }
+
+  it('leaves the Trostrunde byte-identical when a main-field result is undone', () => {
+    const store = bothLive();
+    const before = trackOf(documentOf(store), 'CONSOLATION');
+    const consolationBefore = documentOf(store).consolation;
+
+    const target = currentRound(documentOf(store), 'MAIN')?.matches.find(
+      (match) => match.b !== null,
+    );
+    expect(target).toBeDefined();
+
+    setMatchWinner(store, target!.id, target!.a);
+    // Untouched while the result stands…
+    expect(trackOf(documentOf(store), 'CONSOLATION')).toEqual(before);
+
+    store.undo();
+
+    // …and untouched after the undo, which is the property the issue asks for.
+    expect(trackOf(documentOf(store), 'CONSOLATION')).toEqual(before);
+    expect(documentOf(store).consolation).toEqual(consolationBefore);
+  });
+
+  it('leaves the main field byte-identical when a Trostrunde result is undone', () => {
+    const store = bothLive();
+    const mainBefore = trackOf(documentOf(store), 'MAIN');
+    const target = currentRound(documentOf(store), 'CONSOLATION')?.matches.find(
+      (match) => match.b !== null,
+    );
+    expect(target).toBeDefined();
+
+    setMatchWinner(store, target!.id, target!.a);
+
+    // Still untouched while the result stands…
+    expect(trackOf(documentOf(store), 'MAIN')).toEqual(mainBefore);
+
+    store.undo();
+
+    // …and still untouched after the undo, which is the property the issue
+    // asks for: the two halves of the evening do not reach into each other.
+    expect(trackOf(documentOf(store), 'MAIN')).toEqual(mainBefore);
+  });
+
+  it('keeps every group of one track out of the other one’s rounds', () => {
+    const store = bothLive();
+    const document = documentOf(store);
+    const sideEvent = new Set(consolationGroups(document).map((entry) => entry.id));
+
+    for (const match of currentRound(document, 'MAIN')?.matches ?? []) {
+      expect(sideEvent.has(match.a)).toBe(false);
+      if (match.b !== null) {
+        expect(sideEvent.has(match.b)).toBe(false);
+      }
+    }
+  });
+});
+
+/** Marks every open match of the track's round, `a` winning. */
+function playOutOpen(store: TournamentStore, track: 'MAIN' | 'CONSOLATION'): void {
+  const round = currentRound(documentOf(store), track);
+  for (const match of round?.matches ?? []) {
+    if (match.b !== null && match.winnerId === null) {
+      setMatchWinner(store, match.id, match.a);
+    }
+  }
+}

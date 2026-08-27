@@ -6,6 +6,7 @@ export {
   showBracketOnBeamer,
   startNextBracketMatch,
 } from '@/store/actions/bracket';
+export { declineConsolation, startConsolation } from '@/store/actions/consolation';
 export {
   closeDocument,
   setDocumentSaved,

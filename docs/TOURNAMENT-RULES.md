@@ -27,6 +27,11 @@ SETUP → QUALIFYING → REPECHAGE? → ELIMINATION* → NAMING → BRACKET → 
 
 `REPECHAGE` is skipped when it is not needed. `ELIMINATION` repeats.
 
+The phases above are the **main field**. From the close of the `REPECHAGE` onwards a second,
+parallel tournament may be running beside them — the `Trostrunde` of §10 — with rounds of its
+own, on the same tables, in the same room. It is not a phase and never appears in the line
+above: the main field's phase machine neither waits for it nor knows about it.
+
 ## 2. SETUP
 
 - The host creates tables (at least 1) and groups (at least 2) — groups via a `+` control.
@@ -141,6 +146,16 @@ This situation is logged prominently. It can only occur when a large share of lo
 `Freilose` term is zero unless fallback 1 was taken, so in the ordinary case this is the
 plainer statement that `|W|` is a power of two.
 
+**Declining.** A group that answers *Nein* leaves the main field. It does **not** leave the
+evening: unless the host declined the `Trostrunde`, it drops into the side event with everyone
+else the lottery did not take (§10, docs/OPEN-QUESTIONS.md #6). This is the one place the two
+sections touch, and the direction is one-way — nothing in §10 puts anybody back into `W`.
+
+**Ordering.** This phase runs **before** the `Trostrunde` is started, always. The lottery is
+what decides who is left in `L`, so the side event's field is not known until the pot is
+closed. The host may be *asked* about the side event as soon as the qualifying round closes,
+but the question cannot be *answered into a field* before this phase is over.
+
 ## 5. ELIMINATION rounds
 
 ```text
@@ -210,3 +225,69 @@ fire automatically the instant the final is decided, because the host may still 
 | 13 | Two groups already played each other | They are never drawn against each other again (§3) |
 | 14 | No rematch-free pairing exists at all | Fewest repeats, named to the host, confirmed before the beamer sees them (§3) |
 | 15 | Rematch in a bracket round after the first | Allowed and marked — it is decided by results, not by a draw (§7) |
+| 16 | `Trostrunde` field of 1 or 0 | No side event at all, and no empty round drawn (§10) |
+| 17 | Group declines the `Hoffnungsrunde` | Out of the main field, into the `Trostrunde` (§4, §10) |
+| 18 | Both tracks live at once | No table carries two matches; each track has its own queue (§10) |
+| 19 | Undo during a live `Trostrunde` | Leaves the other track untouched (§10) |
+
+## 10. `Trostrunde` (consolation round)
+
+A **self-contained side event** for the groups knocked out in the qualifying round. Optional:
+the host is asked once, and a tournament whose host says no behaves exactly as it did before
+this section existed.
+
+**Its winner does not rejoin the main field.** The only route back is the §4 lottery. This is
+the sentence the host says out loud, and it is why the panel repeats it in two places.
+
+### Field
+
+```text
+L      := the losers of the qualifying round (§3)
+field  := L minus everyone the Hoffnungsrunde drew back up (§4)
+```
+
+Decliners are in the field, not out of it (§4 "Declining"). A loser the lottery never reached
+is in it too. Nobody else ever is: the side event is for the **first-round** losers, and by the
+time an elimination round has produced any, this section has long since been answered.
+
+If `|field| < 2` there is **no `Trostrunde`**. One group has nobody to play and none has nobody
+at all; neither may produce a round with nothing in it (docs/OPEN-QUESTIONS.md #86).
+
+### Structure
+
+It feeds no bracket, so it needs no power-of-two field. It is §3 repeated:
+
+```text
+while more than one group is left:
+    shuffle; pair; odd count → Freilos; assign tables (§3); play; close
+the one group left is the Trostrunde winner
+```
+
+No second lottery, no naming phase, no bracket, no third-place match. The no-rematch rule of §3
+applies to it out of the **same** history as the main field: two groups who met in the
+qualifying round are not drawn against each other again here.
+
+It stays **numbers-only** throughout. §6 names the main field and nobody else; if the
+`Trostrunde` winner is to be named at the `Siegerehrung`, the host types that name there, once.
+
+### Two rounds at once
+
+From the moment the side event is started, the main field's rounds and its own run **in
+parallel**. Every round carries a `track` — `MAIN` or `CONSOLATION` — and "the open round" is a
+question asked of one track at a time.
+
+- **Tables are one pool.** Both tracks draw from the `FREE` tables of §3 and a table is never
+  handed to a second match while it carries one. Which tables a track *may* use is a separate
+  question the host answers by reserving them, and it is issue #79's.
+- **Queues are per track.** A freed table is offered the next waiting pair of the track the
+  host points it at.
+- **Undo does not cross tracks.** An action on one track does not touch the other, so taking it
+  back cannot either.
+- **The beamer shows one track at a time**, and which one is the host's decision like every
+  other scene (§0, CLAUDE.md golden rule 3).
+
+### Ceremony
+
+The `Trostrunde` winner is announced at the `Siegerehrung` (§8) — after the podium, as a
+separate moment, never mixed into the three places. It is a different tournament, and putting
+its winner on the same podium would tell the room it came fourth.
