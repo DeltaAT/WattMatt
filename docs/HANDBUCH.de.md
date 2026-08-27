@@ -1044,51 +1044,51 @@ auf ein Bild.
    Tische
 
    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-   │ Tisch 1      │  │ Tisch 2      │  │ Tisch 3      │
-   │ Gruppe 4     │  │ Frei         │  │ Gesperrt     │
-   │ gegen        │  │              │  │              │
-   │ Gruppe 9     │  │              │  │              │
+   │ 1    4    9  │  │ 2    Frei    │  │ 3   Gesperrt │
    └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 Wer wo spielt. Die Ansicht für den Moment, in dem das halbe Publikum wissen will, wo es
-hinsoll.
+hinsoll. Links die Tischnummer, daneben groß die beiden Gruppennummern — auf der Leinwand
+stehen nur Zahlen, ohne die Wörter *Tisch* und *Gruppe*. Haben Sie einen Tisch umbenannt,
+steht Ihr eigener Name dafür da.
 
 ### 4 — Auslosung
 
 ```text
-   Runde 1                                  6 von 8 gezogen
+   Auslosung                                6 von 8 gezogen
 
-   Gruppe 4  gegen  Gruppe 9        │  Noch zu ziehen
-   Tisch 1                          │
+        1                           │  Noch zu ziehen
+    4        9                      │
                                     │   [ 1] [ 5]
-   Gruppe 2  gegen  Gruppe 7        │   [11] [16]
-   Tisch 2                          │
+        2                           │   [11] [16]
+    2        7                      │
                                     │
-   Gruppe 3  gegen  Gruppe 12       │
    Wartet auf Tisch                 │
+    3       12                      │
 ```
 
-Links wachsen die Paarungen, rechts leert sich der Topf. Unter jeder Paarung steht der Tisch
-oder **Wartet auf Tisch**. Ein Freilos bekommt eine eigene Farbe und das Wort *Freilos — steigt
-auf*. Ist alles gezogen, steht rechts **Alle gezogen.**
+Links wachsen die Paarungen, rechts leert sich der Topf. Jede Karte hat oben klein den Tisch
+— nur seine Nummer — oder **Wartet auf Tisch**, und darunter groß die beiden Gruppennummern.
+Ein Freilos bekommt eine eigene Farbe und das Wort *Freilos — steigt auf*. Ist alles gezogen,
+steht rechts **Alle gezogen.**
 
 ### 5 — Runde
 
 ```text
    Runde 1
 
-   Tisch 1                    Tisch 2                  Warteschlange
-   ┌────────────────────┐    ┌────────────────────┐    Gruppe 1 gegen 11
-   │       LÄUFT        │    │      BEENDET       │    Gruppe 5 gegen 16
-   │ Gruppe 4           │    │ Gruppe 2   SIEGER  │
-   │ gegen              │    │ gegen              │
-   │ Gruppe 9           │    │ Gruppe 7  AUSGESCH.│
-   └────────────────────┘    └────────────────────┘
+   1                          2                        Warteschlange
+   ┌────────────────────┐    ┌────────────────────┐    ┌────────────┐
+   │       LÄUFT        │    │      BEENDET       │    │   WARTET   │
+   │ ·  4               │    │ ✓  2       SIEGER  │    │ ·  1        │
+   │ ·  9               │    │ ✗  7  AUSGESCHIEDEN│    │ · 11        │
+   └────────────────────┘    └────────────────────┘    └────────────┘
 ```
 
-Das Bild, das den größten Teil des Abends auf der Leinwand steht. Jede Karte trägt oben
-**WARTET**, **LÄUFT** oder **BEENDET**. Ein Ergebnis wird immer dreifach angezeigt: durch die
+Das Bild, das den größten Teil des Abends auf der Leinwand steht. Über jeder Spalte steht die
+Tischnummer, auf den Karten stehen die Gruppennummern — groß, weil auf der Leinwand kein Wort
+davorsteht. Jede Karte trägt oben **WARTET**, **LÄUFT** oder **BEENDET**. Ein Ergebnis wird immer dreifach angezeigt: durch die
 Farbe, durch ein Zeichen und durch das Wort **SIEGER** oder **AUSGESCHIEDEN**. Farbe allein
 genügt nicht — etwa jeder zwölfte Mann unterscheidet Rot und Grün schlecht, und ein heller Saal
 wäscht die Farben ohnehin aus.
@@ -1104,9 +1104,9 @@ wäscht die Farben ohnehin aus.
    [14 VERZICHTET] [19 IM TOPF   ]            │   [ 7 NACHGERÜCKT ]
 ```
 
-Links der Topf, rechts die, die es zurückgeschafft haben. Jede Karte sagt in Worten, was mit
-ihr passiert ist: **IM TOPF**, **GEZOGEN**, **NACHGERÜCKT**, **VERZICHTET**. Oben rechts steht
-mit, wie viele Plätze noch frei sind.
+Links der Topf, rechts die, die es zurückgeschafft haben — beides als Gruppennummern, ohne das
+Wort davor. Jede Karte sagt in Worten, was mit ihr passiert ist: **IM TOPF**, **GEZOGEN**,
+**NACHGERÜCKT**, **VERZICHTET**. Oben rechts steht mit, wie viele Plätze noch frei sind.
 
 ### 7 — Namenserfassung
 

@@ -1,12 +1,12 @@
 import type { GroupId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
-import type { Group, ParticipantLabel } from '@/domain/types';
+import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
-import { fitNameType, type NameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
-import { groupLabel } from '@/windows/groupLabel';
+import { groupNumber } from '@/windows/groupLabel';
+import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `TABLE_OVERVIEW`: who plays where, on the projector (issue #13).
@@ -66,7 +66,6 @@ export function TableOverviewScene({
                   key={slot.table.id}
                   slot={slot}
                   groups={byId}
-                  participant={tournament.participantLabel}
                   size={density(board.length)}
                 />
               ))}
@@ -81,16 +80,14 @@ export function TableOverviewScene({
 function TableCard({
   slot,
   groups,
-  participant,
   size,
 }: {
   slot: TableSlot;
   groups: ReadonlyMap<GroupId, Group>;
-  participant: ParticipantLabel;
   size: Density;
 }) {
   const { table } = slot;
-  const pairing = pairingText(slot, groups, participant);
+  const pairing = pairingOf(slot, groups);
 
   return (
     <li
@@ -100,15 +97,37 @@ function TableCard({
       data-table-id={table.id}
       data-table-status={table.status}
     >
-      <span className={`wm-display shrink-0 font-bold ${TYPE[size]}`}>{table.label}</span>
       {/*
-       * The pairing steps down for a long name before the `truncate` cuts it
-       * (issue #23, `@/ui/nameFit`). The table's own label does not: it is
-       * short by construction and is what somebody scans the wall for.
+       * The table's number, which is what somebody scans this wall for. It
+       * keeps a step of its own — this is the one scene whose subject *is* the
+       * tables, and shrinking their labels to make room for the numerals would
+       * be optimising the wrong half (issue #75).
        */}
-      <span className={`min-w-0 flex-1 truncate font-semibold ${fitNameType(pairing, TYPE[size])}`}>
-        {pairing}
+      <span className={`wm-display wm-tnum shrink-0 font-bold ${TYPE[size]}`} data-table-label="">
+        {tableNumber(table.label)}
       </span>
+
+      {/*
+       * What is on it: two numbers, or a word for the states that are not a
+       * match. No participant label and nothing between the numbers but space
+       * — the width the words took is the width the numerals now have.
+       */}
+      {typeof pairing === 'string' ? (
+        <span className={`min-w-0 flex-1 truncate font-semibold ${TYPE[size]}`}>{pairing}</span>
+      ) : (
+        <span
+          className={`flex min-w-0 flex-1 items-baseline justify-center gap-8 wm-display wm-tnum font-extrabold ${NUMBER_TYPE[size]}`}
+          data-pairing=""
+        >
+          <span>{pairing.a}</span>
+          {/*
+            The word the space stands for, for a screen reader and for nobody
+            else — `7 12` read aloud is two numbers and not a match.
+          */}
+          <span className="sr-only">{de.match.versus}</span>
+          <span>{pairing.b}</span>
+        </span>
+      )}
     </li>
   );
 }
@@ -139,17 +158,38 @@ function density(count: number): Density {
   return count <= 16 ? 'normal' : 'dense';
 }
 
-const TYPE: Record<Density, NameType> = {
+const TYPE: Record<Density, string> = {
   roomy: 'text-beamer-h2',
   normal: 'text-beamer-h3',
   dense: 'text-beamer-body',
 };
 
-function pairingText(
+/**
+ * And how big the two numbers on it are (issue #75).
+ *
+ * A step above the table's own label at every density: the table says which
+ * card to look at, the numbers say whether it is yours, and the second is the
+ * one that has to carry ten metres. `useFitToStage` shrinks the board from here
+ * if the room turns out to be tighter than the ladder assumed.
+ */
+const NUMBER_TYPE: Record<Density, string> = {
+  roomy: 'text-beamer-hero',
+  normal: 'text-beamer-h1',
+  dense: 'text-beamer-h2',
+};
+
+/**
+ * What the card says beside the table: the two numbers, or a word.
+ *
+ * A string for the three states that are not a running match — free, locked,
+ * and the table that claims a match nobody can find — and the pair otherwise,
+ * so the caller can draw the numbers at the size the numerals deserve rather
+ * than at the size a sentence would need.
+ */
+function pairingOf(
   { table, match }: TableSlot,
   groups: ReadonlyMap<GroupId, Group>,
-  participant: ParticipantLabel,
-): string {
+): string | { a: string; b: string } {
   if (table.status === 'DISABLED') {
     return de.beamer.tableOverview.disabled;
   }
@@ -163,9 +203,10 @@ function pairingText(
     return de.table.unknownMatch;
   }
 
-  const a = groupLabel(match.a, groups, participant).text;
-  const b = groupLabel(match.b, groups, participant).text;
-  return `${a} ${de.match.versus} ${b}`;
+  return {
+    a: groupNumber(match.a, groups).text,
+    b: groupNumber(match.b, groups).text,
+  };
 }
 
 /** Grey `frei`, amber `belegt`, dark red `gesperrt` (docs/STYLEGUIDE.md §4). */

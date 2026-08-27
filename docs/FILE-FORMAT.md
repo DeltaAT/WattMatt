@@ -53,7 +53,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "rngCursor": 42,                  // how many values have been consumed
 
   "settings": {
-    "participantLabel": "GROUP",    // GROUP | TEAM | PLAYER — affects German UI only
+    "participantLabel": "GROUP",    // GROUP | TEAM | PLAYER — UI copy only, host + headings
     "namingAt": 16,                 // field size at which names are required
     "performanceMode": false
   },

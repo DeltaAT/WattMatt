@@ -13,6 +13,7 @@ import {
   tableId,
   tournament,
 } from '@/domain/testFixtures';
+import { de } from '@/i18n';
 import { NAME_BUDGET } from '@/ui/nameFit';
 import {
   DrawScene,
@@ -24,7 +25,7 @@ import {
 import type { ReactElement } from 'react';
 
 /**
- * A forty-character name on every scene that draws one (issue #23).
+ * A forty-character name on every scene that draws one (issue #23, issue #75).
  *
  * The acceptance criterion is that a long name does not break *any* beamer
  * layout, so it is checked across the scenes at once rather than left to each
@@ -32,6 +33,11 @@ import type { ReactElement } from 'react';
  * strategy `@/ui/nameFit` decides: the name is drawn down at the 32 px floor
  * rather than at 64 px, and the element it sits in truncates — so the worst
  * case is an ellipsis on one card and never a card pushed off the stage.
+ *
+ * Since issue #75 the group-round match scenes draw **numbers**, so a long name
+ * cannot reach them at all — which is the stronger version of the same
+ * guarantee and is asserted as such below. `GROUP_OVERVIEW` still draws names,
+ * because the field is a roster and a roster is what names are for.
  *
  * The example is the one the issue names. It is a character longer than
  * `MAX_GROUP_NAME_LENGTH`, so a host cannot type it in full — but a file
@@ -81,8 +87,13 @@ function carriers(markup: string): string[] {
     .map(([, classes]) => classes ?? '');
 }
 
-const scenes: [string, ReactElement][] = [
+/** The scenes that still draw a name, and therefore still have to fit one. */
+const naming: [string, ReactElement][] = [
   ['GROUP_OVERVIEW', <GroupOverviewScene tournament={named()} settled key="g" />],
+];
+
+/** The group-round scenes, which draw numbers and never a name (issue #75). */
+const numbering: [string, ReactElement][] = [
   ['ROUND_BOARD', <RoundBoardScene tournament={named()} settled key="r" />],
   ['TABLE_OVERVIEW', <TableOverviewScene tournament={named()} settled key="t" />],
   ['DRAW', <DrawScene tournament={named()} step={2} settled key="d" />],
@@ -94,7 +105,7 @@ describe('a forty-character name on the projector', () => {
     expect(LONG_NAME.length).toBeGreaterThanOrEqual(MAX_GROUP_NAME_LENGTH);
   });
 
-  for (const [name, element] of scenes) {
+  for (const [name, element] of naming) {
     it(`is drawn down to the floor and truncated on ${name}`, () => {
       const found = carriers(renderToStaticMarkup(element));
 
@@ -106,6 +117,21 @@ describe('a forty-character name on the projector', () => {
         // the column it sits in and take the scene off the stage.
         expect(classes, name).not.toContain('text-beamer-h2');
       }
+    });
+  }
+
+  /*
+   * The stronger guarantee, and the reason the list above got shorter: a scene
+   * that draws the number cannot be broken by a name at all, however long, and
+   * the participant label is gone with it (issue #75).
+   */
+  for (const [name, element] of numbering) {
+    it(`draws neither the name nor the label on ${name}`, () => {
+      const markup = renderToStaticMarkup(element);
+
+      expect(markup, name).not.toContain(LONG_NAME);
+      expect(markup, name).not.toContain('Die Adler');
+      expect(markup, name).not.toContain(de.participant.GROUP.one);
     });
   }
 

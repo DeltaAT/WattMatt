@@ -137,8 +137,31 @@ carry. This is per *name* and composes with the per-*scene* scaling above.
 exists) beside it, status colour as a left border. Same component in host and beamer, size
 driven by a `scale` prop.
 
-**Match card** — two group chips separated by a `VS` divider, table label in the corner,
-status ribbon at the top (`WARTET` / `LÄUFT` / `BEENDET`).
+**Match card** — status ribbon at the top (`WARTET` / `LÄUFT` / `BEENDET`), the table above,
+the two participants below it. What "participant" means differs by screen, and that difference
+is the rule (issue #75):
+
+- **On the beamer, in a group round, it is the bare number.** No `Gruppe`, no `Team`, no
+  `Spieler`, and no name — `groupNumber` in `@/windows/groupLabel`. The word carries nothing
+  and thirty-two copies of it are the width the numerals could have had. The numbers are
+  therefore drawn in the display font with tabular figures, at `beamer-hero` where the field
+  leaves room and never below `beamer-h2`; `useFitToStage` shrinks the board from there.
+  The one word that stays is `Freilos`, because no number can express "advanced without
+  playing" (docs/TOURNAMENT-RULES.md §9 case 1).
+- **On the beamer, in the final phase, it is the name.** That is the entire point of the naming
+  phase (issue #23) and nothing above applies to `BRACKET` or `CEREMONY`.
+- **On the host screen it is the full label** — `groupLabel`, participant wording and all.
+  A 50 cm control panel has no density problem, and the host needs the sentence.
+
+Same rule for the table: on the beamer a match card names it by its number
+(`tableNumber` in `@/windows/tableLabel`), which is the default label `Tisch 3` with the word
+taken off. A table the host renamed keeps whatever they wrote — the label is their word for a
+physical thing in the room. If a dry run shows a bare number over a bare number is ambiguous,
+the fallback the issue holds in reserve is a compact `T` marker, not the whole word.
+
+`settings.participantLabel` therefore no longer reaches a beamer **match card** at all. It
+still decides the wording of the one-line scene headings that count participants rather than
+name them — `GROUP_OVERVIEW`, `WELCOME`, `NAMING` — and the whole of the host UI.
 
 **Table chip** — label plus status dot: grey `frei`, amber `belegt`, dark red `gesperrt`.
 The host's table overview is a live occupancy board and must be readable at a glance.

@@ -4,7 +4,7 @@ import type { GroupId } from '@/domain/ids';
 import { group, groupId } from '@/domain/testFixtures';
 import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
-import { groupLabel } from '@/windows/groupLabel';
+import { groupLabel, groupNumber } from '@/windows/groupLabel';
 
 /**
  * What a participant is called on both screens (issue #13).
@@ -51,5 +51,56 @@ describe('groupLabel', () => {
       text: de.group.unknown,
       isBye: false,
     });
+  });
+});
+
+/**
+ * And what it is called on the beamer, in a group round (issue #75).
+ *
+ * The same three cases, answered the other way. The word in front of the number
+ * carries nothing, and thirty-two copies of it are the width the numerals could
+ * have had — so the beamer takes the number and the host keeps the sentence.
+ */
+describe('groupNumber', () => {
+  it('is the bare number, with no word in front of it', () => {
+    expect(groupNumber(groupId(1), byId)).toEqual({ text: '1', isBye: false });
+    expect(groupNumber(groupId(1), byId).text).not.toContain(de.participant.GROUP.one);
+  });
+
+  /*
+   * Group rounds run before the naming phase (docs/TOURNAMENT-RULES.md §6), so
+   * a name this early can only come from a file repaired by hand — and a board
+   * where one card carried a name and thirty-one carried a number would be two
+   * designs at once. Names come back with the `Turnierbaum` (issue #23).
+   */
+  it('keeps the number even once a group has a name', () => {
+    expect(groupNumber(groupId(2), byId).text).toBe('2');
+  });
+
+  /*
+   * The one thing a number cannot say. It is the audience's only explanation of
+   * why somebody advanced without playing (docs/TOURNAMENT-RULES.md §9 case 1).
+   */
+  it('still calls the empty side of a match a Freilos', () => {
+    expect(groupNumber(null, byId)).toEqual({ text: de.outcome.bye, isBye: true });
+  });
+
+  it('still says so when the id names no group at all', () => {
+    expect(groupNumber(groupId(9), byId)).toEqual({ text: de.group.unknown, isBye: false });
+  });
+
+  /*
+   * The wording is the host's setting and no longer reaches a beamer match card
+   * at all — which is the point of the change, and the reason this function
+   * takes no `ParticipantLabel`. The host's form still does, and still says the
+   * whole thing.
+   */
+  it('leaves the wording to the host screen, which keeps it', () => {
+    for (const participant of ['GROUP', 'TEAM', 'PLAYER'] as const) {
+      expect(groupLabel(groupId(1), byId, participant).text).toContain(
+        de.participant[participant].one,
+      );
+    }
+    expect(groupNumber(groupId(1), byId).text).toBe('1');
   });
 });
