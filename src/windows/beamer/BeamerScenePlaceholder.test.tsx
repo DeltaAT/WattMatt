@@ -165,9 +165,11 @@ describe('the beamer scene surface', () => {
 
       expect(markup).toContain('data-scene="ROUND_BOARD"');
       expect(markup).toContain(past.label);
-      // The pairing of that round, not of the one that is running.
-      expect(markup).toContain(de.participant.GROUP.numbered({ n: 1 }));
-      expect(markup).toContain(de.participant.GROUP.numbered({ n: 2 }));
+      // The pairing of that round, not of the one that is running. Numbers
+      // and no label, since issue #75.
+      expect(markup).toContain('>1<');
+      expect(markup).toContain('>2<');
+      expect(markup).not.toContain(de.participant.GROUP.numbered({ n: 1 }));
     });
 
     it('still draws the open round when that is the one named', () => {
@@ -272,9 +274,9 @@ describe('the beamer scene surface', () => {
       );
 
       expect(markup).toContain('Trostrunde 1');
-      // Its pairing, not the main field's.
-      expect(markup).toContain(de.participant.GROUP.numbered({ n: 7 }));
-      expect(markup).toContain(de.participant.GROUP.numbered({ n: 8 }));
+      // Its pairing, not the main field's (issue #75: numbers, no label).
+      expect(markup).toContain('>7<');
+      expect(markup).toContain('>8<');
       expect(markup).not.toContain('Runde 2');
     });
 
@@ -291,7 +293,7 @@ describe('the beamer scene surface', () => {
 
       expect(markup).toContain('Runde 2');
       expect(markup).not.toContain('Trostrunde 1');
-      expect(markup).not.toContain(de.participant.GROUP.numbered({ n: 7 }));
+      expect(markup).not.toContain('>7<');
     });
 
     /*
@@ -311,7 +313,7 @@ describe('the beamer scene surface', () => {
       );
 
       expect(markup).toContain('data-scene="DRAW"');
-      expect(markup).toContain(de.participant.GROUP.numbered({ n: 7 }));
+      expect(markup).toContain('>7<');
     });
   });
 

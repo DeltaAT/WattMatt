@@ -47,7 +47,9 @@ above: the main field's phase machine neither waits for it nor knows about it.
   exists would show the audience a `Freilos` the draw never granted. Such a participant leaves
   the tournament by losing, by declining (§4), or by the host undoing back past the draw.
 - The German word for a participant is the host's choice — `Gruppe`, `Team` or `Spieler`
-  (`settings.participantLabel`). It changes UI copy only; the model is `Group` throughout.
+  (`settings.participantLabel`). It changes UI copy only; the model is `Group` throughout —
+  and since issue #75 it does not reach a beamer match card at all, which draws the bare
+  number in a group round (docs/STYLEGUIDE.md §4).
 - The tournament cannot start unless: `groups >= 2` and at least one table is **usable**, that
   is not `DISABLED` — a room whose only table has a wobbly leg is a room that cannot play. Both
   are checked before the host presses *Turnier starten*, with the reason stated in German

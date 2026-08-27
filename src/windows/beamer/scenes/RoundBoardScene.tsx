@@ -7,13 +7,13 @@ import {
   type MatchPhase,
 } from '@/domain/round';
 import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
-import type { Group, Match, ParticipantLabel } from '@/domain/types';
+import type { Group, Match } from '@/domain/types';
 import { de } from '@/i18n';
-import { fitNameType, type NameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { useResultFlip } from '@/windows/beamer/useResultFlip';
-import { groupLabel } from '@/windows/groupLabel';
+import { groupNumber } from '@/windows/groupLabel';
+import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `ROUND_BOARD`: the live round, green and red (issue #19).
@@ -115,7 +115,6 @@ export function RoundBoardScene({
                   key={section.table?.id ?? 'queue'}
                   section={section}
                   groups={byId}
-                  participant={tournament.participantLabel}
                   size={size}
                   flipping={flipping}
                 />
@@ -131,13 +130,11 @@ export function RoundBoardScene({
 function Section({
   section,
   groups,
-  participant,
   size,
   flipping,
 }: {
   section: BoardSection;
   groups: ReadonlyMap<GroupId, Group>;
-  participant: ParticipantLabel;
   size: Density;
   /** The matches whose result has just changed — see the scene. */
   flipping: ReadonlySet<MatchId>;
@@ -155,8 +152,17 @@ function Section({
       data-table-id={table?.id ?? undefined}
       data-queue={isQueue ? '' : undefined}
     >
-      <h2 className={`wm-display font-bold text-wm-text-muted ${HEADING[size]}`}>
-        {isQueue ? de.beamer.roundBoard.queueTitle : table.label}
+      {/*
+       * The table, small and above its matches — the shape issue #75 asks for,
+       * one level up because this board already groups by table. It is the
+       * table's number and nothing else: `Tisch` printed over every section is
+       * the width the numerals under it could have had.
+       */}
+      <h2
+        className={`wm-display wm-tnum font-bold text-wm-text-muted ${HEADING[size]}`}
+        data-table-label=""
+      >
+        {isQueue ? de.beamer.roundBoard.queueTitle : tableNumber(table.label)}
       </h2>
 
       {section.matches.length === 0 ? (
@@ -175,7 +181,6 @@ function Section({
               key={match.id}
               match={match}
               groups={groups}
-              participant={participant}
               size={size}
               flip={flipping.has(match.id)}
             />
@@ -189,13 +194,11 @@ function Section({
 function MatchCard({
   match,
   groups,
-  participant,
   size,
   flip,
 }: {
   match: Match;
   groups: ReadonlyMap<GroupId, Group>;
-  participant: ParticipantLabel;
   size: Density;
   flip: boolean;
 }) {
@@ -211,23 +214,9 @@ function MatchCard({
         {de.beamer.roundBoard.phase[phase]}
       </span>
 
-      <Side
-        match={match}
-        groupId={match.a}
-        groups={groups}
-        participant={participant}
-        size={size}
-        flip={flip}
-      />
+      <Side match={match} groupId={match.a} groups={groups} size={size} flip={flip} />
       {match.b === null ? null : (
-        <Side
-          match={match}
-          groupId={match.b}
-          groups={groups}
-          participant={participant}
-          size={size}
-          flip={flip}
-        />
+        <Side match={match} groupId={match.b} groups={groups} size={size} flip={flip} />
       )}
     </li>
   );
@@ -244,18 +233,16 @@ function Side({
   match,
   groupId,
   groups,
-  participant,
   size,
   flip,
 }: {
   match: Match;
   groupId: GroupId;
   groups: ReadonlyMap<GroupId, Group>;
-  participant: ParticipantLabel;
   size: Density;
   flip: boolean;
 }) {
-  const label = groupLabel(groupId, groups, participant);
+  const label = groupNumber(groupId, groups);
   const decided = match.winnerId !== null;
   const isWinner = decided && match.winnerId === groupId;
   const outcome: Outcome = !decided ? 'OPEN' : isWinner ? 'WINNER' : 'LOSER';
@@ -290,12 +277,14 @@ function Side({
       </span>
 
       {/*
-       * Stepped down towards the 32 px floor for a long name before the
-       * `truncate` beside it resorts to an ellipsis (issue #23, `@/ui/nameFit`):
-       * a forty-character team is read rather than cut off mid-word.
+       * The number, and nothing in front of it (issue #75). Two digits at a
+       * fixed step rather than a name stepped down towards the 32 px floor:
+       * there is no length here to defend against, so the type is the size the
+       * room needs rather than the size the longest label allowed.
        */}
       <span
-        className={`min-w-0 flex-1 truncate font-semibold ${fitNameType(label.text, TYPE[size])}`}
+        className={`min-w-0 flex-1 wm-display wm-tnum font-extrabold ${TYPE[size]}`}
+        data-group-number=""
       >
         {label.text}
       </span>
@@ -405,10 +394,20 @@ function deepestSection(sections: readonly BoardSection[]): number {
   return sections.reduce((most, section) => Math.max(most, section.matches.length), 0);
 }
 
-const TYPE: Record<Density, NameType> = {
-  roomy: 'text-beamer-h2',
-  normal: 'text-beamer-h3',
-  dense: 'text-beamer-body',
+/**
+ * How big a participant's number is drawn (issue #75).
+ *
+ * Every step went up once the words came off. `beamer-hero` on a board with
+ * room for it, and never below `beamer-h2` — two digits need a fraction of the
+ * width `Gruppe 12` did, and the space that frees is the whole point of the
+ * change. `useFitToStage` shrinks the board from here when a projector has less
+ * room than the ladder assumed, so the ladder asks for what the room needs
+ * rather than for what always fits (docs/STYLEGUIDE.md §2, §4).
+ */
+const TYPE: Record<Density, string> = {
+  roomy: 'text-beamer-hero',
+  normal: 'text-beamer-h1',
+  dense: 'text-beamer-h2',
 };
 
 const HEADING: Record<Density, string> = {

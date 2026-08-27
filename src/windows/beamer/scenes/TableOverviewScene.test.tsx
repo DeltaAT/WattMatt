@@ -41,14 +41,27 @@ describe('the table overview scene', () => {
     expect(markup).toContain('data-table-id="tbl_3"');
   });
 
-  it('names who is playing on a busy table', () => {
+  it('numbers who is playing on a busy table', () => {
     const markup = scene(RUNNING);
 
-    // `midTournament` runs group 1 against group 2 on the first table, and
-    // group 2 has a name while group 1 has only its number.
-    expect(markup).toContain(
-      `${de.participant.GROUP.numbered({ n: 1 })} ${de.match.versus} Die Schnellen`,
-    );
+    // `midTournament` runs group 1 against group 2 on the first table. Since
+    // issue #75 that is two numbers and nothing else — the word `Gruppe`
+    // printed across a wall of tables is the width the numerals could have had.
+    expect(markup).toContain('data-pairing=""><span>1</span>');
+    expect(markup).toContain('<span>2</span>');
+    expect(markup).not.toContain(de.participant.GROUP.numbered({ n: 1 }));
+  });
+
+  /*
+   * Issue #75's second acceptance criterion, on the scene that carries the most
+   * pairings at once.
+   */
+  it('carries no participant label anywhere on the board', () => {
+    const markup = scene(RUNNING);
+
+    for (const words of [de.participant.GROUP, de.participant.TEAM, de.participant.PLAYER]) {
+      expect(markup).not.toContain(words.one);
+    }
   });
 
   /* Colour is never the only signal: a projector in a bright room destroys hue
@@ -101,14 +114,45 @@ describe('the table overview scene', () => {
     expect(markup).toContain(de.beamer.tableOverview.empty);
   });
 
-  it('shows a group that has a name by its name', () => {
+  /*
+   * Group rounds run before the naming phase (docs/TOURNAMENT-RULES.md §6), so
+   * a name this early can only come from a file repaired by hand — and a board
+   * where one card said `Die Rasenden` and thirty-one said a number would be
+   * two designs at once. Names come back with the `Turnierbaum` (issue #23).
+   */
+  it('draws the number even for a group that already has a name', () => {
     const named = tournament({
       groups: [group(1, { name: 'Die Rasenden' }), group(2)],
       tables: [occupiedTable(1, matchId(1))],
       rounds: [round(1, { matches: [match(1, { a: groupId(1), b: groupId(2), tableId: null })] })],
     });
 
-    expect(scene(toTournamentSnapshot(named))).toContain('Die Rasenden');
+    const markup = scene(toTournamentSnapshot(named));
+
+    expect(markup).not.toContain('Die Rasenden');
+    expect(markup).toContain('data-pairing=""><span>1</span>');
+  });
+
+  /*
+   * The default label is `Tisch 3` and the word is as redundant on a wall of
+   * tables as `Gruppe` was. A table the host renamed keeps whatever they wrote
+   * (issue #75, `tableNumber`).
+   */
+  it('drops the word Tisch from a default label and keeps a renamed one', () => {
+    const renamed = tournament({
+      groups: [group(1), group(2)],
+      // The real default a host gets, not the fixture's English stand-in.
+      tables: [
+        table(1, { label: de.table.defaultLabel({ n: 1 }) }),
+        table(2, { label: 'Fenster' }),
+      ],
+      rounds: [round(1, { matches: [match(1, { tableId: null })] })],
+    });
+
+    const markup = scene(toTournamentSnapshot(renamed));
+
+    expect(markup).toContain('data-table-label="">1<');
+    expect(markup).toContain('data-table-label="">Fenster<');
   });
 
   /* The beamer must not replay an animation for a scene it is already showing

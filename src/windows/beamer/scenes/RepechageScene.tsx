@@ -3,10 +3,9 @@ import type { PotStatus } from '@/domain/repechage';
 import type { RepechageSnapshot, TournamentSnapshot } from '@/domain/snapshot';
 import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
-import { fitNameType } from '@/ui/nameFit';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
-import { groupLabel } from '@/windows/groupLabel';
+import { groupNumber } from '@/windows/groupLabel';
 
 /**
  * `REPECHAGE`: the `Hoffnungsrunde`, live in front of the room (issue #21,
@@ -68,7 +67,11 @@ export function RepechageScene({
   const byId: ReadonlyMap<GroupId, Group> = new Map(
     tournament.groups.map((group) => [group.id, group]),
   );
-  const name = (groupId: GroupId) => groupLabel(groupId, byId, tournament.participantLabel).text;
+  // The bare number, like every other group-round scene since issue #75: the
+  // `Hoffnungsrunde` runs on the losers of the qualifying round, who have no
+  // names yet and would not be helped by the word `Gruppe` in front of thirty
+  // of them.
+  const number = (groupId: GroupId) => groupNumber(groupId, byId).text;
 
   // A candidate is on the beamer waiting for an answer, which is the moment the
   // rest of the pot dims (docs/MOTION.md §4.3).
@@ -110,8 +113,8 @@ export function RepechageScene({
 
       <div className="min-h-0 flex-1 overflow-hidden" ref={frame}>
         <div className="beamer-fit grid grid-cols-[2fr_1fr] gap-8" ref={content}>
-          <Pot entries={repechage.pot} name={name} beat={beat} dimmed={isDrawing} />
-          <Through through={repechage.through} byes={repechage.byes} name={name} beat={beat} />
+          <Pot entries={repechage.pot} number={number} beat={beat} dimmed={isDrawing} />
+          <Through through={repechage.through} byes={repechage.byes} number={number} beat={beat} />
         </div>
       </div>
     </div>
@@ -129,12 +132,12 @@ export function RepechageScene({
  */
 function Pot({
   entries,
-  name,
+  number,
   beat,
   dimmed,
 }: {
   entries: RepechageSnapshot['pot'];
-  name: (groupId: GroupId) => string;
+  number: (groupId: GroupId) => string;
   beat: GroupId | null;
   /** True while a candidate is out: the rest of the pot recedes behind them. */
   dimmed: boolean;
@@ -153,7 +156,7 @@ function Pot({
             key={entry.groupId}
             groupId={entry.groupId}
             status={entry.status}
-            name={name(entry.groupId)}
+            number={number(entry.groupId)}
             // Only the card that just moved animates. Animating the pot would
             // blow the 60-element budget of docs/MOTION.md §6 and read as a
             // flicker rather than as one thing happening.
@@ -171,13 +174,13 @@ function Pot({
 function PotCard({
   groupId,
   status,
-  name,
+  number,
   isBeat,
   dimmed,
 }: {
   groupId: GroupId;
   status: PotStatus;
-  name: string;
+  number: string;
   isBeat: boolean;
   dimmed: boolean;
 }) {
@@ -195,11 +198,11 @@ function PotCard({
         {de.beamer.repechage.status[status]}
       </span>
       {/*
-       * Stepped down to the 32 px floor for a long name before the ellipsis
-       * (issue #23, `@/ui/nameFit`). This is the card the room is reading out
-       * loud, so it is the last place a name should end mid-word.
+       * The number, at a step it could not have had while it was a word in
+       * front of a number (issue #75). This is the card the room is reading out
+       * loud, so it is the one that most has to carry to the back.
        */}
-      <span className={`truncate font-bold ${fitNameType(name, 'text-beamer-h3')}`}>{name}</span>
+      <span className="wm-display wm-tnum text-beamer-h2 font-extrabold">{number}</span>
     </li>
   );
 }
@@ -215,12 +218,12 @@ function PotCard({
 function Through({
   through,
   byes,
-  name,
+  number,
   beat,
 }: {
   through: readonly GroupId[];
   byes: number;
-  name: (groupId: GroupId) => string;
+  number: (groupId: GroupId) => string;
   beat: GroupId | null;
 }) {
   const columns = fitColumns(through.length, THROUGH_CELL_ASPECT);
@@ -239,14 +242,14 @@ function Through({
         {through.map((groupId) => (
           <li
             key={groupId}
-            className={`min-w-0 truncate rounded-wm-md border-4 border-wm-win bg-wm-win-bg px-3 py-2 text-beamer-body font-bold ${
+            className={`wm-display wm-tnum min-w-0 truncate rounded-wm-md border-4 border-wm-win bg-wm-win-bg px-3 py-2 text-center text-beamer-h3 font-extrabold ${
               // The card that has just arrived. It lands rather than appearing:
               // the audience has to see *this* number take *that* place.
               beat === groupId ? 'wm-repechage-arrive' : ''
             }`}
             data-group-id={groupId}
           >
-            {name(groupId)}
+            {number(groupId)}
           </li>
         ))}
       </ul>
