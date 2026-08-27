@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BLACKOUT_SCENE, IDLE_SCENE } from '@/domain/beamerScene';
+import { BLACKOUT_SCENE, IDLE_SCENE, WELCOME_SCENE } from '@/domain/beamerScene';
 import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
-import { group, tournament } from '@/domain/testFixtures';
+import { group, midTournament, tournament } from '@/domain/testFixtures';
 import {
   closeDocument,
   setDocumentSaved,
@@ -156,15 +156,45 @@ describe('document actions', () => {
    * open — a round id from the previous evening. Leaving it up would show the
    * audience the last event while the tournament leader sets up the next one.
    */
-  it('switching tournaments returns the beamer to idle and to auto-follow', () => {
+  it('switching tournaments hands the beamer back and turns auto-follow on', () => {
     const store = createTournamentStore();
     setOpenedDocument(store, tournament(), PATH);
     showScene(store, BLACKOUT_SCENE);
 
     setOpenedDocument(store, tournament({ name: 'Anderes' }), 'C:\\Turniere\\Anderes.wattmatt');
 
-    expect(store.getState().scene).toEqual(IDLE_SCENE);
+    // The fixture has not started, so the picture is the welcome one — the
+    // blackout the host had staged is gone either way (issue #74).
+    expect(store.getState().scene).toEqual(WELCOME_SCENE);
     expect(store.getState().autoFollow).toBe(true);
+  });
+
+  /**
+   * The other half of the same rule: a tournament that is already under way
+   * stays on `IDLE` until the tournament leader stages something or the next
+   * phase step does. Opening a file is not a moment to put a round board in
+   * front of a room (issue #74).
+   */
+  it('leaves a tournament opened mid-event on the idle picture', () => {
+    const store = createTournamentStore();
+
+    setOpenedDocument(store, midTournament(), PATH);
+
+    expect(store.getState().scene).toEqual(IDLE_SCENE);
+  });
+
+  /**
+   * And a closed tournament goes back to idle whatever it was doing: there is
+   * no tournament left to welcome anybody to.
+   */
+  it('returns to the idle picture when the tournament is closed', () => {
+    const store = createTournamentStore();
+    setNewDocument(store, tournament());
+    expect(store.getState().scene).toEqual(WELCOME_SCENE);
+
+    closeDocument(store);
+
+    expect(store.getState().scene).toEqual(IDLE_SCENE);
   });
 
   it('keeps the beamer projection in step with the tournament', () => {

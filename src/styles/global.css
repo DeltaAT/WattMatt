@@ -792,6 +792,53 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * The welcome count (issue #74, docs/MOTION.md §4.7).
+ *
+ * One element, one beat: the digits grow a little and settle. Everything else
+ * on the screen is deliberately still — the host may add forty groups in under
+ * a minute, and a scene that re-entered for each of them would strobe at a room
+ * that is only there to register.
+ *
+ * `transform` only, so the compositor does the whole thing on its own and the
+ * pulse costs nothing at 1080p (§1 law 3). `--dur-base` is the shortest beat the
+ * beamer has: long enough to be seen from the back of the room, short enough to
+ * be over before the host has clicked the next group in.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wm-count-pulse {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@utility wm-count-pulse {
+  animation: wm-count-pulse var(--dur-base) var(--ease-out) both;
+  /* Only for the duration of the animation, per docs/MOTION.md §6.
+   * `useWillChangeCleanup` takes it back off at `animationend` (issue #29). */
+  will-change: transform;
+}
+
+/* docs/MOTION.md §6: reduced motion drops movement and scale. The keyframes are
+ * emptied rather than the animation switched off, so `animationend` still
+ * fires and `useWillChangeCleanup` still has something to clean up. Nothing is
+ * lost by holding still here: the number itself is the information, and it has
+ * already changed. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wm-count-pulse {
+    0%,
+    100% {
+      transform: none;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * The error toast (issue #30, docs/MOTION.md §5 "Toast").
  *
  * Enters from the edge it sits on, so the movement reads as arriving rather

@@ -197,9 +197,14 @@ describe('docs/MOTION.md §6: `will-change` only during an animation', () => {
       }
     }
 
-    // The two reveals of §4.1 and §4.3, and nothing else. `wm-bracket-advance`
-    // deliberately carries no hint: every slot in the tree wears it.
-    expect(hinted.sort()).toEqual(['@utility wm-draw-reveal', '@utility wm-repechage-lift']);
+    // The two reveals of §4.1 and §4.3, the welcome count's tick of §4.7, and
+    // nothing else. `wm-bracket-advance` deliberately carries no hint: every
+    // slot in the tree wears it.
+    expect(hinted.sort()).toEqual([
+      '@utility wm-count-pulse',
+      '@utility wm-draw-reveal',
+      '@utility wm-repechage-lift',
+    ]);
   });
 
   it('leaves the beamer with no `will-change` a component sets and forgets', () => {

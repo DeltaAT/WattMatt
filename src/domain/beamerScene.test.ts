@@ -9,6 +9,7 @@ describe('the beamer scene contract', () => {
   it('accepts every scene named in ARCHITECTURE.md §3', () => {
     const scenes: BeamerScene[] = [
       { id: 'IDLE' },
+      { id: 'WELCOME' },
       { id: 'BLACKOUT' },
       { id: 'GROUP_OVERVIEW' },
       { id: 'TABLE_OVERVIEW' },
@@ -55,10 +56,16 @@ describe('isSameScene', () => {
       isSameScene({ id: 'DRAW', roundId: round('r1') }, { id: 'DRAW', roundId: round('r1') }),
     ).toBe(true);
     expect(isSameScene({ id: 'IDLE' }, { id: 'IDLE' })).toBe(true);
+    // Which is what keeps the welcome screen from re-entering every time the
+    // host adds a group: the scene has not changed, only the count on it.
+    expect(isSameScene({ id: 'WELCOME' }, { id: 'WELCOME' })).toBe(true);
   });
 
   it('separates different scene ids', () => {
     expect(isSameScene({ id: 'IDLE' }, { id: 'BLACKOUT' })).toBe(false);
+    // The welcome picture and the idle one are two scenes, not one dressed
+    // differently: staging either must animate in over the other (issue #74).
+    expect(isSameScene({ id: 'WELCOME' }, { id: 'IDLE' })).toBe(false);
     expect(isSameScene({ id: 'BRACKET' }, { id: 'DRAW', roundId: round('r1') })).toBe(false);
   });
 });

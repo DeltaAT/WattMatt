@@ -1,4 +1,4 @@
-import { IDLE_SCENE } from '@/domain/beamerScene';
+import { IDLE_SCENE, WELCOME_SCENE } from '@/domain/beamerScene';
 import { NO_CARRIED_FIELDS, type CarriedFields } from '@/domain/schema';
 import type { Tournament } from '@/domain/types';
 import { UNSAVED_FILE, type TournamentStore } from '@/store/tournamentStore';
@@ -28,7 +28,7 @@ import { UNSAVED_FILE, type TournamentStore } from '@/store/tournamentStore';
  * a working tournament and a warning, rather than nothing.
  */
 export function setNewDocument(store: TournamentStore, tournament: Tournament): void {
-  store.commit(() => ({ document: tournament, file: UNSAVED_FILE, ...startingOver() }));
+  store.commit(() => ({ document: tournament, file: UNSAVED_FILE, ...startingOver(tournament) }));
 }
 
 /**
@@ -50,7 +50,7 @@ export function setOpenedDocument(
     file: { status: 'saved', path },
     // After the reset, not before it: `startingOver` clears `carried`, and the
     // fields this file brought are the one thing that must survive that.
-    ...startingOver(),
+    ...startingOver(tournament),
     carried,
   }));
 }
@@ -98,7 +98,7 @@ export function setDocumentSaved(
  * every future caller inherit a prompt it did not ask for.
  */
 export function closeDocument(store: TournamentStore): void {
-  store.commit(() => ({ document: null, file: UNSAVED_FILE, ...startingOver() }));
+  store.commit(() => ({ document: null, file: UNSAVED_FILE, ...startingOver(null) }));
 }
 
 /**
@@ -108,10 +108,22 @@ export function closeDocument(store: TournamentStore): void {
  * it names no longer exists, and the audience would be looking at the last
  * event while the host sets up the next one. Auto-follow comes back on because
  * a new document is not a moment the host has taken manual control in.
+ *
+ * A tournament that has not started yet lands on `WELCOME` rather than `IDLE`
+ * (issue #74): it is the default picture of the whole setup phase, and staging
+ * it here is what makes it the default from the moment the tournament exists
+ * rather than from the next phase step. Anything further along keeps `IDLE`,
+ * because opening a file mid-tournament must not throw a round board onto a
+ * screen the host has not looked at yet — `autoFollow` puts the right picture
+ * up at the next step, which is a moment the host chose.
  */
-function startingOver() {
+function startingOver(document: Tournament | null) {
   // `carried` is reset here rather than only where it is set: a tournament
   // created or closed after one was opened from a newer build's file must not
   // inherit that file's unknown fields and write them into its own.
-  return { scene: IDLE_SCENE, autoFollow: true, carried: NO_CARRIED_FIELDS };
+  return {
+    scene: document?.phase === 'SETUP' ? WELCOME_SCENE : IDLE_SCENE,
+    autoFollow: true,
+    carried: NO_CARRIED_FIELDS,
+  };
 }

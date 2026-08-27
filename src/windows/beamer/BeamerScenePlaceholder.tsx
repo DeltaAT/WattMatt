@@ -12,6 +12,7 @@ import {
   RoundBoardScene,
   TableOverviewScene,
   CeremonySceneHost,
+  WelcomeScene,
 } from '@/windows/beamer/scenes';
 import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
@@ -77,6 +78,17 @@ export function BeamerScenePlaceholder({
         <p className="text-beamer-body text-wm-text-muted">{de.beamer.idleNotice}</p>
       </div>
     );
+  }
+
+  if (scene.id === 'WELCOME') {
+    /*
+     * The picture of the whole setup phase (issue #74). Like `NAMING` it needs
+     * no guard against the snapshot: what it draws is the tournament's name and
+     * how many are registered, and a descriptor that names nothing cannot
+     * disagree with either. `delivery` is what keeps the count from ticking at
+     * a beamer that has only just been handed it.
+     */
+    return <WelcomeScene tournament={tournament} settled={settled} delivery={delivery} />;
   }
 
   if (scene.id === 'GROUP_OVERVIEW') {

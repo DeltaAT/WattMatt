@@ -54,7 +54,7 @@ Eine Seite. Ausdrucken, abhaken, dann anfangen. Das Handbuch steht in
 
 - [ ] Beamer-Fenster ist offen, Statuszeile meldet **Beamer läuft im Vollbild.**
 - [ ] **Bildkanal** meldet *Beamer meldet sich.*
-- [ ] Das **Startbild** (Ziffer `1`) liegt auf der Leinwand.
+- [ ] Das **Willkommen**-Bild (Ziffer `1`) liegt auf der Leinwand und die Zahl darauf stimmt.
 - [ ] **Bildschirm aus** einmal ausprobiert: `B` drücken, Leinwand wird schwarz, `B` drücken,
       Bild ist zurück.
 - [ ] Auf der Leinwand ist von **hinten in der letzten Reihe** lesbar, was dort steht. Wenn

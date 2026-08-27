@@ -3,6 +3,7 @@ export {
   BLACKOUT_SCENE,
   IDLE_SCENE,
   isSameScene,
+  WELCOME_SCENE,
   type BeamerScene,
   type BeamerSceneId,
 } from '@/domain/beamerScene';

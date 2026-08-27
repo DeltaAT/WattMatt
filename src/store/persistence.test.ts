@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { IDLE_SCENE } from '@/domain/beamerScene';
+import { IDLE_SCENE, WELCOME_SCENE } from '@/domain/beamerScene';
 import type { Migration, SchemaTarget } from '@/domain/migrations';
 import { SCHEMA_VERSION, tournamentFileSchema, type TournamentFileLike } from '@/domain/schema';
 import { EMPTY_TOURNAMENT } from '@/domain/snapshot';
@@ -293,7 +293,9 @@ describe('createTournamentDocument', () => {
     // moment the tournament exists — the round board puts it on the wall as
     // persistent chrome (issue #19).
     expect(store.getState().tournament).toEqual({ ...EMPTY_TOURNAMENT, name: 'T' });
-    expect(store.getState().scene).toEqual(IDLE_SCENE);
+    // And the welcome picture is up from that same moment: a tournament that
+    // exists and has not started is exactly what that scene is for (issue #74).
+    expect(store.getState().scene).toEqual(WELCOME_SCENE);
   });
 });
 
@@ -608,6 +610,9 @@ describe('a tournament that changes laptops', () => {
     expect(reopened.getState().tournament.groups.map((entry) => entry.number)).toEqual([
       1, 2, 3, 4,
     ]);
+    // Idle rather than the round board: opening a file mid-tournament must not
+    // throw the last event's round onto a screen nobody has looked at yet
+    // (issue #74). `WELCOME` is only for a tournament that has not started.
     expect(reopened.getState().scene).toEqual(IDLE_SCENE);
   });
 });

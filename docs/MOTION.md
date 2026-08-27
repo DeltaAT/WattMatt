@@ -146,6 +146,21 @@ something nobody can see. The veil's resting opacity is 1 and the animation only
 this covers the one control that must never fail, so an animation that does not run leaves the
 screen black instantly rather than not black at all.
 
+### 4.7 Willkommen — the live count
+
+Chronologically the first thing the room sees, and numbered last because the positions above it
+are the ones hosts already know. One element moves: the digits of the count scale
+`1 → 1.08 → 1` over `--dur-base` on `--ease-out`, and nothing else on the screen does anything.
+
+The constraint is the issue's own note (#74). A host may enter forty groups in under a minute,
+so the tick has to survive being played forty times in a row without becoming a strobe — which
+rules out a scene re-entry, a colour flash and a travelling number, and leaves a small,
+transform-only beat on one element. `useCountPulse` decides when it plays: only for a change
+this window watched happen, never for a beamer catching up and never for an undo, which is the
+same rule `useResultFlip` and `useRepechageBeat` follow (docs/OPEN-QUESTIONS.md #60). It is
+returned as a generation the scene keys the digits on, because a CSS animation does not replay
+just because its class was applied a second time.
+
 ## 5. Host UI micro-interactions
 
 | Element | Behaviour |

@@ -57,6 +57,7 @@ const RENDER_BUDGET_MS = 120;
 
 /** Every animation utility the beamer can put on an element. */
 const ANIMATION_CLASSES = [
+  'wm-count-pulse',
   'wm-draw-reveal',
   'wm-draw-pool-number',
   'wm-result-win',
@@ -166,6 +167,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
 /** Every scene the host can stage, at the worst field each of them can carry. */
 const SCENES: readonly BeamerScene[] = [
   { id: 'IDLE' },
+  { id: 'WELCOME' },
   { id: 'BLACKOUT' },
   { id: 'GROUP_OVERVIEW' },
   { id: 'TABLE_OVERVIEW' },
