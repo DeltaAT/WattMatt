@@ -15,6 +15,7 @@ export {
   bracketColumns,
   bracketCorrection,
   bracketNodeState,
+  bracketNodeTableId,
   bracketRoundForSize,
   canFinishBracket,
   chipOrigin,

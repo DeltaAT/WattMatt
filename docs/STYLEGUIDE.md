@@ -125,7 +125,7 @@ The beamer root font size is resolution-relative so the same layout works on 720
 | `beamer-h2` | 4 | 64 px | Group name in a match card |
 | `beamer-h3` | 3 | 48 px | Table label, round label |
 | `beamer-body` | 2 | 32 px | **The floor a scene is designed to.** See the note below |
-| `beamer-caption` | 1.5 | 24 px | Only for persistent chrome (clock, tournament name) |
+| `beamer-caption` | 1.5 | 24 px | Persistent chrome (clock, tournament name), and the bracket's table reference |
 
 **32 px is a design floor, not a hard limit.** Every scene is laid out so that the field sizes
 a host normally has land on it or above. Past that, the scene is scaled down until everything
@@ -199,6 +199,19 @@ Two lengths in it are relative rather than tokens, and deliberately so:
 - `gap-[1.5ch]` between the two boxes of a pairing. "At least as wide as one numeral" only
   stays true across the type ladder if it is stated in numerals; the row keeps `wm-display`
   and its type step for exactly this reason, since that is what `ch` is measured in.
+
+**Bracket node** (`BRACKET`, issue #90) — two name slots, and the number of the table the
+match is on in the top-right corner. The table is a *reference*, not content: one type step
+under the names at every density (`beamer-body` → `beamer-caption`), muted, and **absolutely
+positioned**, so the names keep every pixel they had and no node changes height when a match
+starts or ends. It lands over the box each slot reserves for `SIEGER` / `AUSGESCHIEDEN`, which
+can never collide with it — that word appears only once the match is decided, and a decided
+match has no table to name.
+
+Whether there is one to name is `bracketNodeTableId` in `@/domain/bracket`, shared with the
+host panel. A node keeps its `tableId` after it is played (docs/OPEN-QUESTIONS.md #37) but the
+table itself went back to the pool, so only a `RUNNING` node names one. Everything else names
+nothing at all — no placeholder, no dash and no `0`.
 
 **Match card** — status ribbon at the top (`WARTET` / `LÄUFT` / `BEENDET`), the table above,
 the two group boxes below it. What "participant" means differs by screen, and that difference
