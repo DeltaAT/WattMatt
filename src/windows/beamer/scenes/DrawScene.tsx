@@ -2,6 +2,7 @@ import type { GroupId, TableId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match, Table } from '@/domain/types';
 import { de } from '@/i18n';
+import { GroupBox, type GroupBoxScale } from '@/ui';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupNumber } from '@/windows/groupLabel';
@@ -34,6 +35,14 @@ import { tableNumber } from '@/windows/tableLabel';
  * same two lines with a non-breaking space in each, which is the same height
  * and says nothing about what is coming (the issue's second acceptance
  * criterion).
+ *
+ * **Each number is in a box of its own** (issue #88, `@/ui/GroupBox`). Two
+ * numerals separated by nothing but space read as one number from ten metres —
+ * `7 12` is `712` to anybody who has not been told otherwise — and the fix is
+ * not more space but a container each. It is deliberately the same component
+ * the round board paints its results in: the neutral box the room watches a
+ * pairing land in is the box that turns green or red once the match is played,
+ * so the two pictures are continuous.
  *
  * The reveal is a CSS keyframe: docs/MOTION.md §6 prefers CSS for predetermined
  * beats because they run off the main thread and stay smooth while React is
@@ -79,8 +88,8 @@ export function DrawScene({
   // index that runs off the list.
   const revealed = Math.max(0, Math.min(Math.floor(step) || 0, total));
 
-  // All three derived from the **final** count, never from what is on screen so
-  // far. That is what reserves the layout (issue #76).
+  // Both derived from the **final** count, never from what is on screen so far.
+  // That is what reserves the layout (issue #76).
   const size = density(total);
   const columns = fitColumns(total, CELL_ASPECT);
 
@@ -227,17 +236,32 @@ function PairingCard({
       </span>
 
       {/*
-       * The two numbers, and nothing between them but space (issue #75). They
-       * are the one thing on this scene that has to carry ten metres, and every
-       * word taken off the card went into their size.
+       * The two numbers, each in a box of its own (issue #88). Every word taken
+       * off this card by issue #75 went into their size, and at that size two
+       * numerals with only space between them are one number — `7 12` reads as
+       * `712` from the back of a hall. The box is what separates them, and it
+       * is `@/ui/GroupBox` rather than a border added here, so it is the same
+       * object that turns green or red on the round board afterwards.
+       *
+       * `gap-[1.5ch]` is the issue's "at least as wide as one numeral", said in
+       * the only unit that stays true at every step of the ladder: `ch` is the
+       * advance of a digit, and the digits are tabular, so one `ch` is exactly
+       * one numeral wide. That is why `wm-display wm-tnum` and the type step
+       * stay on this row even though each box now sets its own — they are what
+       * `ch` is measured in.
+       *
+       * An undrawn slot draws one box holding the blank. It is the same height
+       * as the boxes that will replace it, which is what keeps the grid still
+       * (issue #76), and it says nothing about what is coming — not even
+       * whether the pairing is a `Freilos`.
        */}
       <span
-        className={`flex min-w-0 items-baseline justify-center gap-8 wm-display wm-tnum font-extrabold ${NUMBER_TYPE[size]}`}
+        className={`flex min-w-0 items-baseline justify-center gap-[1.5ch] wm-display wm-tnum ${NUMBER_TYPE[size]}`}
         data-pairing=""
       >
         {revealed ? (
           <>
-            <span>{a.text}</span>
+            <GroupBox number={a.text} state="NEUTRAL" scale={BOX_SCALE[size]} />
             {match.b === null ? null : (
               <>
                 {/*
@@ -245,12 +269,12 @@ function PairingCard({
                   nobody else — `7 12` read aloud is two numbers and not a match.
                 */}
                 <span className="sr-only">{de.match.versus}</span>
-                <span>{b.text}</span>
+                <GroupBox number={b.text} state="NEUTRAL" scale={BOX_SCALE[size]} />
               </>
             )}
           </>
         ) : (
-          <span>{EMPTY_SLOT_TEXT}</span>
+          <GroupBox number={EMPTY_SLOT_TEXT} state="NEUTRAL" scale={BOX_SCALE[size]} />
         )}
       </span>
     </li>
@@ -299,7 +323,7 @@ function density(count: number): Density {
 }
 
 /**
- * How big the two numbers are drawn (issue #75).
+ * How big the two numbers are drawn (issues #75, #88).
  *
  * Every step went up once the words came off: `beamer-hero` at the field sizes
  * where it fits, and never below `beamer-h2` — two digits need a fraction of
@@ -307,9 +331,20 @@ function density(count: number): Density {
  * from here if a projector turns out to have less room than the ladder assumed,
  * so the ladder is free to ask for the size the room actually needs
  * (docs/STYLEGUIDE.md §2, §4).
+ *
+ * The step is set twice over: `BOX_SCALE` is what each number is actually drawn
+ * at, and `NUMBER_TYPE` puts the same step on the row around them so the `ch`
+ * gap between the two boxes measures one of their numerals rather than one of
+ * the body font's. The two must agree, which is why they are written together.
  */
 const NUMBER_TYPE: Record<Density, string> = {
   roomy: 'text-beamer-hero',
   normal: 'text-beamer-h1',
   dense: 'text-beamer-h2',
+};
+
+const BOX_SCALE: Record<Density, GroupBoxScale> = {
+  roomy: 'hero',
+  normal: 'h1',
+  dense: 'h2',
 };

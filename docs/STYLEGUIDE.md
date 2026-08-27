@@ -61,7 +61,7 @@ property it was always protecting, and what is left has to satisfy it without th
    eyeballed: `src/styles/resultContrast.test.ts` composites what is actually painted — the
    loser's `opacity: .6` included — and asserts the separation.
 2. **Geometry.** Border weight, ring, or shape. The winner's edge reads 6 px against the
-   loser's 2 px. It must cost no layout: on the round board the extra 4 px are an inset
+   loser's 2 px. It must cost no layout: in the group box the extra 4 px are an inset
    shadow, so a result landing moves nothing.
 3. **Weight.** Losers drop to `opacity: .6` and half saturation. Winners stay at full strength.
 4. **An icon** (`✓` / `✗`, filled shapes, not thin outlines) where one fits.
@@ -176,8 +176,32 @@ stopped reading as a podium.
 exists) beside it, status colour as a left border. Same component in host and beamer, size
 driven by a `scale` prop.
 
+**Group box** (`@/ui/GroupBox`, issue #88) — a participant's number, in a container of its
+own. Two numerals with nothing between them but space read as one number at ten metres: `7 12`
+is `712` to anybody who has not been told otherwise. So a number is never loose text on the
+beamer. It gets a box, and it is this box in every group-round scene, driven by a `scale` prop
+the way the group chip is.
+
+One component, three states — `NEUTRAL` while the pairing is only drawn or still being played,
+then `WINNER` or `LOSER`. **The three differ in paint and in nothing else.** Padding, radius,
+border weight and the position of the number are identical in all of them, which is what makes
+two separate promises true at once: nothing moves when a result lands (issue #77), and the box
+the room watches a pairing land in during the `Auslosung` is the same object that turns green
+or red on the round board (issue #88). `src/ui/GroupBox.test.tsx` compares the geometry of the
+three states directly, and `groupBoxContinuity.test.tsx` compares the two scenes.
+
+Two lengths in it are relative rather than tokens, and deliberately so:
+
+- `min-w-[2ch]` on the numeral. The digits are tabular, so two of them are exactly the width a
+  `12` needs — a `7` reserves it instead of drawing a narrower box, and a wider box therefore
+  never implies anything about who is in it. A minimum, not a fixed width, so a three-digit
+  field grows instead of clipping.
+- `gap-[1.5ch]` between the two boxes of a pairing. "At least as wide as one numeral" only
+  stays true across the type ladder if it is stated in numerals; the row keeps `wm-display`
+  and its type step for exactly this reason, since that is what `ch` is measured in.
+
 **Match card** — status ribbon at the top (`WARTET` / `LÄUFT` / `BEENDET`), the table above,
-the two participants below it. What "participant" means differs by screen, and that difference
+the two group boxes below it. What "participant" means differs by screen, and that difference
 is the rule (issue #75):
 
 - **On the beamer, in a group round, it is the bare number.** No `Gruppe`, no `Team`, no
@@ -194,7 +218,8 @@ is the rule (issue #75):
 
 Same rule for the table: on the beamer a match card names it by its number
 (`tableNumber` in `@/windows/tableLabel`), which is the default label `Tisch 3` with the word
-taken off. A table the host renamed keeps whatever they wrote — the label is their word for a
+taken off. It sits above both group boxes and outside them, so a bare `3` over a bare `7`
+cannot read as a third participant (issue #88). A table the host renamed keeps whatever they wrote — the label is their word for a
 physical thing in the room. If a dry run shows a bare number over a bare number is ambiguous,
 the fallback the issue holds in reserve is a compact `T` marker, not the whole word.
 

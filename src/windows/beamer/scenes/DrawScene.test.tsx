@@ -76,9 +76,15 @@ function layout(markup: string) {
   };
 }
 
+/** Each slot's markup, in board order. */
+const cardsOf = (markup: string) => markup.split('<li ').slice(1);
+
+/** How many number boxes a slot draws (issue #88). */
+const boxesIn = (card: string) => (card.match(/data-outcome="/g) ?? []).length;
+
 /** A pairing slot that is still waiting: both its lines hold the blank. */
 const blankPairings = (markup: string) =>
-  markup.match(new RegExp(`data-pairing=""><span>${EMPTY_SLOT_TEXT}</span>`, 'g')) ?? [];
+  markup.match(new RegExp(`data-group-number="">${EMPTY_SLOT_TEXT}<`, 'g')) ?? [];
 
 describe('the draw scene', () => {
   it('shows nothing drawn at step zero', () => {
@@ -251,6 +257,85 @@ describe('the draw scene', () => {
     for (const smaller of ['text-host-xs', 'text-host-sm', 'text-beamer-caption']) {
       expect(markup, smaller).not.toContain(smaller);
     }
+  });
+
+  /*
+   * Issue #88. Two numerals with nothing between them but space read as one
+   * number from ten metres — `7 12` is `712` to anybody who has not been told
+   * otherwise — so each gets a container of its own.
+   */
+  describe('each number in its own box', () => {
+    it('draws two boxes for a pairing', () => {
+      const drawn = cardsOf(scene(drawnTournament({ pairs: 3 }), 3, true));
+
+      expect(drawn).toHaveLength(3);
+      for (const card of drawn) {
+        expect(boxesIn(card)).toBe(2);
+      }
+    });
+
+    /* A `Freilos` has one participant, so it has one box — the empty half of
+     * the pair is what makes it read as a bug (docs/TOURNAMENT-RULES.md §9). */
+    it('draws one box for a Freilos', () => {
+      const drawn = cardsOf(scene(drawnTournament({ pairs: 2, bye: true }), 3, true));
+
+      expect(boxesIn(drawn.at(-1) ?? '')).toBe(1);
+    });
+
+    /*
+     * "The gap between them should be at least as wide as one numeral." Said in
+     * `ch`, which is the advance of a digit in the font the row is set in — the
+     * only unit that stays true as the ladder steps the numerals up and down.
+     * The type step has to stay on the row for that to mean anything, so it is
+     * asserted with the gap rather than beside it.
+     */
+    it('separates the two boxes by more than a numeral', () => {
+      const row = /class="([^"]*)"\s+data-pairing=""/.exec(
+        scene(drawnTournament({ pairs: 3 }), 3, true),
+      )?.[1];
+
+      expect(row).toContain('gap-[1.5ch]');
+      expect(row).toContain('wm-tnum');
+      expect(row).toMatch(/text-beamer-(?:hero|h1|h2)/);
+    });
+
+    /*
+     * Issue #75's shape, restated now that the numbers have edges of their own:
+     * the table is above both boxes and outside them, so a bare `3` over a bare
+     * `7` can never read as a third participant.
+     */
+    it('keeps the table number above both boxes and outside them', () => {
+      const card = cardsOf(scene(drawnTournament({ pairs: 2 }), 2, true))[0] ?? '';
+      const where = /class="[^"]*"\s+data-pairing-where="">([^<]*)</.exec(card);
+
+      expect(where?.[1]).toBe(table(1).label);
+      expect(card.indexOf('data-pairing-where')).toBeLessThan(card.indexOf('data-outcome'));
+    });
+
+    /*
+     * An undrawn slot reserves a box too. It is the same height as the boxes
+     * that will replace it — which is what keeps the grid still (issue #76) —
+     * and it still says nothing about what is coming, not even whether the
+     * pairing turns out to be a `Freilos`.
+     */
+    it('reserves a box in a slot nothing has landed in', () => {
+      const empty = cardsOf(scene(drawnTournament({ pairs: 4 }), 0))[0] ?? '';
+
+      expect(boxesIn(empty)).toBe(1);
+      expect(empty).toContain('data-outcome="NEUTRAL"');
+      expect(blankPairings(empty)).toHaveLength(1);
+    });
+
+    /* Neutral, always: a drawn pairing has no result yet, and a box that was
+     * painted before the match would be telling the room the wrong thing. */
+    it('paints every box neutral however far the draw has run', () => {
+      for (const step of [0, 2, 4]) {
+        const markup = scene(drawnTournament({ pairs: 4 }), step, true);
+
+        expect(markup, `step ${String(step)}`).not.toContain('data-outcome="WINNER"');
+        expect(markup, `step ${String(step)}`).not.toContain('data-outcome="LOSER"');
+      }
+    });
   });
 
   /* A round with nothing in it should not happen, but a blank projector during

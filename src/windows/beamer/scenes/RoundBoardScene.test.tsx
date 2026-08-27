@@ -135,7 +135,7 @@ describe('the round board', () => {
 
       expect(markup).not.toContain('data-outcome="WINNER"');
       expect(markup).not.toContain('data-outcome="LOSER"');
-      expect(markup).toContain('data-outcome="OPEN"');
+      expect(markup).toContain('data-outcome="NEUTRAL"');
     });
 
     /*
