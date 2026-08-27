@@ -17,15 +17,26 @@ import { RoundBoardScene } from '@/windows/beamer/scenes/RoundBoardScene';
  * from ten metres.
  */
 
-/** `pairs` matches on `tables` tables; the rest queue. */
+/**
+ * `pairs` matches on `tables` tables; the rest queue.
+ *
+ * `idle` adds further tables that no match of this round is on — the hall the
+ * host actually set up, which is bigger than the round played on it more often
+ * than not (issue #87). `locked` names tables to take out of service, by their
+ * one-based number.
+ */
 function board({
   pairs,
   tables = 2,
+  idle = 0,
+  locked = [],
   decided = 0,
   bye = false,
 }: {
   pairs: number;
   tables?: number;
+  idle?: number;
+  locked?: readonly number[];
   decided?: number;
   bye?: boolean;
 }): TournamentSnapshot {
@@ -54,7 +65,9 @@ function board({
     tournament({
       name: 'Sommerturnier',
       groups: Array.from({ length: pairs * 2 + (bye ? 1 : 0) }, (_, i) => group(i + 1)),
-      tables: Array.from({ length: tables }, (_, i) => table(i + 1)),
+      tables: Array.from({ length: tables + idle }, (_, i) =>
+        table(i + 1, locked.includes(i + 1) ? { status: 'DISABLED' as const } : {}),
+      ),
       rounds: [round(1, { state: 'RUNNING', matches })],
     }),
   );
@@ -374,11 +387,114 @@ describe('the round board', () => {
     expect(scene(toTournamentSnapshot(tournament()))).toContain(de.beamer.roundBoard.empty);
   });
 
-  it('shows a table with nothing on it as free', () => {
-    const markup = scene(board({ pairs: 1, tables: 3 }));
-    expect(markup).toContain(de.beamer.roundBoard.tableIdle);
+  /*
+   * Issue #87. One card per match, never one per table — a table the round is
+   * not played on is dead space, and on a projector dead space is paid for in
+   * numeral size, which is the only thing that matters at 10 m.
+   */
+  describe('a table with no match this round', () => {
+    /* The issue's first acceptance criterion: 10 tables, 3 matches → 3 cards. */
+    it('is not drawn at all', () => {
+      const markup = scene(board({ pairs: 3, tables: 3, idle: 7 }));
+
+      expect(markup.match(/data-table-id="/g)).toHaveLength(3);
+      expect(markup.match(/data-match-id="/g)).toHaveLength(3);
+      expect(markup).not.toContain('data-table-idle');
+    });
+
+    /*
+     * ...and the other half of that criterion, which is the whole point of the
+     * issue: "sized as if the screen only ever had 3 cards on it". Dropping the
+     * seven headings and then laying the three out as though ten were still
+     * there would buy the room nothing. Byte-for-byte the same board.
+     */
+    it('costs the board nothing at all', () => {
+      const wideHall = scene(board({ pairs: 3, tables: 3, idle: 7 }));
+      const narrowHall = scene(board({ pairs: 3, tables: 3 }));
+
+      expect(wideHall).toBe(narrowHall);
+    });
+
+    it('is left out whether it is free or out of service', () => {
+      const markup = scene(board({ pairs: 1, tables: 1, idle: 2, locked: [3] }));
+
+      expect(markup.match(/data-table-id="/g)).toHaveLength(1);
+      expect(markup).toContain(`data-table-id="${tableId(1)}"`);
+    });
+  });
+
+  /*
+   * The mistake the issue spends half its text warning about. "Unused" means
+   * *no match assigned this round* — never "the match there has finished".
+   * Getting it backwards would delete each result from the wall at the moment
+   * the room started reading it.
+   */
+  describe('a table that has been played on', () => {
+    it('keeps its finished match, and its colour, while the hall stands idle', () => {
+      const markup = scene(board({ pairs: 1, tables: 1, idle: 9, decided: 1 }));
+
+      expect(markup.match(/data-table-id="/g)).toHaveLength(1);
+      expect(markup).toContain('data-outcome="WINNER"');
+      expect(markup).toContain('data-outcome="LOSER"');
+    });
+
+    it('keeps every result of a round that is over', () => {
+      const markup = scene(board({ pairs: 4, tables: 4, idle: 6, decided: 4 }));
+
+      expect(markup.match(/data-match-id="/g)).toHaveLength(4);
+      expect(markup.match(/data-outcome="WINNER"/g)).toHaveLength(4);
+    });
+
+    /*
+     * The issue's third acceptance criterion. A table locked mid-round keeps
+     * whatever is on it: the host sets `gesperrt` because the table is going
+     * out of service *after* this match, and a board reading `status` rather
+     * than the match list would blank a match still being played.
+     */
+    it('keeps its running match when the host locks it mid-round', () => {
+      const markup = scene(board({ pairs: 2, tables: 2, locked: [1] }));
+
+      expect(markup).toContain(`data-table-id="${tableId(1)}"`);
+      expect(markup.match(/data-match-id="/g)).toHaveLength(2);
+    });
+  });
+
+  /*
+   * "The grid is still pre-computed once, so nothing reflows mid-round"
+   * (issue #87, the same rule issue #76 imposed on the draw).
+   *
+   * The card scale is keyed on the round's match count and on nothing else,
+   * and a round's match list is fixed the moment it is drawn — so the three
+   * stages below are one round at three points in its evening and the numerals
+   * are the same size in all of them. Keying it on the sections, or on the
+   * deepest one, is what this rules out: both move as the host works through
+   * the queue, and the room would watch the whole board change size because a
+   * pair was sent to a table.
+   */
+  it('never changes the card scale as the round is played', () => {
+    const queued = numeralType(scene(board({ pairs: 6, tables: 1 })));
+    const spread = numeralType(scene(board({ pairs: 6, tables: 3 })));
+    const over = numeralType(scene(board({ pairs: 6, tables: 6, decided: 6 })));
+
+    expect(queued).not.toBe('');
+    expect(spread).toBe(queued);
+    expect(over).toBe(queued);
+  });
+
+  /* The other direction of the same rule: a smaller round is genuinely bigger
+   * on the wall, so the scale is not simply constant everywhere. */
+  it('gives a three-match round bigger numerals than a thirty-match one', () => {
+    expect(numeralType(scene(board({ pairs: 3, tables: 3 })))).not.toBe(
+      numeralType(scene(board({ pairs: 30, tables: 8 }))),
+    );
   });
 });
+
+/** The type step the participant numbers are drawn at. */
+function numeralType(markup: string): string {
+  const numeral = /class="([^"]*)"[^>]*data-group-number/.exec(markup)?.[1] ?? '';
+  return numeral.split(' ').find((name) => name.startsWith('text-beamer-')) ?? '';
+}
 
 /** The match ids in document order — the board's structure, without its paint. */
 function order(markup: string): string[] {

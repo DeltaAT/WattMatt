@@ -1266,9 +1266,12 @@ export const deAT = {
        */
       /** The heading over the matches that have no table yet. */
       queueTitle: 'Warteschlange',
-      /** On a table with nothing on it this round. */
-      tableIdle: 'Frei',
-      tableDisabled: 'Gesperrt',
+      /*
+       * `Frei` and `Gesperrt` are gone with issue #87. A table with no match
+       * this round is no longer on the board at all, so there is nothing left
+       * to label — the board draws one card per match, and an idle table is
+       * something the *host* has to see (`TablePanel`), never the room.
+       */
       /** Before anything has been drawn into this round. */
       empty: 'Es ist keine Partie angesetzt.',
     },
