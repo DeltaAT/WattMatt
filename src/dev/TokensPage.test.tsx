@@ -37,8 +37,11 @@ describe('the /tokens review page', () => {
 
   it('lists every colour token', () => {
     // `--wm-fx-*` are lengths, not colours (issue #29): they belong to the
-    // motion section below, which is where the page shows them.
-    const colours = rootTokens(/^--wm-(?!space-|radius-|beamer-|font-|tracking-|fx-)/);
+    // motion section below, which is where the page shows them. `--wm-podium-*`
+    // are lengths too — the geometry of the `Siegerehrung` in beamer units
+    // (issue #86) — and belong with the beamer geometry the page also leaves
+    // out, because a swatch of a block width says nothing a reviewer can use.
+    const colours = rootTokens(/^--wm-(?!space-|radius-|beamer-|font-|tracking-|fx-|podium-)/);
     expect(colours.length).toBe(22);
     expect(colours.filter((name) => !markup.includes(name))).toEqual([]);
   });

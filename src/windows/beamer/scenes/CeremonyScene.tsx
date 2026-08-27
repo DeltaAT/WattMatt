@@ -3,6 +3,7 @@ import type { GroupId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
 import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, type NameType } from '@/ui/nameFit';
 import { useReducedMotion } from '@/windows/beamer/reducedMotion';
 import { groupLabel } from '@/windows/groupLabel';
 
@@ -10,7 +11,7 @@ import { groupLabel } from '@/windows/groupLabel';
 type Place = 'bronze' | 'silver' | 'gold';
 
 /**
- * Where each place stands and how big its block is.
+ * Where each place stands, how big its block is, and what colour it is.
  *
  * The geometry is what says who came second without anybody reading a word, so
  * it travels with the place rather than with the column it happens to sit in —
@@ -18,12 +19,37 @@ type Place = 'bronze' | 'silver' | 'gold';
  * to the place and the colours and captions to the column, and the two drifted
  * apart. One table now, so a wrong podium is a wrong line rather than a wrong
  * pairing of two right ones.
+ *
+ * The sizes themselves are one step further out, in the tokens the `step`
+ * classes carry (issue #86). They were Tailwind's `h-40 w-48` here, which is
+ * `rem` and therefore 160 × 192 device pixels on every projector the app will
+ * ever meet — a podium that filled a laptop preview and sat in the middle of a
+ * 4K wall. On the beamer unit they are the same picture at every resolution.
  */
-const PODIUM: Record<Place, { position: '1' | '2' | '3'; block: string }> = {
-  gold: { position: '1', block: 'h-40 w-48 bg-wm-gold font-extrabold' },
-  silver: { position: '2', block: 'h-24 w-40 bg-wm-silver font-semibold' },
-  bronze: { position: '3', block: 'h-20 w-36 bg-wm-bronze font-semibold' },
+const PODIUM: Record<Place, { position: '1' | '2' | '3'; step: string; tone: string }> = {
+  gold: { position: '1', step: 'wm-podium-step-gold', tone: 'bg-wm-gold' },
+  silver: { position: '2', step: 'wm-podium-step-silver', tone: 'bg-wm-silver' },
+  bronze: { position: '3', step: 'wm-podium-step-bronze', tone: 'bg-wm-bronze' },
 };
+
+/**
+ * The room the podium gives a name (issue #86, `@/ui/nameFit`).
+ *
+ * `beamer-hero` because this is the one screen of the evening where a name *is*
+ * the picture rather than a label on a card, and a floor of `beamer-h2` because
+ * the point of the scene is that the back of the room can read who won — a
+ * winner's name stepped down to 32 px to save a layout would be the app quietly
+ * deciding the room does not need to see it.
+ *
+ * Two lines, never three: at three the name has become a paragraph and the
+ * block under it has stopped reading as a podium. Below the floor the ellipsis
+ * takes over, which is issue #23's strategy unchanged — a name a host can type
+ * lands at or above 64 px, and the ellipsis covers the longer one a
+ * hand-repaired file can carry.
+ */
+const NAME_BASE: NameType = 'text-beamer-hero';
+const NAME_FLOOR: NameType = 'text-beamer-h2';
+const NAME_LINES = 2;
 
 /** The 2 · 1 · 3 arrangement: the runner-up on the left, the winner in the middle. */
 const COLUMNS: readonly Place[] = ['silver', 'gold', 'bronze'];
@@ -140,7 +166,10 @@ export function CeremonyScene({
       <header className="absolute top-6 left-6">
         <h1 className="wm-display text-beamer-h1">{de.beamer.ceremony.title}</h1>
       </header>
-      <div className="flex w-full max-w-5xl items-end justify-center gap-8" data-podium="">
+      {/* No `max-w`: the podium is the picture, and a cap of 64 rem was what
+          kept it sitting politely in the middle of a 4K wall (issue #86). The
+          columns are sized in beamer units to reach the safe area instead. */}
+      <div className="wm-podium-row flex w-full items-end justify-center" data-podium="">
         {columns.map((place) => (
           <PodiumPlace
             key={place}
@@ -170,6 +199,13 @@ export function CeremonyScene({
  * The column and its block are always drawn, so the picture does not rearrange
  * itself around each name as it arrives; what the reveal adds is the colour,
  * the caption and the name.
+ *
+ * Three bands, bottom-aligned on one floor (issue #86): the name, the block
+ * with its place number, and the caption. The name stands *above* the block
+ * rather than inside it, which is what lets it be 160 px on a block that is
+ * only as tall as its place deserves — and it is exactly as wide as the block,
+ * so "never overflows its block" is a fact about the box rather than a hope
+ * about the name.
  */
 function PodiumPlace({
   place,
@@ -182,25 +218,40 @@ function PodiumPlace({
   revealed: boolean;
   animate: boolean;
 }) {
-  const { position, block } = PODIUM[place];
+  const { position, step, tone } = PODIUM[place];
   const rise = revealed && animate ? 'wm-podium-rise' : '';
   const glow = place === 'gold' && revealed && animate ? 'wm-podium-gold' : '';
+  const nameType = fitNameType(name, NAME_BASE, { floor: NAME_FLOOR, lines: NAME_LINES });
 
   return (
     <div
-      className="flex flex-col items-center"
+      className={`wm-podium-column flex flex-col items-center ${step}`}
       data-podium-place={position}
       data-revealed={revealed}
     >
-      <div
-        className={`podium-block rounded-wm-sm p-4 text-center ${block} ${revealed ? '' : 'invisible'} ${rise} ${glow}`}
-      >
-        {/* §4.5: the name arrives after its block has risen. */}
-        <span className={revealed && animate ? 'wm-podium-name' : undefined}>
+      <div className="wm-podium-name-box flex w-full items-end justify-center">
+        {/* §4.5: the name arrives after its block has risen. `line-clamp-2` is
+            the second half of issue #23's strategy at this scene's floor — the
+            step above has already taken the name as far down as 64 px. */}
+        <span
+          className={`wm-display line-clamp-2 w-full text-center ${nameType} ${
+            revealed && animate ? 'wm-podium-name' : ''
+          }`}
+        >
           {revealed ? name : ''}
         </span>
       </div>
-      <div className="mt-2 text-beamer-caption text-wm-text-muted">
+      <div
+        className={`podium-block wm-podium-block flex w-full items-center justify-center rounded-t-wm-lg ${tone} ${revealed ? '' : 'invisible'} ${rise} ${glow}`}
+      >
+        {/* The place, on the block face and in the same 160 px as a name: the
+            room reads 1 · 2 · 3 from the back before it reads anything else,
+            and the medal colours alone do not carry that at fifteen metres.
+            Dark on the medal, because light text on gold is unreadable through
+            a projector. */}
+        <span className="wm-display wm-tnum text-beamer-hero text-wm-bg">{position}</span>
+      </div>
+      <div className="wm-display text-beamer-h3 text-wm-text-muted">
         {revealed ? de.beamer.ceremony.positions[place] : ''}
       </div>
     </div>

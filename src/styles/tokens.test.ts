@@ -105,6 +105,77 @@ describe('tokens.css implements the normative documents', () => {
     }
   });
 
+  /*
+   * The podium's geometry (issue #86, docs/STYLEGUIDE.md §4).
+   *
+   * "Fills the screen rather than sitting politely in the middle of it" is a
+   * sentence about arithmetic, and this is the arithmetic: the stage is 120
+   * units wide, the 4 % safe area takes 4.8 off each side, and what the three
+   * columns and their two gaps come to has to land inside 110.4 without
+   * stopping far short of it. A `max-w-5xl` and three `rem` blocks passed every
+   * test in the repository while doing neither.
+   */
+  describe('the podium fills the stage it is drawn on', () => {
+    /** The multiple of the beamer unit a geometry token is worth. */
+    function units(name: string): number {
+      const value = declaredTokens.get(name) ?? '';
+      const found = /calc\(var\(--wm-beamer-unit\) \* ([\d.]+)\)/.exec(value)?.[1];
+      expect(found, name).toBeDefined();
+      return Number(found);
+    }
+
+    /** The stage inside the safe area, in beamer units. 4 % of 120, twice. */
+    const USABLE_WIDTH = 120 - 2 * 4.8;
+
+    it('reaches the safe area without crossing it', () => {
+      const across =
+        units('--wm-podium-width-gold') +
+        units('--wm-podium-width-silver') +
+        units('--wm-podium-width-bronze') +
+        2 * units('--wm-podium-gap');
+
+      expect(across).toBeLessThanOrEqual(USABLE_WIDTH);
+      // And it is not a podium in the middle of a wall: nothing narrower than
+      // nine tenths of the room it has is what the issue asked for.
+      expect(across).toBeGreaterThan(USABLE_WIDTH * 0.9);
+    });
+
+    it('leaves the tallest column inside the safe area', () => {
+      // 4 % padding resolves against the *width* in both axes, so the stage's
+      // 67.5 units of height lose 4.8 twice as well.
+      const usableHeight = 120 / (16 / 9) - 2 * 4.8;
+      const tallest =
+        units('--wm-podium-name-height') +
+        units('--wm-podium-height-gold') +
+        2 * units('--wm-podium-column-gap') +
+        3; // the caption, one `beamer-h3` line
+
+      expect(tallest).toBeLessThan(usableHeight);
+    });
+
+    it('makes gold clearly the tallest and the widest', () => {
+      expect(units('--wm-podium-height-gold')).toBeGreaterThan(units('--wm-podium-height-silver'));
+      expect(units('--wm-podium-height-silver')).toBeGreaterThan(
+        units('--wm-podium-height-bronze'),
+      );
+      expect(units('--wm-podium-width-gold')).toBeGreaterThan(units('--wm-podium-width-silver'));
+      expect(units('--wm-podium-width-silver')).toBe(units('--wm-podium-width-bronze'));
+    });
+
+    it('gives a name two full hero lines', () => {
+      // The name box is what keeps the three blocks on one floor whether a name
+      // takes one line or two, so it is exactly two lines of `beamer-hero`.
+      expect(units('--wm-podium-name-height')).toBe(2 * 10);
+    });
+
+    it('scales the reveal travel with the blocks (docs/MOTION.md §4.5)', () => {
+      // §4.5 named 40 px against a podium 2.4× smaller than this one. The
+      // travel is a unit multiple for the same reason the sizes are, and it is
+      // more than the 2.5 units the 40 px was.
+      expect(units('--wm-podium-travel')).toBeGreaterThan(2.5);
+    });
+  });
+
   it('scales the beamer root with the 16:9 stage (docs/STYLEGUIDE.md §2)', () => {
     const globalCss = readFileSync(join(REPO_ROOT, 'src/styles/global.css'), 'utf8');
     const beamerRoot = /\.beamer-root\s*\{([\s\S]*?)\}/.exec(globalCss)?.[1] ?? '';

@@ -87,6 +87,40 @@
   --wm-beamer-unit: calc(var(--wm-beamer-stage-width) / 120);
   --wm-beamer-safe-area: 4%; /* projectors overscan — §3 */
 
+  /* ---- the podium (issue #86, docs/STYLEGUIDE.md §4) ----
+   * The `Siegerehrung` is the last picture of the evening and the one the room
+   * photographs, so the three blocks are sized to fill the stage rather than to
+   * sit politely in the middle of it.
+   *
+   * Multiples of the beamer unit, not `rem`. `rem` resolves against <html>, so
+   * a podium built out of Tailwind's `h-40 w-48` is 160 × 192 device pixels at
+   * 720p, at 1080p, at 4K and inside the host's 300 px preview — which is the
+   * bug this replaces. The unit follows the stage, so one set of numbers is
+   * the same picture at every resolution.
+   *
+   * The stage is 120 units wide and the 4 % safe area takes 4.8 off each side,
+   * leaving 110.4. The three columns and their two gaps come to 106: the
+   * podium reaches the safe area and stops there. Vertically the safe area
+   * leaves 57.9 units (the 4 % padding resolves against the width in both
+   * axes), and the tallest column — two hero lines of name, the block, and the
+   * caption — comes to about 50, which leaves the scene title its corner.
+   */
+  --wm-podium-gap: calc(var(--wm-beamer-unit) * 3);
+  --wm-podium-column-gap: calc(var(--wm-beamer-unit) * 1.5);
+  /* Two lines of `beamer-hero`, so a one-line name and a two-line one sit on
+   * the same block rather than on blocks at two different heights. */
+  --wm-podium-name-height: calc(var(--wm-beamer-unit) * 20);
+  --wm-podium-width-gold: calc(var(--wm-beamer-unit) * 36);
+  --wm-podium-width-silver: calc(var(--wm-beamer-unit) * 32);
+  --wm-podium-width-bronze: calc(var(--wm-beamer-unit) * 32);
+  --wm-podium-height-gold: calc(var(--wm-beamer-unit) * 24);
+  --wm-podium-height-silver: calc(var(--wm-beamer-unit) * 18);
+  --wm-podium-height-bronze: calc(var(--wm-beamer-unit) * 14);
+  /* docs/MOTION.md §4.5's 40 px rise, re-measured for a block 2.4× the size it
+   * was: the same travel under a 160 px name reads as a twitch rather than as
+   * an arrival. Also a unit multiple, for the reason the sizes above are. */
+  --wm-podium-travel: calc(var(--wm-beamer-unit) * 5);
+
   /* ---- typography ---- */
   --wm-font-stretch-expanded: 125%; /* Archivo's wdth axis maxes at 125% */
   --wm-tracking-label: 0.04em; /* host labels, 12px uppercase — §2 */

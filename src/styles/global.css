@@ -682,12 +682,65 @@
  * hint would outlive the 600 ms it was for.
  * ------------------------------------------------------------------------- */
 
+/*
+ * The geometry (issue #86, docs/STYLEGUIDE.md §4).
+ *
+ * Each place picks its two sizes once, as local variables, and the column and
+ * the block below read them — so a step is one line per place rather than a
+ * width here and a height there that a later issue can move apart. The values
+ * themselves are tokens: the podium has to be the same picture at 720p, at
+ * 1080p, at 4K and in the host's preview, which the `rem`-based Tailwind sizes
+ * it used to carry were not.
+ */
+
+@utility wm-podium-step-gold {
+  --wm-podium-width: var(--wm-podium-width-gold);
+  --wm-podium-height: var(--wm-podium-height-gold);
+}
+
+@utility wm-podium-step-silver {
+  --wm-podium-width: var(--wm-podium-width-silver);
+  --wm-podium-height: var(--wm-podium-height-silver);
+}
+
+@utility wm-podium-step-bronze {
+  --wm-podium-width: var(--wm-podium-width-bronze);
+  --wm-podium-height: var(--wm-podium-height-bronze);
+}
+
+/* The row of columns. Its own gap token rather than a Tailwind `gap-8`, which
+ * is rem and would close up at 4K. */
+@utility wm-podium-row {
+  gap: var(--wm-podium-gap);
+}
+
+@utility wm-podium-column {
+  width: var(--wm-podium-width);
+  gap: var(--wm-podium-column-gap);
+}
+
+/* The name stands above its block and is exactly as wide as it — which is what
+ * "never overflows its block" means in CSS. The fixed height is two hero lines,
+ * so the blocks stay on one floor whether a name takes one line or two, and the
+ * name is bottom-aligned inside it so a one-line name sits on its block rather
+ * than floating above it. */
+@utility wm-podium-name-box {
+  height: var(--wm-podium-name-height);
+}
+
+@utility wm-podium-block {
+  height: var(--wm-podium-height);
+}
+
 @keyframes wm-podium-rise {
   0% {
     opacity: 0;
-    /* §4.5 names 40 px. Written as a rem on the 8 px grid so it scales with the
-     * projector's root size rather than staying 40 device pixels at 4K. */
-    transform: translateY(2.5rem);
+    /* §4.5 names 40 px, measured against the podium as it was. Issue #86 made
+     * the blocks about 2.4× that, and the same 40 px under a 160 px name reads
+     * as a twitch rather than as an arrival — so the travel is a token on the
+     * beamer unit (`--wm-podium-travel`, 80 px at 1080p), which also keeps it
+     * proportional at 720p and 4K where a rem would not be. */
+    transform: translateY(var(--wm-podium-travel));
   }
   100% {
     opacity: 1;

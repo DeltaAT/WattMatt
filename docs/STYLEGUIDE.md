@@ -142,6 +142,14 @@ limit on a name is chosen to be exactly what one card line holds at the floor, s
 can type is always read whole; the ellipsis is there for the longer one a hand-repaired file can
 carry. This is per *name* and composes with the per-*scene* scaling above.
 
+A scene may move both ends of that ladder, and one does. A scene where the name *is* the
+picture rather than a label on a card gives it more than one line and refuses to go all the way
+down to 32 px: the `Siegerehrung` draws a name at `beamer-hero` over at most two lines and
+stops at a floor of `beamer-h2` (`{ floor, lines }`, issue #86). The pair of numbers still
+meets — two lines of 64 px hold exactly 40 characters — so the guarantee is the same one, at a
+different size. Never three lines: at three the name is a paragraph and the block under it has
+stopped reading as a podium.
+
 ### Host type scale
 
 `12 / 14 / 16 / 20 / 24 / 32 px`. Body is 14 px, labels 12 px uppercase with `.04em` tracking.
@@ -193,6 +201,16 @@ the fallback the issue holds in reserve is a compact `T` marker, not the whole w
 `settings.participantLabel` therefore no longer reaches a beamer **match card** at all. It
 still decides the wording of the one-line scene headings that count participants rather than
 name them — `GROUP_OVERVIEW`, `WELCOME`, `NAMING` — and the whole of the host UI.
+
+**Podium** (`CEREMONY`, issue #86) — the last picture of the evening and the one the room
+photographs, so it is sized to fill the stage rather than to sit in the middle of it. Three
+bottom-aligned columns in the 2 · 1 · 3 arrangement, gold the tallest and the widest, and the
+three columns plus their gaps come to 106 of the 110.4 units the safe area leaves. Each column
+is a name at `beamer-hero` above its block, the block itself with the place number `1` / `2` /
+`3` on its face at the same size, and the medal word below it at `beamer-h3`. The name is
+exactly as wide as its block, which is what stops it overflowing one. Every length is a
+multiple of the beamer unit (`--wm-podium-*`), never a `rem`: a podium built from Tailwind's
+`h-40 w-48` is the same 160 × 192 device pixels on a 4K wall as in the host's 300 px preview.
 
 **Table chip** — label plus status dot: grey `frei`, amber `belegt`, dark red `gesperrt`.
 The host's table overview is a live occupancy board and must be readable at a glance.

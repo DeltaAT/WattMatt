@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { drawBracket, setBracketWinner } from '@/domain/bracket';
 import type { GroupId } from '@/domain/ids';
+import { MAX_GROUP_NAME_LENGTH } from '@/domain/naming';
 import { toTournamentSnapshot, type TournamentSnapshot } from '@/domain/snapshot';
 import { FIXED_NOW, group, table, tournament } from '@/domain/testFixtures';
 import type { Tournament } from '@/domain/types';
 import { de } from '@/i18n';
+import { fitNameType, NAME_BUDGET } from '@/ui/nameFit';
 import { CeremonyScene } from '@/windows/beamer/scenes/CeremonyScene';
 import { CeremonySceneHost } from '@/windows/beamer/scenes/CeremonySceneHost';
 
@@ -146,14 +148,42 @@ describe('the podium', () => {
 
   it('keeps the runner-up on the taller block', () => {
     const { container } = scene(toTournamentSnapshot(played(4)));
-    const block = (position: '1' | '2' | '3') =>
-      place(container, position)?.querySelector('.podium-block')?.className ?? '';
+    const column = (position: '1' | '2' | '3') => place(container, position)?.className ?? '';
 
-    // The geometry was the half of the podium that was right, and the fix must
-    // not have inverted it: 2 · 1 · 3 with the middle tallest.
-    expect(block('1')).toContain('h-40');
-    expect(block('2')).toContain('h-24');
-    expect(block('3')).toContain('h-20');
+    // The geometry was the half of the podium that was right, and neither
+    // issue #69's fix nor issue #86's resize may have inverted it: 2 · 1 · 3
+    // with the middle on the gold step. Which step is the tallest is not a
+    // question about this markup — it is the tokens, and `tokens.test.ts`
+    // pins that gold is taller and wider than the two beside it.
+    expect(column('1')).toContain('wm-podium-step-gold');
+    expect(column('2')).toContain('wm-podium-step-silver');
+    expect(column('3')).toContain('wm-podium-step-bronze');
+  });
+
+  /*
+   * Issue #86. The podium is the last picture of the evening and the one people
+   * photograph from the back of a room fifteen metres deep, so the two things
+   * it must be are large and unambiguous.
+   */
+  it('draws the names at the hero step', () => {
+    const { container } = scene(toTournamentSnapshot(played(4)));
+
+    for (const position of ['1', '2', '3'] as const) {
+      const name = place(container, position)?.querySelector('.wm-display');
+      expect(name?.className, position).toContain('text-beamer-hero');
+    }
+  });
+
+  it('reads out the place on the block itself', () => {
+    const { container } = scene(toTournamentSnapshot(played(4)));
+
+    for (const position of ['1', '2', '3'] as const) {
+      const number = place(container, position)?.querySelector('.podium-block span');
+      // The digit, at the same size as a name: the medal colours alone do not
+      // say 1 · 2 · 3 at fifteen metres, and a caption at 24 px does not either.
+      expect(number?.textContent, position).toBe(position);
+      expect(number?.className, position).toContain('text-beamer-hero');
+    }
   });
 
   it('names an unnamed participant in the words this tournament uses', () => {
@@ -174,6 +204,76 @@ describe('the podium', () => {
     const number = document.groups.find((entry) => entry.id === gold)?.number ?? 0;
     expect(text(container, '1')).toContain(de.participant.TEAM.numbered({ n: number }));
     expect(text(container, '1')).not.toContain(de.participant.GROUP.numbered({ n: number }));
+  });
+});
+
+/*
+ * Issue #86's worst case, which is issue #23's: three of the longest names a
+ * host can enter, side by side, on the one scene that draws a name at 160 px.
+ *
+ * The two halves of `@/ui/nameFit` are what has to hold here, and they are
+ * asserted as *bounds* rather than as one exact step: the name comes down from
+ * the hero step until it fits, it never goes below the 64 px floor this scene
+ * sets, and the element it sits in clamps at two lines so anything the floor
+ * still cannot hold ends in an ellipsis instead of over the block beside it.
+ * A three-line name is the failure the issue names explicitly.
+ */
+describe('three of the longest names there are', () => {
+  /** The example from issue #23's acceptance criteria, at the 40-character limit. */
+  const LONG = [
+    'Die schnellen Schnitzeljäger aus Salzburg',
+    'Die langsamen Schnitzeljäger aus Salzburg',
+    'Die mittleren Schnitzeljäger aus Salzburg',
+  ];
+
+  function longNamed(): TournamentSnapshot {
+    const snapshot = toTournamentSnapshot(played(4));
+    return {
+      ...snapshot,
+      groups: snapshot.groups.map((entry, index) => ({
+        ...entry,
+        name: LONG[index % LONG.length] ?? entry.name,
+      })),
+    };
+  }
+
+  it('steps every name down to the floor and no further', () => {
+    const { container } = scene(longNamed());
+
+    for (const position of ['1', '2', '3'] as const) {
+      const name = place(container, position)?.querySelector('.wm-display');
+      expect(name?.className, position).toContain('text-beamer-h2');
+      // Below the floor is where a name the back of the room cannot read
+      // starts, and this is the scene where that name is the whole point.
+      expect(name?.className, position).not.toContain('text-beamer-h3');
+      expect(name?.className, position).not.toContain('text-beamer-body');
+    }
+  });
+
+  it('holds the longest name a host can type without an ellipsis', () => {
+    // The pair of numbers issue #23's strategy rests on, at this scene's floor:
+    // two lines of 64 px hold exactly `MAX_GROUP_NAME_LENGTH` characters, so a
+    // name a host can actually enter is read whole. The clamp below is for the
+    // longer one only a hand-repaired file can carry.
+    expect(NAME_BUDGET['text-beamer-h2'] * 2).toBe(MAX_GROUP_NAME_LENGTH);
+    expect(
+      fitNameType('x'.repeat(MAX_GROUP_NAME_LENGTH), 'text-beamer-hero', {
+        floor: 'text-beamer-h2',
+        lines: 2,
+      }),
+    ).toBe('text-beamer-h2');
+  });
+
+  it('clamps a name at two lines rather than letting it grow a third', () => {
+    const { container } = scene(longNamed());
+
+    for (const position of ['1', '2', '3'] as const) {
+      const name = place(container, position)?.querySelector('.wm-display');
+      expect(name?.className, position).toContain('line-clamp-2');
+      // And the name is in the markup whole: the clamp is the projector's last
+      // resort, not this scene deciding in advance what the room may read.
+      expect(LONG, position).toContain(name?.textContent);
+    }
   });
 });
 
