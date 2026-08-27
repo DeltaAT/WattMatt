@@ -73,7 +73,7 @@ uses.
 | `beamer-1-welcome.png` | `WELCOME` | Before the doors open, with a couple of dozen registered so the count is on the wall. |
 | `beamer-2-groups.png` | `GROUP_OVERVIEW` | 40 participants, so the dense grid is what the reader sees. |
 | `beamer-3-tables.png` | `TABLE_OVERVIEW` | A mix of occupied, free and `gesperrt`. |
-| `beamer-4-draw.png` | `DRAW` | Mid-sequence: about half the slots filled, the rest still empty and dashed, one *Wartet auf Tisch*. |
+| `beamer-4-draw.png` | `DRAW` | Mid-sequence: about half the slots filled, the rest still empty and dashed, one *Wartet auf Tisch*. Include at least one pairing of a single-digit against a double-digit number — issue #88's criterion is that the two read as peers in separate boxes. |
 | `beamer-4-draw-bye.png` | `DRAW` | The `Freilos` reveal (odd field — the 13-group run). |
 | `beamer-5-round.png` | `ROUND_BOARD` | One `LÄUFT`, one `BEENDET` with a green winner box and a dimmed red loser box, a non-empty *Warteschlange*. Set the hall up with more tables than the round uses — since issue #87 the unused ones are not on the board, and the shot should show that. **Also save a greyscale copy** — issue #77's acceptance criterion is that the two are still tellable apart with the colour gone. |
 | `beamer-6-repechage.png` | `REPECHAGE` | A card in `GEZOGEN`, one `VERZICHTET`, places left on the counter. |

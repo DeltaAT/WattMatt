@@ -9,6 +9,7 @@ import {
 import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
 import type { Group, Match } from '@/domain/types';
 import { de } from '@/i18n';
+import { GroupBox, type GroupBoxScale, type GroupBoxState } from '@/ui';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { useResultFlip } from '@/windows/beamer/useResultFlip';
@@ -27,6 +28,12 @@ import { tableNumber } from '@/windows/tableLabel';
  * deficiency, and a projector in a bright room flattens the hues for everybody
  * — so the board has to survive being read in greyscale, and the test asserts
  * exactly that by stripping the colour classes out of the markup.
+ *
+ * **The number boxes are `@/ui/GroupBox`**, the same component the `Auslosung`
+ * draws its pairings with (issue #88). The box a group sits in during the draw
+ * is the box that turns green or red here, so the room sees a colour arrive
+ * rather than a new object — and the three states cannot drift apart, because
+ * there is only one of each.
  *
  * **Nothing moves when a result lands.** Cards are grouped by the match's own
  * `tableId` (`@/domain/round`), which `setWinner` leaves alone, so the flip
@@ -230,33 +237,16 @@ function MatchCard({
 }
 
 /**
- * One participant of a match, as a box that carries the result (issue #77).
+ * One participant of a match: which state its box is in, and nothing else.
  *
- * The `SIEGER` / `AUSGESCHIEDEN` words are gone: at the sizes issue #75 gave
- * the numerals there is no room for a word beside them that is worth reading,
- * and the box around the number can say the same thing without any.
+ * The box itself is `@/ui/GroupBox` (issue #88) — every decision about how a
+ * number is drawn on the projector lives there, including the three signals
+ * that have to survive a red–green deficiency. What is left here is the one
+ * question only a match can answer, which is whether this side won it.
  *
- * **What replaced the word, and why it is not just colour.** docs/STYLEGUIDE.md
- * §1 used to require three signals because roughly 8 % of men have a red–green
- * deficiency and a projector in a lit room flattens hue. Dropping the text
- * leaves three that are not hue at all, and `resultContrast.test.ts` computes
- * them rather than trusting the eye:
- *
- *  - **Luminance.** The winner's edge and the loser's differ by 3.2:1 in
- *    greyscale once the loser's dimming is composited — past §1's 3:1 bar for
- *    non-text UI. The *fills* alone manage only 1.4:1, which is why the edge
- *    does the work and not the background.
- *  - **Geometry.** The winner's edge reads 6 px against the loser's 2 px
- *    (`wm-result-ring`), drawn inward so it costs no layout.
- *  - **Weight.** The loser stays at `opacity .6` and half saturation — the
- *    issue #19 treatment, kept deliberately. Winner at full strength.
- *
- * The `✓` / `✗` glyph stays too. The issue's own warning counts the text as
- * *one* of the three signals, so the icon is the one that survives, and it is
- * the cheapest non-hue signal there is.
- *
- * The digits themselves are `--wm-text` in every state: the box is coloured,
- * never the number (issue #77).
+ * Keyed on `winnerId` rather than on `status`, so a corrected result — which
+ * goes back through `setWinner` — repaints both sides rather than leaving the
+ * old winner green.
  */
 function Side({
   match,
@@ -271,85 +261,22 @@ function Side({
   size: Density;
   flip: boolean;
 }) {
-  const label = groupNumber(groupId, groups);
   const decided = match.winnerId !== null;
-  const isWinner = decided && match.winnerId === groupId;
-  const outcome: Outcome = !decided ? 'OPEN' : isWinner ? 'WINNER' : 'LOSER';
+  const state: GroupBoxState = !decided
+    ? 'NEUTRAL'
+    : match.winnerId === groupId
+      ? 'WINNER'
+      : 'LOSER';
 
   return (
-    <span
-      // 2 px of border in every state, and never more: the winner's extra 4 px
-      // are drawn inward by `wm-result-ring`, so the box is exactly the same
-      // size decided and undecided. A border that grew when a result landed
-      // would move every card on the row — "no layout shift when a result comes
-      // in" is issue #77's one hard requirement.
-      className={`flex min-w-0 items-baseline justify-center gap-3 rounded-wm-lg border-[2px] px-4 py-2 ${
-        OUTCOME_BOX[outcome]
-      } ${
-        // The flip itself. Only the decided sides animate, and both run at once
-        // — a stagger would look like hesitation about the result
-        // (docs/MOTION.md §4.2). A board that is only *arriving* does not flip
-        // at all: `OUTCOME_BOX` already carries every settled colour, so the
-        // results are there, they simply do not replay (issue #29).
-        outcome === 'OPEN' || !flip ? '' : OUTCOME_ANIMATION[outcome]
-      }`}
-      data-outcome={outcome}
-    >
-      {/*
-       * A fixed box, so `·` → `✓` cannot nudge the number sideways. The three
-       * glyphs have different advance widths, and the acceptance criterion is
-       * that nothing moves when a result lands — inside the box as much as
-       * outside it.
-       */}
-      <span
-        aria-hidden="true"
-        className={`w-[1.2em] shrink-0 text-center font-bold ${LABEL[size]}`}
-        data-outcome-icon=""
-      >
-        {OUTCOME_ICON[outcome]}
-      </span>
-
-      {/*
-       * The number, and nothing in front of it (issue #75). Two digits at a
-       * fixed step rather than a name stepped down towards the 32 px floor:
-       * there is no length here to defend against, so the type is the size the
-       * room needs rather than the size the longest label allowed.
-       */}
-      <span className={`wm-display wm-tnum font-extrabold ${TYPE[size]}`} data-group-number="">
-        {label.text}
-      </span>
-    </span>
+    <GroupBox
+      number={groupNumber(groupId, groups).text}
+      state={state}
+      scale={BOX_SCALE[size]}
+      flip={flip}
+    />
   );
 }
-
-type Outcome = 'OPEN' | 'WINNER' | 'LOSER';
-
-/** Filled shapes, not thin outlines — a hairline glyph dies on a projector. */
-const OUTCOME_ICON: Record<Outcome, string> = {
-  OPEN: '·',
-  WINNER: '✓',
-  LOSER: '✗',
-};
-
-/**
- * The three states of a number box (issue #77).
- *
- * `text-wm-text` throughout: the box is coloured and the digits are not, so a
- * number is exactly as readable when its match is lost as when it is won.
- * `wm-result-ring` is the winner's extra 4 px of edge, and it is applied here
- * rather than in the animation so a board that is merely catching up wears it
- * too (golden rule 4).
- */
-const OUTCOME_BOX: Record<Outcome, string> = {
-  OPEN: 'border-wm-border-strong bg-wm-bg-elevated text-wm-text',
-  WINNER: 'wm-result-ring border-wm-win bg-wm-win-bg text-wm-text',
-  LOSER: 'border-wm-lose bg-wm-lose-bg text-wm-text opacity-60 saturate-50',
-};
-
-const OUTCOME_ANIMATION: Record<Exclude<Outcome, 'OPEN'>, string> = {
-  WINNER: 'wm-result-win',
-  LOSER: 'wm-result-lose',
-};
 
 /** The card itself only carries the phase; the result lives on the sides. */
 const PHASE_CARD: Record<MatchPhase, string> = {
@@ -410,28 +337,23 @@ function density(cards: number): Density {
 }
 
 /**
- * How big a participant's number is drawn (issue #75).
+ * Which `GroupBox` step a density draws its numbers at (issues #75, #88).
  *
- * Every step went up once the words came off. `beamer-hero` on a board with
- * room for it, and never below `beamer-h2` — two digits need a fraction of the
- * width `Gruppe 12` did, and the space that frees is the whole point of the
- * change. `useFitToStage` shrinks the board from here when a projector has less
- * room than the ladder assumed, so the ladder asks for what the room needs
- * rather than for what always fits (docs/STYLEGUIDE.md §2, §4).
+ * The thresholds above are this scene's; the box these land on is shared with
+ * the `Auslosung`, so a `hero` box is the same object in both. Every step went
+ * up when the words came off — `beamer-hero` on a board with room for it, and
+ * never below `beamer-h2`, because two digits need a fraction of the width
+ * `Gruppe 12` did. `useFitToStage` shrinks the board from here when a projector
+ * has less room than the ladder assumed, so the ladder asks for what the room
+ * needs rather than for what always fits (docs/STYLEGUIDE.md §2, §4).
  */
-const TYPE: Record<Density, string> = {
-  roomy: 'text-beamer-hero',
-  normal: 'text-beamer-h1',
-  dense: 'text-beamer-h2',
+const BOX_SCALE: Record<Density, GroupBoxScale> = {
+  roomy: 'hero',
+  normal: 'h1',
+  dense: 'h2',
 };
 
 const HEADING: Record<Density, string> = {
-  roomy: 'text-beamer-h3',
-  normal: 'text-beamer-body',
-  dense: 'text-beamer-body',
-};
-
-const LABEL: Record<Density, string> = {
   roomy: 'text-beamer-h3',
   normal: 'text-beamer-body',
   dense: 'text-beamer-body',
