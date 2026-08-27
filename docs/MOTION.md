@@ -158,6 +158,14 @@ Bronze → silver → gold, 500 ms apart. Each podium block rises with
 block. Gold gets a 1200 ms glow bloom and a confetti burst capped at **150 particles**,
 auto-stopping after 6 s. Triggered manually by the host — never automatically.
 
+Issue #86 re-measured the travel. The blocks are now about 2.4× the size §4.5 was written
+against and the names on them are 160 px, and 40 px under a name that size reads as a twitch
+rather than as an arrival — so the rise is `--wm-podium-travel`, 5 beamer units (80 px at
+1080p). A unit multiple rather than a `rem` for the same reason the podium's widths and
+heights are: at 4K a `rem` is the same handful of device pixels it was at 720p, so the block
+would travel a quarter of the distance the room sees at 1080p. Everything else in the
+paragraph above is unchanged — the timings, the order, the 150 ms and the burst.
+
 Built in issue #69. *Which* places are up is the host's, so it is not in the keyframes: the
 step lives in the scene descriptor, `useCeremonyReveal` turns it into a place that is
 arriving, and `wm-podium-rise` is the arrival of one block. `--ease-dramatic` stands in for

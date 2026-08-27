@@ -65,6 +65,69 @@ describe('fitNameType', () => {
   });
 
   /*
+   * The two rungs above 64 px (issue #86). They exist for the one scene where a
+   * name *is* the picture rather than a label on a card — the `Siegerehrung` —
+   * and the ladder behaves there exactly as it does below: down a step at a
+   * time, never up, never past the floor.
+   */
+  it('steps a hero name down through 96 px before it reaches 64 px', () => {
+    const eight = 'x'.repeat(NAME_BUDGET['text-beamer-hero']);
+    expect(fitNameType(eight, 'text-beamer-hero')).toBe('text-beamer-hero');
+    expect(fitNameType(`${eight}x`, 'text-beamer-hero')).toBe('text-beamer-h1');
+    expect(fitNameType('x'.repeat(NAME_BUDGET['text-beamer-h1'] + 1), 'text-beamer-hero')).toBe(
+      'text-beamer-h2',
+    );
+  });
+
+  /*
+   * A scene may refuse to go all the way down to 32 px. The podium does: a
+   * winner's name at body size is one the back of the room cannot read, and
+   * this is the scene that exists to be read from the back of the room.
+   */
+  it('stops at the floor the scene set, not at 32 px', () => {
+    const long = 'x'.repeat(MAX_GROUP_NAME_LENGTH * 4);
+    expect(fitNameType(long, 'text-beamer-hero', { floor: 'text-beamer-h2' })).toBe(
+      'text-beamer-h2',
+    );
+    // Unchanged for everybody who does not ask: the default floor is the 32 px
+    // of docs/STYLEGUIDE.md §2.
+    expect(fitNameType(long, 'text-beamer-hero')).toBe('text-beamer-body');
+  });
+
+  it('never inflates a name to reach a floor above the step its scene offered', () => {
+    // A floor is the smallest step, not a target. A dense card that asked for
+    // 32 px keeps it even if some caller passes a floor two sizes up.
+    expect(fitNameType('X', 'text-beamer-body', { floor: 'text-beamer-hero' })).toBe(
+      'text-beamer-body',
+    );
+  });
+
+  /*
+   * A second line doubles what a step holds. The podium gives each name a whole
+   * column and two lines of it; nothing gives a name three.
+   */
+  it('counts a second line as twice the budget', () => {
+    const name = 'x'.repeat(NAME_BUDGET['text-beamer-hero'] * 2);
+    // On one line it is two steps down; on two it stays where the scene put it.
+    expect(fitNameType(name, 'text-beamer-hero')).toBe('text-beamer-h2');
+    expect(fitNameType(name, 'text-beamer-hero', { lines: 2 })).toBe('text-beamer-hero');
+  });
+
+  /*
+   * The podium's own pair of numbers (issue #86), the same shape as the pair
+   * the floor rests on: two lines of 64 px hold exactly the longest name a host
+   * can enter, so the ellipsis is only ever for a hand-repaired file.
+   */
+  it('holds the longest legal name at the podium floor', () => {
+    const podium = { floor: 'text-beamer-h2', lines: 2 } as const;
+    expect(NAME_BUDGET['text-beamer-h2'] * 2).toBe(MAX_GROUP_NAME_LENGTH);
+    expect(fitNameType('x'.repeat(MAX_GROUP_NAME_LENGTH), 'text-beamer-hero', podium)).toBe(
+      'text-beamer-h2',
+    );
+    expect(fitNameType(LONG_NAME, 'text-beamer-hero', podium)).toBe('text-beamer-h2');
+  });
+
+  /*
    * A pairing is two names and the word between them. Stepping down for the
    * longer of the two alone would still overflow the card.
    */

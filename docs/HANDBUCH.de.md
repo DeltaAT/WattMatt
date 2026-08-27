@@ -904,7 +904,9 @@ Zwei Knöpfe:
 Die Knöpfe lassen sich mischen: Sie können den Aufbau starten und mit **Nächsten Platz
 zeigen** dort übernehmen, wo er gerade steht.
 
-Auf dem Podest steht Gold in der Mitte, Silber und Bronze daneben. Der dritte Platz ist die
+Auf dem Podest steht Gold in der Mitte, Silber und Bronze daneben — jeder Name über seinem
+Block, die Platzziffer auf dem Block. Sehr lange Namen werden kleiner gesetzt und notfalls
+zweizeilig umbrochen; sie bleiben aber immer groß genug für die letzte Reihe. Der dritte Platz ist die
 Siegerin oder der Sieger des **Spiels um Platz 3**. Bei genau zwei Teilnehmenden gibt es
 kein Spiel um Platz 3 — das Podest hat dann zwei Stufen, und der erste Druck zeigt Silber.
 
@@ -1187,14 +1189,19 @@ Der Baum wächst von links nach rechts. Ein Platz, den noch niemand erreicht hat
 ```text
    Siegerehrung
 
-                     ┌──────────────┐
-                     │              │
-      ┌───────────┐  │    Adler     │  ┌──────────┐
-      │  Falken   │  │              │  │  Sturm   │
-      └───────────┘  └──────────────┘  └──────────┘
+                              Adler
+                          ┌──────────┐
+        Falken            │          │
+     ┌──────────┐         │    1     │        Sturm
+     │    2     │         │          │     ┌─────────┐
+     │          │         │          │     │    3    │
+     └──────────┘         └──────────┘     └─────────┘
+        Silber                Gold            Bronze
 ```
 
-Das Podest: Gold in der Mitte, höher als die beiden anderen.
+Das Podest: Gold in der Mitte, höher und breiter als die beiden anderen. Der Name steht
+über dem Block, die Platzziffer darauf. Das Podest füllt die Leinwand — es ist das Bild,
+das am Ende fotografiert wird.
 
 ---
 

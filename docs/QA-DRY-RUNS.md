@@ -144,6 +144,14 @@ where the host is under real pressure.
 - [ ] **Readable at 10 m** on a real projector in a lit room: group numbers, names, the round
       board, the bracket and the podium. Nothing thinner than weight 500 on the beamer
       ([STYLEGUIDE.md](STYLEGUIDE.md) §2).
+- [ ] **The podium at 15 m** (issue #86). The `Siegerehrung` is the one moment the room is
+      furthest from the screen and holding up phones, so it gets its own check at half again
+      the distance. Three things, on the wall and not in a browser: the longest names there
+      are — three copies of *Die schnellen Schnitzeljäger aus Salzburg*, entered by hand —
+      readable and none of them running past its block or onto a third line; three short names,
+      where the podium must still fill the frame rather than look empty; and the two-step
+      podium of a bracket that started at 2, which has no bronze. This is the check that
+      settles [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) #96, which no unit test can.
 - [ ] **Greyscale.** Put the projector into greyscale (or photograph the wall and desaturate) and
       confirm every win/lose state is still readable. The three signals of STYLEGUIDE.md §1 —
       colour, icon, German word — are unit-tested for the round board, the bracket and the
