@@ -173,6 +173,8 @@ export function HostWindow() {
                 closeBlockers={round.closeBlockers}
                 canClose={round.canClose}
                 undecided={round.undecided}
+                rematches={round.rematches}
+                onPreviewDraw={round.previewDraw}
                 onDraw={round.draw}
                 onSetWinner={round.setWinner}
                 onStartNext={round.startNext}
@@ -243,6 +245,7 @@ export function HostWindow() {
                 canDraw={bracket.canDraw}
                 canFinish={bracket.canFinish}
                 focus={bracket.focus}
+                onPreviewDraw={bracket.previewDraw}
                 onDraw={bracket.draw}
                 onSetWinner={bracket.setWinner}
                 correctionFor={bracket.correctionFor}

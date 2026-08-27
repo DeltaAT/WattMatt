@@ -18,9 +18,11 @@ export {
   canFinishBracket,
   chipOrigin,
   finishBracket,
+  forcedBracketRematches,
   buildBracket,
   canDrawBracket,
   drawBracket,
+  previewDrawBracket,
   finalStandings,
   finalStandingsOf,
   hasThirdPlace,
@@ -34,6 +36,7 @@ export {
   type BracketColumnState,
   type BracketCorrection,
   type BracketNodeState,
+  type BracketPreview,
   type BracketSide,
   type BuildBracketInput,
   type DrawBracketInput,
@@ -50,6 +53,8 @@ export {
   drawBlockers,
   drawRound,
   fieldSize,
+  forcedRematches,
+  previewDrawRound,
   FINAL_PHASE_SIZE,
   MINIMUM_BRACKET_SIZE,
   nextQueuedMatch,
@@ -59,9 +64,18 @@ export {
   type AssignMatchInput,
   type CloseRoundBlocker,
   type DrawBlocker,
+  type DrawPreview,
   type DrawRoundInput,
   type RoundOutcome,
 } from '@/domain/draw';
+export {
+  havePlayed,
+  NO_HISTORY,
+  playedAgainst,
+  rematchesIn,
+  rematchIds,
+  type MatchHistory,
+} from '@/domain/history';
 export {
   TOURNAMENT_FILE_EXTENSION,
   toTournamentFileName,
@@ -117,6 +131,13 @@ export {
   type NamingEntry,
   type NamingState,
 } from '@/domain/naming';
+export {
+  drawPairing,
+  isRematchPair,
+  type DrawPairingInput,
+  type Pair,
+  type Pairing,
+} from '@/domain/pairing';
 export {
   advancePhase,
   canAdvancePhase,

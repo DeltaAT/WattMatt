@@ -48,6 +48,11 @@ export function drawRound(store: TournamentStore, clock: Clock = systemClock): v
       }),
     (_before, after) => {
       const round = currentRound(after);
+      // A forced rematch is the §4-fallback moment of the draw engine: rare,
+      // confirmed by the host, and the first thing anybody asks about
+      // afterwards. It goes in the record with the pairings themselves
+      // (issue #72, docs/FILE-FORMAT.md rule 6).
+      const forced = round === null ? [] : draw.forcedRematches(after, round);
       return {
         // A draw is not repeatable: the RNG cursor has moved, so a crash that
         // lost the round would deal the room different pairings than the ones
@@ -63,6 +68,11 @@ export function drawRound(store: TournamentStore, clock: Clock = systemClock): v
               a: match.a,
               b: match.b,
               tableId: match.tableId,
+            })),
+            forcedRematches: forced.map((match) => ({
+              matchId: match.id,
+              a: match.a,
+              b: match.b,
             })),
             // The cursor the draw ran from is what makes it reproducible a week
             // later, which is the whole reason the seed is stored at all

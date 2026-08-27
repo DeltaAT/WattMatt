@@ -5,6 +5,7 @@ import { FINAL_PHASE_SIZE, MINIMUM_BRACKET_SIZE } from '@/domain/draw';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
 import type {
   Bracket,
+  BracketNode,
   BracketRound,
   Group,
   ParticipantLabel,
@@ -12,8 +13,10 @@ import type {
   Timestamp,
 } from '@/domain/types';
 import { de } from '@/i18n';
+import { groupLabel } from '@/windows/groupLabel';
 import { BracketCorrectionDialog } from '@/windows/host/BracketCorrectionDialog';
 import { BracketNodeCard } from '@/windows/host/BracketNodeCard';
+import { RematchDialog, type RematchPair } from '@/windows/host/RematchDialog';
 
 /**
  * The bracket control panel (issue #26).
@@ -53,6 +56,7 @@ export function BracketPanel({
   canDraw,
   canFinish,
   focus,
+  onPreviewDraw,
   onDraw,
   onSetWinner,
   correctionFor,
@@ -79,6 +83,12 @@ export function BracketPanel({
   canDraw: boolean;
   canFinish: boolean;
   focus: BracketRound | null;
+  /**
+   * What drawing the tree would deal: the first-round pairings it could not
+   * keep apart. Null when there is nothing to draw, empty in every ordinary
+   * draw (issue #72).
+   */
+  onPreviewDraw: () => readonly BracketNode[] | null;
   onDraw: () => void;
   onSetWinner: (nodeId: BracketNodeId, winnerId: GroupId) => void;
   correctionFor: (nodeId: BracketNodeId, winnerId: GroupId) => BracketCorrection | null;
@@ -100,9 +110,40 @@ export function BracketPanel({
   const [armed, setArmed] = useState<BracketNodeId | null>(null);
   /** The correction waiting for an answer, or null. */
   const [pending, setPending] = useState<BracketCorrection | null>(null);
+  /**
+   * The forced rematches of a tree the host has been offered but not yet
+   * confirmed (issue #72, docs/TOURNAMENT-RULES.md §3).
+   *
+   * Nothing is committed while this is set: the draw is a preview, so
+   * cancelling costs the host nothing and the same press asks the same
+   * question again.
+   */
+  const [pendingRematches, setPendingRematches] = useState<readonly BracketNode[] | null>(null);
 
   const byId: ReadonlyMap<GroupId, Group> = new Map(groups.map((group) => [group.id, group]));
   const drawReason = drawBlockers.map((blocker) => blockerText(blocker, field))[0];
+
+  /**
+   * The draw button. A tree that repeats nothing goes straight through, and
+   * only a forced rematch stops to ask (§3, never silently).
+   */
+  const requestDraw = () => {
+    const forced = onPreviewDraw();
+    if (forced === null || forced.length === 0) {
+      onDraw();
+      return;
+    }
+    setPendingRematches(forced);
+  };
+
+  const slotLabel = (id: GroupId | null) =>
+    id === null ? de.outcome.bye : groupLabel(id, byId, participant).text;
+
+  const pendingPairs: readonly RematchPair[] = (pendingRematches ?? []).map((node) => ({
+    key: node.id,
+    a: slotLabel(node.slotA),
+    b: slotLabel(node.slotB),
+  }));
 
   const decide = (nodeId: BracketNodeId, winnerId: GroupId) => {
     setArmed(null);
@@ -117,7 +158,7 @@ export function BracketPanel({
   };
 
   return (
-    <section className="flex flex-col gap-3" aria-label={de.bracket.sectionLabel}>
+    <section className="relative flex flex-col gap-3" aria-label={de.bracket.sectionLabel}>
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="wm-display text-host-lg font-bold">{de.bracket.sectionLabel}</h2>
 
@@ -150,7 +191,7 @@ export function BracketPanel({
             <button
               type="button"
               className={PRIMARY_CLASS}
-              onClick={onDraw}
+              onClick={requestDraw}
               disabled={!canDraw}
               // The reason is on the control the click was aimed at, for both
               // the pointer and the screen reader (every other panel does the
@@ -242,6 +283,17 @@ export function BracketPanel({
           onCancel={() => {
             setPending(null);
           }}
+        />
+      )}
+
+      {pendingRematches === null ? null : (
+        <RematchDialog
+          pairs={pendingPairs}
+          onConfirm={() => {
+            setPendingRematches(null);
+            onDraw();
+          }}
+          onCancel={() => setPendingRematches(null)}
         />
       )}
     </section>

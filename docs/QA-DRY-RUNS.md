@@ -48,6 +48,7 @@ three things that actually go wrong at a live event:
 | The laptop dies | The tournament is created through `createTournamentDocument` on a fake library and autosaved after every action. The check reads back **the bytes the autosave wrote** and reopens them through `openTournamentAt` — schema version, Zod, migrations and all — then compares the recovered tournament, every decided result and every table's occupancy against what the host had. |
 | The beamer window dies | A fresh beamer store subscribes over the real sync transports, whose payloads round-trip through JSON and the shipping schemas. Its snapshot must equal the host's catch-up snapshot, and `animate` must be false. |
 | The host misclicks | *Rückgängig* five times, then five redos. The tournament after the undos must equal the one from five actions earlier — table occupancy compared separately, so a failure names it — and the tournament after the redos must equal the one the host was on. Run once per phase that is at least six actions long, and once more after the `Siegerehrung` so even the two-participant run gets it. |
+| Nobody plays the same opponent twice | Every pairing of the finished evening is read out of the rounds and the tree and checked for a repeat. A pairing a *draw* decided may never repeat; a bracket round above the first may, and that exception is asserted rather than assumed (issue #72, §3 and §7). |
 
 Two more properties are checked structurally rather than by assertion:
 

@@ -9,6 +9,7 @@ import {
   canDrawBracket,
   canFinishBracket,
   hasThirdPlace,
+  previewDrawBracket,
   type BracketBlocker,
   type BracketColumn,
   type BracketCorrection,
@@ -16,7 +17,15 @@ import {
 import { fieldSize, FINAL_PHASE_SIZE } from '@/domain/draw';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
 import { freeTables } from '@/domain/selectors';
-import type { Bracket, BracketRound, Group, ParticipantLabel, Table } from '@/domain/types';
+import type {
+  Bracket,
+  BracketNode,
+  BracketRound,
+  Group,
+  ParticipantLabel,
+  Table,
+} from '@/domain/types';
+import { systemClock } from '@/platform/clock';
 import {
   assignBracketMatch,
   drawBracket,
@@ -72,6 +81,13 @@ export interface BracketHandle {
   /** Which round the projector is zoomed to, or null for the whole tree. */
   focus: BracketRound | null;
 
+  /**
+   * What drawing the tree would deal, without dealing it: the first-round
+   * pairings it could not keep apart (issue #72).
+   *
+   * Null when there is nothing to draw, empty in every ordinary draw.
+   */
+  previewDraw: () => readonly BracketNode[] | null;
   draw: () => void;
   setWinner: (nodeId: BracketNodeId, winnerId: GroupId) => void;
   /**
@@ -114,6 +130,16 @@ export function useBracket(): BracketHandle {
 
   const draw = useCallback(() => {
     drawBracket(tournamentStore);
+  }, []);
+  // Read at click time and thrown away: the preview runs the real draw against
+  // a copy, so what the host is shown is what `draw()` then commits, and
+  // declining it spends nothing (issue #72).
+  const previewDraw = useCallback((): readonly BracketNode[] | null => {
+    const open = tournamentStore.getState().document;
+    if (open === null) {
+      return null;
+    }
+    return previewDrawBracket(open, { at: systemClock.now() })?.forced ?? null;
   }, []);
   const setWinner = useCallback((nodeId: BracketNodeId, winnerId: GroupId) => {
     setBracketWinner(tournamentStore, nodeId, winnerId);
@@ -165,6 +191,7 @@ export function useBracket(): BracketHandle {
   }, []);
 
   const actions = {
+    previewDraw,
     draw,
     setWinner,
     correctionFor,

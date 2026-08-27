@@ -903,6 +903,40 @@ export const deAT = {
      */
     finalPhaseReached:
       'Das Feld ist bereits vollständig für die Finalphase. Wechseln Sie in die nächste Phase.',
+
+    /**
+     * Wiederholte Paarungen (issue #72, docs/TOURNAMENT-RULES.md §3).
+     *
+     * Normalerweise sieht der Host nichts davon: die Auslosung vermeidet
+     * Wiederholungen von selbst. Der Dialog erscheint nur, wenn es keine
+     * wiederholungsfreie Paarung mehr gibt — und dann muss der Host es
+     * bestätigen, bevor die Auslosung auf den Beamer geht. Niemals
+     * stillschweigend.
+     */
+    rematch: {
+      /** Auf der Partiekarte und im Turnierbaum. */
+      badge: 'Wiederholung',
+      badgeTitle: 'Diese Paarung hat es in diesem Turnier schon gegeben.',
+
+      title: 'Wiederholte Paarungen',
+      /**
+       * Was passiert ist, in einem Satz, den der Host laut sagen kann. Die
+       * Zahl steht vorne, weil sie das Erste ist, was er wissen will.
+       */
+      body: (params: { n: number }) =>
+        `${pluralizeDeAT(params.n, 'Paarung wiederholt', 'Paarungen wiederholen')} sich. Alle anderen Kombinationen wurden in diesem Turnier bereits gespielt.`,
+      /** Warum es keine bessere Auslosung gibt. */
+      explain:
+        'Es gibt keine Auslosung mehr, in der niemand einem alten Gegner begegnet. Diese hier hat die wenigsten Wiederholungen.',
+      /** Eine wiederholte Paarung in der Liste: "Gruppe 4 gegen Gruppe 9". */
+      pair: (params: { a: string; b: string }) => `${params.a} gegen ${params.b}`,
+
+      confirm: 'Auslosung so übernehmen',
+      cancel: 'Abbrechen',
+      /** Unter den beiden Knöpfen: was Abbrechen bedeutet. */
+      cancelHint:
+        'Abbrechen ändert nichts. Die gleiche Auslosung kommt beim nächsten Versuch wieder.',
+    },
   },
 
   outcome: {

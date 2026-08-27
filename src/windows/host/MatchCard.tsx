@@ -29,6 +29,7 @@ export function MatchCard({
   since,
   now,
   isArmed,
+  isRematch = false,
   onSetWinner,
   onArm,
   onDisarm,
@@ -41,6 +42,14 @@ export function MatchCard({
   since: Timestamp | null;
   now: Timestamp;
   isArmed: boolean;
+  /**
+   * Whether these two have met before in this tournament (issue #72).
+   *
+   * Only ever true when the field admitted no rematch-free pairing and the host
+   * confirmed the draw anyway. The badge is there so the pairing the host was
+   * asked about is still marked on the screen they work from all evening.
+   */
+  isRematch?: boolean;
   onSetWinner: (winnerId: GroupId) => void;
   onArm: () => void;
   onDisarm: () => void;
@@ -73,6 +82,16 @@ export function MatchCard({
           </span>
         )}
       </header>
+
+      {isRematch ? (
+        <p
+          className="wm-label rounded-wm-sm bg-wm-lose-bg px-1 text-host-xs text-wm-lose"
+          title={de.draw.rematch.badgeTitle}
+          data-match-rematch=""
+        >
+          {de.draw.rematch.badge}
+        </p>
+      ) : null}
 
       {isBye ? (
         // Decided by the draw itself: there is nobody to beat, so there is

@@ -56,9 +56,33 @@ SETUP → QUALIFYING → REPECHAGE? → ELIMINATION* → NAMING → BRACKET → 
 ```text
 P  := active groups, n := |P|, n >= 2
 shuffle(P) using the seeded RNG
-pairs := [(P[0],P[1]), (P[2],P[3]), …]
-if n is odd: the last remaining group receives a BYE and advances automatically
+byes := the last `b` of the shuffle (see §4 fallback 1; `b` is 0 or 1 in the ordinary case)
+pairs := the reading of the rest of that shuffle in which no two groups meet
+         who have already played each other in this tournament
 ```
+
+**No rematches.** In every randomly drawn round — the qualifying round, every elimination
+round, and the **first** bracket round — two groups may not be paired if they have already
+played each other at any earlier point in this tournament. Two groups meeting twice feels
+unfair and reads as a bug from the third row.
+
+The history is *derived* from the rounds and the bracket. It is never stored a second time:
+a copy would drift from the matches the moment a host undid a round or corrected a result.
+
+The pairing is searched for out of the shuffled order rather than filtered afterwards, so the
+fairness still comes from the shuffle and the room still watches the same pot being emptied.
+The search is bounded — a frozen host window mid-event is worse than any pairing.
+
+**Fallback — no rematch-free pairing exists.** With a small field this is genuinely possible:
+four groups in which everyone has played everyone admit no such pairing at all. The engine
+detects it rather than looping, and then:
+
+1. It takes the pairing with the **fewest** repeated meetings.
+2. Those pairings are marked as repeats and named to the host.
+3. The host confirms them **before the draw is published to the beamer**. Never silently.
+
+Cancelling costs nothing: the draw is a preview, so the seed, the cursor and the history are
+untouched and the same press of the button asks the identical question again.
 
 **Table assignment.** Matches are assigned to `FREE` tables in draw order. If there are more
 matches than tables, the remaining matches get status `WAITING_FOR_TABLE` and are queued.
@@ -146,7 +170,13 @@ small tournament may legitimately enter the final phase at 8, 4 or 2.
 ## 7. BRACKET (`Turnierbaum`)
 
 - The named groups are drawn **randomly** into the bracket slots — a single shuffle, then
-  slots `1..2^k` in order.
+  slots `1..2^k` in order, subject to §3's no-rematch rule for the pairings the first round
+  produces.
+- **Known limitation.** Only the **first** bracket round can be constrained. Every round above
+  it is decided by *who wins*, not by a draw, so two groups who have already played may meet
+  again in a `Viertelfinale`, `Halbfinale` or `Finale`. That is a documented rule of the final
+  phase rather than a bug: there is nothing to draw. Such a pairing still carries the repeat
+  marker on the host's screen, so nobody has to work it out from memory.
 - Rounds are named by field size: 16 → `Achtelfinale`, 8 → `Viertelfinale`,
   4 → `Halbfinale`, 2 → `Finale`.
 - Each bracket match is assigned a table using the same rules as §3.
@@ -177,3 +207,6 @@ fire automatically the instant the final is decided, because the host may still 
 | 10 | Final phase reached at 8/4/2 | Bracket adapts, third-place match still exists (except at 2) |
 | 11 | App crashes mid-round | Autosave restores the round with all decided results |
 | 12 | Beamer window closed mid-draw | Reopening shows the current scene in its settled state |
+| 13 | Two groups already played each other | They are never drawn against each other again (§3) |
+| 14 | No rematch-free pairing exists at all | Fewest repeats, named to the host, confirmed before the beamer sees them (§3) |
+| 15 | Rematch in a bracket round after the first | Allowed and marked — it is decided by results, not by a draw (§7) |

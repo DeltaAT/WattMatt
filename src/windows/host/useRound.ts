@@ -5,13 +5,17 @@ import {
   canDrawRound,
   closeRoundBlockers,
   drawBlockers,
+  previewDrawRound,
   type CloseRoundBlocker,
   type DrawBlocker,
 } from '@/domain/draw';
+import { rematchIds } from '@/domain/history';
 import type { GroupId, MatchId, TableId } from '@/domain/ids';
 import { roundBoard, roundSummary, type RoundBoard, type RoundSummary } from '@/domain/round';
 import { currentRound, undecidedMatches } from '@/domain/selectors';
-import type { Group, ParticipantLabel, Round } from '@/domain/types';
+import type { Group, Match, ParticipantLabel, Round } from '@/domain/types';
+import { de } from '@/i18n';
+import { systemClock } from '@/platform/clock';
 import { closeRound, drawRound, setMatchWinner, startNextMatch } from '@/store/actions/round';
 import { showScene } from '@/store/actions/scene';
 import { tournamentStore } from '@/store/session';
@@ -54,7 +58,24 @@ export interface RoundHandle {
   canClose: boolean;
   /** How many matches still need a winner, for the close button's reason. */
   undecided: number;
+  /**
+   * The matches of the open round that repeat a meeting the evening already
+   * staged, for the badge on their cards (issue #72).
+   *
+   * Derived from the tournament's own history rather than stored on the match,
+   * so it survives an undo, a correction and a file repaired by hand
+   * (`@/domain/history`).
+   */
+  rematches: ReadonlySet<MatchId>;
 
+  /**
+   * What the next draw would deal, without dealing it.
+   *
+   * Null when there is nothing to draw. Otherwise the forced rematches it
+   * could not avoid — empty in every ordinary draw, and the one case the host
+   * has to confirm before the projector shows it (docs/TOURNAMENT-RULES.md §3).
+   */
+  previewDraw: () => readonly Match[] | null;
   draw: () => void;
   setWinner: (matchId: MatchId, winnerId: GroupId) => void;
   /** Hands the next waiting pair to a table that has come free. */
@@ -78,6 +99,7 @@ const NO_ROUND = {
   closeBlockers: [],
   canClose: false,
   undecided: 0,
+  rematches: new Set<MatchId>(),
 } as const;
 
 export function useRound(): RoundHandle {
@@ -86,7 +108,27 @@ export function useRound(): RoundHandle {
     () => tournamentStore.getState().document,
   );
 
-  const draw = useCallback(() => drawRound(tournamentStore), []);
+  const draw = useCallback(() => {
+    drawRound(tournamentStore);
+  }, []);
+  /**
+   * Read at click time rather than captured, and thrown away afterwards.
+   *
+   * The preview runs the real draw against a copy of the document, so what the
+   * host is shown is exactly what `draw()` then commits — same seed, same
+   * cursor, same history. Nothing is spent by looking (issue #72).
+   */
+  const previewDraw = useCallback((): readonly Match[] | null => {
+    const open = tournamentStore.getState().document;
+    if (open === null) {
+      return null;
+    }
+    const preview = previewDrawRound(open, {
+      at: systemClock.now(),
+      label: (index) => de.round.title({ n: index }),
+    });
+    return preview === null ? null : preview.forced;
+  }, []);
   const setWinner = useCallback(
     (matchId: MatchId, winnerId: GroupId) => setMatchWinner(tournamentStore, matchId, winnerId),
     [],
@@ -104,7 +146,7 @@ export function useRound(): RoundHandle {
     }
   }, []);
 
-  const actions = { draw, setWinner, startNext, close, showOnBeamer };
+  const actions = { previewDraw, draw, setWinner, startNext, close, showOnBeamer };
 
   if (document === null) {
     return { ...NO_ROUND, ...actions };
@@ -128,6 +170,7 @@ export function useRound(): RoundHandle {
     closeBlockers: closeRoundBlockers(document),
     canClose: canCloseRound(document),
     undecided: round === null ? 0 : undecidedMatches(round).length,
+    rematches: rematchIds(document),
     ...actions,
   };
 }

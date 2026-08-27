@@ -447,6 +447,10 @@ Ab hier arbeiten Sie fast nur noch im Bereich **Aktuelle Runde**.
 die zuletzt gezogene Gruppe ein **Freilos** und ist ohne Partie eine Runde weiter — auf der
 Leinwand steht *Freilos — steigt auf*, damit im Saal niemand rätselt.
 
+**Keine Wiederholungen.** Zwei Gruppen, die in diesem Turnier schon einmal gegeneinander
+gespielt haben, werden nicht noch einmal zusammengelost. Darum kümmert sich das Programm von
+selbst; Sie merken normalerweise nichts davon.
+
 Die Partien werden der Reihe nach auf die freien Tische verteilt. Gibt es mehr Partien als
 Tische, kommen die übrigen in die **Warteschlange**.
 
@@ -600,7 +604,33 @@ Auslosung starten → Partien spielen → Sieger festlegen → Runde abschließe
                         Weiter zur nächsten Phase
 ```
 
-Das läuft genau wie in Abschnitt 7. Freilose gibt es hier normalerweise keine mehr.
+Das läuft genau wie in Abschnitt 7. Freilose gibt es hier normalerweise keine mehr, und auch
+hier werden zwei Gruppen nicht zweimal gegeneinander gelost.
+
+### 9.1 Wenn *Wiederholte Paarungen* erscheint
+
+Sehr selten ist das Feld so klein und so weit gespielt, dass jede mögliche Paarung eine
+Wiederholung wäre. Dann fragt WattMatt nach, **bevor** die Auslosung auf die Leinwand geht:
+
+```text
+   Wiederholte Paarungen
+
+   2 Paarungen wiederholen sich. Alle anderen Kombinationen wurden in diesem
+   Turnier bereits gespielt.
+   Es gibt keine Auslosung mehr, in der niemand einem alten Gegner begegnet.
+   Diese hier hat die wenigsten Wiederholungen.
+
+   Gruppe 4 gegen Gruppe 9
+   Gruppe 2 gegen Gruppe 7
+
+   [ Auslosung so übernehmen ]   [ Abbrechen ]
+```
+
+Lesen Sie die Paarungen vor, bevor Sie übernehmen — im Saal fällt es sonst auf und wirkt wie
+ein Fehler. **Abbrechen** ändert nichts; beim nächsten Versuch kommt dieselbe Frage wieder.
+
+Die betroffenen Partien tragen für den Rest der Runde die Markierung **Wiederholung** auf
+ihrer Karte, damit Sie nicht nachdenken müssen, welche es waren.
 
 Im Bereich **Turnierverlauf** steht, wo Sie sind und was als Nächstes kommt:
 
@@ -686,6 +716,11 @@ Die Runden heißen nach der Feldgröße:
 
 Beginnt Ihre Finalphase mit 8 statt 16, beginnt der Baum eben beim Viertelfinale. Das ist bei
 kleinen Turnieren normal.
+
+Auch hier gilt: in der **ersten** Runde des Baums treffen zwei Gruppen nicht noch einmal
+aufeinander, wenn sie schon gegeneinander gespielt haben. Ab der zweiten Runde geht das nicht
+mehr — wer dort auf wen trifft, entscheiden die Ergebnisse und nicht die Auslosung. Kommt es
+dazu, steht **Wiederholung** auf der Partie, und Sie können es im Saal ansagen.
 
 Die beiden Verlierer des Halbfinales spielen das **Spiel um Platz 3**. Es hängt als eigener
 Knoten unter dem Baum und wird zur selben Zeit angesetzt wie das Finale.

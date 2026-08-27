@@ -8,6 +8,7 @@ import type { Group, Match, ParticipantLabel, Round, Timestamp } from '@/domain/
 import { de } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 import { MatchCard } from '@/windows/host/MatchCard';
+import { RematchDialog, type RematchPair } from '@/windows/host/RematchDialog';
 
 /**
  * The round control panel (issue #17).
@@ -39,6 +40,8 @@ export function RoundPanel({
   closeBlockers,
   canClose,
   undecided,
+  rematches,
+  onPreviewDraw,
   onDraw,
   onSetWinner,
   onStartNext,
@@ -58,6 +61,14 @@ export function RoundPanel({
   closeBlockers: readonly CloseRoundBlocker[];
   canClose: boolean;
   undecided: number;
+  /** The matches of this round that repeat an earlier meeting (issue #72). */
+  rematches: ReadonlySet<MatchId>;
+  /**
+   * What the next draw would deal, without dealing it: the pairs it could not
+   * keep apart. Null when there is nothing to draw, empty in every ordinary
+   * draw.
+   */
+  onPreviewDraw: () => readonly Match[] | null;
   onDraw: () => void;
   onSetWinner: (matchId: MatchId, winnerId: GroupId) => void;
   onStartNext: (tableId: TableId) => void;
@@ -73,7 +84,40 @@ export function RoundPanel({
    */
   const [armed, setArmed] = useState<MatchId | null>(null);
 
+  /**
+   * The forced rematches of a draw the host has been offered but not yet
+   * confirmed (issue #72, docs/TOURNAMENT-RULES.md §3).
+   *
+   * Panel state rather than store state, because nothing has been committed:
+   * the draw is a preview and cancelling costs nothing. A reload while the
+   * dialog is up simply loses the question, and pressing the button again asks
+   * it identically — same seed, same cursor, same history.
+   */
+  const [pendingRematches, setPendingRematches] = useState<readonly Match[] | null>(null);
+
   const byId: ReadonlyMap<GroupId, Group> = new Map(groups.map((group) => [group.id, group]));
+
+  /**
+   * The draw button. A draw that repeats nothing goes straight through — one
+   * press, as it always was — and only a forced rematch stops to ask.
+   */
+  const requestDraw = () => {
+    const forced = onPreviewDraw();
+    if (forced === null || forced.length === 0) {
+      onDraw();
+      return;
+    }
+    setPendingRematches(forced);
+  };
+
+  const label = (id: GroupId | null) =>
+    id === null ? de.outcome.bye : groupLabel(id, byId, participant).text;
+
+  const pendingPairs: readonly RematchPair[] = (pendingRematches ?? []).map((entry) => ({
+    key: entry.id,
+    a: label(entry.a),
+    b: label(entry.b),
+  }));
   const drawReason = drawBlockers.map((blocker) => drawBlockerText(blocker, participant))[0];
   const closeReason = closeBlockers.map((blocker) => closeBlockerText(blocker, undecided))[0];
 
@@ -87,6 +131,7 @@ export function RoundPanel({
       since={since}
       now={now}
       isArmed={armed === match.id}
+      isRematch={rematches.has(match.id)}
       onSetWinner={(winnerId) => {
         // Disarmed first: after a correction the card is a decided card again,
         // and leaving its targets on screen is the state this whole interaction
@@ -100,7 +145,7 @@ export function RoundPanel({
   );
 
   return (
-    <section className="flex flex-col gap-3" aria-label={de.round.sectionLabel}>
+    <section className="relative flex flex-col gap-3" aria-label={de.round.sectionLabel}>
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="wm-display text-host-lg font-bold">
           {round === null ? de.round.sectionLabel : round.label}
@@ -134,7 +179,7 @@ export function RoundPanel({
           <button
             type="button"
             className={PRIMARY_CLASS}
-            onClick={onDraw}
+            onClick={requestDraw}
             disabled={!canDraw}
             // The reason is on the control the click was aimed at, for both the
             // pointer and the screen reader (the pre-start panel does the same).
@@ -240,6 +285,17 @@ export function RoundPanel({
             )}
           </div>
         </>
+      )}
+
+      {pendingRematches === null ? null : (
+        <RematchDialog
+          pairs={pendingPairs}
+          onConfirm={() => {
+            setPendingRematches(null);
+            onDraw();
+          }}
+          onCancel={() => setPendingRematches(null)}
+        />
       )}
     </section>
   );

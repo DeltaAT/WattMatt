@@ -15,6 +15,8 @@ import {
   canFinishBracket,
   drawBracket,
   finishBracket,
+  forcedBracketRematches,
+  previewDrawBracket,
   finalStandings,
   finalStandingsOf,
   hasThirdPlace,
@@ -637,6 +639,118 @@ describe('bracketCorrection', () => {
   it('is nothing for a node that does not exist, or without a bracket', () => {
     expect(bracketCorrection(played(), 'bn_99' as BracketNodeId, groupId(1))).toBeNull();
     expect(bracketCorrection(readyToDraw(4), 'bn_1' as BracketNodeId, groupId(1))).toBeNull();
+  });
+});
+
+describe('rematches in the first bracket round (issue #72)', () => {
+  /** Every pairing of a tree as an unordered key, so a repeat is comparable. */
+  function meetings(nodes: readonly BracketNode[]): readonly string[] {
+    return nodes
+      .filter((node) => node.slotA !== null && node.slotB !== null)
+      .map((node) => [String(node.slotA), String(node.slotB)].sort().join('+'));
+  }
+
+  /**
+   * A tournament of `count` named groups whose qualifying round is on record.
+   *
+   * The bracket is the second time a small field is drawn — 8 groups play one
+   * qualifying round and go straight into the tree — so this is the case the
+   * issue's first test describes for a field that never sees an elimination
+   * round (docs/TOURNAMENT-RULES.md §5).
+   */
+  function afterQualifying(count: number, pairs: readonly (readonly [number, number])[]) {
+    return readyToDraw(count, {
+      rounds: [
+        round(1, {
+          kind: 'QUALIFYING',
+          state: 'CLOSED',
+          matches: pairs.map(([a, b], index) =>
+            match(index + 1, {
+              a: groupId(a),
+              b: groupId(b),
+              winnerId: groupId(a),
+              status: 'DONE',
+            }),
+          ),
+        }),
+      ],
+    });
+  }
+
+  it('does not put two groups back together who have already played', () => {
+    // Eight groups, one qualifying round of four pairings, then the tree. None
+    // of those four may appear in the `Viertelfinale`.
+    const played: readonly (readonly [number, number])[] = [
+      [1, 2],
+      [3, 4],
+      [5, 6],
+      [7, 8],
+    ];
+    const document = afterQualifying(8, played);
+
+    const drawn = drawBracket(document, { at: FIXED_NOW });
+    const bracket = drawn.bracket as Bracket;
+
+    const before = played.map(([a, b]) => [groupId(a), groupId(b)].sort().join('+'));
+    expect(meetings(bracket.nodes)).toHaveLength(4);
+    expect(meetings(bracket.nodes).filter((pairing) => before.includes(pairing))).toEqual([]);
+  });
+
+  it('reports no forced rematch, and previews the tree it will deal', () => {
+    const document = afterQualifying(8, [
+      [1, 2],
+      [3, 4],
+      [5, 6],
+      [7, 8],
+    ]);
+
+    const preview = previewDrawBracket(document, { at: FIXED_NOW });
+
+    expect(preview?.forced).toEqual([]);
+    expect(preview?.bracket).toEqual(drawBracket(document, { at: FIXED_NOW }).bracket);
+    // Nothing was committed: the phase and the cursor are untouched, so a host
+    // who declines the confirmation has lost nothing (issue #72).
+    expect(document.phase).toBe('NAMING');
+    expect(document.bracket).toBeNull();
+  });
+
+  it('previews nothing when the tree cannot be drawn', () => {
+    // A field of six is not a power of two, so there is no tree to preview —
+    // the same refusal `drawBracket` gives (docs/TOURNAMENT-RULES.md §7).
+    expect(previewDrawBracket(readyToDraw(6), { at: FIXED_NOW })).toBeNull();
+  });
+
+  it('names the pairs it could not avoid when the field has played itself out', () => {
+    // Four groups who have all played all — the smallest genuinely unsolvable
+    // field, and one a `Halbfinale` of four can be handed by a repaired file.
+    const played: readonly (readonly [number, number])[] = [
+      [1, 2],
+      [3, 4],
+      [1, 3],
+      [2, 4],
+      [1, 4],
+      [2, 3],
+    ];
+    const document = afterQualifying(4, played);
+
+    const drawn = drawBracket(document, { at: FIXED_NOW });
+
+    // Two semi-finals, both of them repeats, and the draw still happened:
+    // everybody in the tree exactly once (§7).
+    expect(forcedBracketRematches(drawn)).toHaveLength(2);
+    expect(firstRoundEntrants(drawn.bracket as Bracket).sort()).toEqual(
+      [groupId(1), groupId(2), groupId(3), groupId(4)].sort(),
+    );
+  });
+
+  it('leaves a tree drawn from a fresh field exactly as it was', () => {
+    // The regression guard for every existing bracket test: with no history,
+    // the shuffle is still read off in twos and the tree is unchanged.
+    const groups = named(16);
+
+    expect(buildBracket(groups, { rng: createRng('seed') })).toEqual(
+      buildBracket(groups, { rng: createRng('seed'), history: new Map() }),
+    );
   });
 });
 
