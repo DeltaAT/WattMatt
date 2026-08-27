@@ -17,6 +17,7 @@ import { FIXED_NOW, group, table, tournament } from '@/domain/testFixtures';
 import type { Round, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { RepechageScene } from '@/windows/beamer/scenes/RepechageScene';
+import { NO_TRAVEL, type RepechageTravel } from '@/windows/beamer/useRepechageTravel';
 
 /**
  * `REPECHAGE` (issue #21) — the second chance, live in front of the room.
@@ -65,11 +66,23 @@ const started = () => startRepechage(qualified(13));
 
 const pendingOf = (document: Tournament) => repechageState(document)?.pending ?? null;
 
-function scene(document: Tournament, beat: GroupId | null = null): string {
+function scene(
+  document: Tournament,
+  beat: GroupId | null = null,
+  travel: RepechageTravel = NO_TRAVEL,
+): string {
   return renderToStaticMarkup(
-    <RepechageScene tournament={toTournamentSnapshot(document)} beat={beat} />,
+    <RepechageScene tournament={toTournamentSnapshot(document)} beat={beat} travel={travel} />,
   );
 }
+
+/** A travel in flight, with the light on `highlight` and `pending` held back. */
+const travelling = (pending: GroupId | null, highlight: GroupId | null): RepechageTravel => ({
+  pending,
+  highlight,
+  isTravelling: true,
+  skip: () => undefined,
+});
 
 /** The pot cards, as `[groupId, status]`, straight out of the markup. */
 function cards(markup: string): [string, string][] {
@@ -233,6 +246,92 @@ describe('the choreography', () => {
   it('dims the rest of the pot only while a candidate is out', () => {
     expect(scene(drawCandidate(started()))).toContain('data-drawing="true"');
     expect(scene(started())).toContain('data-drawing="false"');
+  });
+});
+
+/*
+ * Issue #89. The snapshot carries the answer from the first frame — the pot
+ * already has one entry at `DRAWN` — so every assertion here is a way of
+ * asking whether the picture gives it away before the light gets there.
+ */
+describe('the travelling highlight', () => {
+  const drawn = () => drawCandidate(started());
+
+  /* The card the light is on. Only one, ever: two lit cards is a highlight the
+   * eye cannot follow, and the room would not know which one landed. */
+  it('lights exactly one card', () => {
+    const document = drawn();
+    // Anybody still in the pool: a card the light may legitimately pass over.
+    const elsewhere = repechageState(document)?.pool[0] ?? null;
+
+    const markup = scene(document, pendingOf(document), travelling(pendingOf(document), elsewhere));
+
+    expect(markup.match(/data-pot-lit=""/g)).toHaveLength(1);
+    expect(markup).toContain(`data-group-id="${String(elsewhere)}" data-pot-status="POOL"`);
+  });
+
+  /*
+   * The failure the whole issue exists to remove. `drawCandidate` has already
+   * put the candidate at `DRAWN`, and a scene that simply rendered the snapshot
+   * would lift them, name them and dim everybody else two seconds before the
+   * light arrived.
+   */
+  it('keeps the drawn candidate in the crowd until the light lands', () => {
+    const document = drawn();
+    const candidate = pendingOf(document);
+    // Anybody still in the pool: a card the light may legitimately pass over.
+    const elsewhere = repechageState(document)?.pool[0] ?? null;
+
+    const markup = scene(document, candidate, travelling(candidate, elsewhere));
+
+    // Painted, worded and animated exactly like everybody still in the pot.
+    expect(markup).toContain(`data-group-id="${String(candidate)}" data-pot-status="POOL"`);
+    expect(markup).not.toContain('data-pot-status="DRAWN"');
+    expect(markup).not.toContain('wm-repechage-lift');
+    expect(greyscale(markup)).not.toContain(de.beamer.repechage.status.DRAWN);
+  });
+
+  /*
+   * The dimming is half of the landing (docs/MOTION.md §4.3). A pot that
+   * receded the instant the snapshot arrived would announce that somebody had
+   * been drawn before the room could see who — the same tell, one step out.
+   */
+  it('does not dim the pot while the light is still moving', () => {
+    const document = drawn();
+    const candidate = pendingOf(document);
+
+    expect(scene(document, candidate, travelling(candidate, candidate))).toContain(
+      'data-drawing="false"',
+    );
+    expect(scene(document, candidate, travelling(candidate, candidate))).toContain(
+      'data-travelling="true"',
+    );
+  });
+
+  /*
+   * And the landing itself: the travel is over, so the picture is exactly the
+   * one this scene has always drawn for a candidate who is out — which is what
+   * makes the skip, the natural end and a caught-up window agree.
+   */
+  it('is the ordinary drawn picture once it lands', () => {
+    const document = drawn();
+    const candidate = pendingOf(document);
+
+    const landed: RepechageTravel = {
+      pending: null,
+      highlight: null,
+      isTravelling: false,
+      skip: () => undefined,
+    };
+
+    expect(scene(document, candidate, landed)).toBe(scene(document, candidate));
+  });
+
+  /* A window with no travel — catching up, holding still, or a pot too small
+   * to travel across — draws the settled picture and nothing else. */
+  it('draws no highlight when nothing is travelling', () => {
+    expect(scene(drawn(), pendingOf(drawn()))).not.toContain('data-pot-lit');
+    expect(scene(drawn(), pendingOf(drawn()))).toContain('data-travelling="false"');
   });
 });
 

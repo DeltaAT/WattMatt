@@ -131,11 +131,30 @@ weight, measured rather than assumed.
 
 ### 4.3 Hoffnungsrunde — repechage draw
 
-All losers on screen, dimmed. The drawn candidate lifts: `scale(1) → 1.06`, full opacity,
-accent ring, 500 ms `--ease-dramatic`, while the others dim further to `opacity: .35`.
+All losers on screen. **A highlight travels the pot and stops on the candidate** (issue #89):
+7–10 jumps to random positions, dwelling 80 ms on the first and 400 ms on the last, so the
+whole travel takes 1.7–2.4 s and decelerates into the landing. Never in index order, never to
+a neighbour, never onto the target before the final jump, and never converging on it — a light
+that visibly closes in gives the answer away as plainly as a counter would. The path is drawn
+by a **presentation** RNG seeded per draw (`@/domain/repechageTravel`), never the tournament's:
+the candidate was decided before the animation started, and a decoration that consumed from
+that stream would break the `(seed, cursor)` reproducibility of issue #8.
+
+The lit card is a held class and not a keyframe — the light *jumps*, and a transition would
+smear it into a slide toward somewhere, which is itself a tell. Until it lands the drawn card
+is painted as one of the pool, because the snapshot has said `DRAWN` since the first frame and
+the room must not.
+
+Then the landing, which is what §4.3 always described: the candidate lifts, `scale(1) → 1.06`,
+full opacity, accent ring, 500 ms `--ease-dramatic`, while the others dim to `opacity: .35`.
 On accept: the card flies to the winners column with a Motion `layoutId` transition (600 ms
 spring) and the target counter ticks up. On decline: 200 ms shake (±4 px, two cycles), then
 fade to `opacity: .2` and desaturate.
+
+`Space` lands the travel immediately (§1 law 2), from either window. Performance mode and
+reduced motion remove it rather than shortening it — a light jumping around a screen at 80 ms
+is precisely what the setting exists to stop — and so does a pot of fewer than three, where
+the travel would be a coin flipped in front of somebody who can see both sides.
 
 ### 4.4 Turnierbaum — bracket
 
