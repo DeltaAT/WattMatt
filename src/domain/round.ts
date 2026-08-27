@@ -1,5 +1,5 @@
 import { queuedMatches, roundOutcome } from '@/domain/draw';
-import type { GroupId, RoundId } from '@/domain/ids';
+import type { GroupId, RoundId, TableId } from '@/domain/ids';
 import { tablesForTrack, usableTables } from '@/domain/selectors';
 import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Match, Round, Table, Tournament } from '@/domain/types';
@@ -245,7 +245,7 @@ export function roundById(tournament: Tournament, roundId: RoundId): Round | nul
 }
 
 /**
- * What the beamer's round board draws (issue #19).
+ * What the beamer's round board draws (issue #19, narrowed by issue #87).
  *
  * Grouped by table, and grouped by the match's **own** `tableId` rather than by
  * `table.currentMatchId`. The difference is the whole acceptance criterion "no
@@ -255,6 +255,16 @@ export function roundById(tournament: Tournament, roundId: RoundId): Round | nul
  * would never be seen. A match keeps its `tableId` once assigned (`setWinner`
  * changes only the winner and the status), so its card keeps its place for the
  * rest of the round.
+ *
+ * **Only the tables this round is actually played on.** The board is derived
+ * from the round's matches, not from `tournament.tables` — a hall with sixteen
+ * tables running a four-match round drew twelve empty headings, and on a
+ * projector empty headings are not context, they are the width the numerals
+ * could have had (issue #87). What counts as unused is deliberately narrow: no
+ * match assigned *this round*, which is not the same as "the match there has
+ * finished". A finished match keeps its `tableId`, so its table keeps its
+ * section and its result stays on the wall until the round closes — the
+ * opposite reading would delete results as they came in.
  *
  * The queue is a section of its own, with `table: null`. A match moving out of
  * it does move on screen, but that is the host starting the next pair — a
@@ -271,12 +281,28 @@ export function beamerBoard(
   tables: readonly Table[],
   matches: readonly Match[],
 ): readonly BoardSection[] {
-  const queue = matches.filter((match) => match.tableId === null);
+  const queue: Match[] = [];
+  const seated = new Map<TableId, Match[]>();
+  for (const match of matches) {
+    if (match.tableId === null) {
+      queue.push(match);
+      continue;
+    }
+    const there = seated.get(match.tableId);
+    if (there === undefined) {
+      seated.set(match.tableId, [match]);
+    } else {
+      there.push(match);
+    }
+  }
 
-  const sections: BoardSection[] = tables.map((table) => ({
-    table,
-    matches: matches.filter((match) => match.tableId === table.id),
-  }));
+  // Walked in the host's table order rather than in the order the matches were
+  // assigned, so the board reads left to right the way the room is laid out —
+  // but only the tables that turned up in the matches above (issue #87).
+  const sections: BoardSection[] = tables.flatMap((table) => {
+    const there = seated.get(table.id);
+    return there === undefined ? [] : [{ table, matches: there }];
+  });
 
   // The queue last: it is what has not started, and the room reads the tables
   // first. Omitted entirely when nothing is waiting, so a board with enough

@@ -38,6 +38,13 @@ import { tableNumber } from '@/windows/tableLabel';
  * match came fourth in its section had to take the board's word for it that
  * they were playing at all. Everything is drawn now, and the board is scaled
  * down until it fits the stage instead (issue #55, `useFitToStage`).
+ *
+ * **And nothing else is.** One card per match, never one per table: a table
+ * with no match this round is not drawn at all, so a hall with sixteen tables
+ * and a four-match round gets four cards at the size four cards can have rather
+ * than twelve empty headings around them (issue #87, `beamerBoard`). Unused
+ * means *no match assigned this round* — a finished match keeps its table's
+ * section and its result colour until the round closes.
  */
 export function RoundBoardScene({
   tournament,
@@ -64,12 +71,14 @@ export function RoundBoardScene({
   const flipping = useResultFlip(tournament.matches, delivery);
   const sections = beamerBoard(tournament.tables, tournament.matches);
   const progress = matchesProgress(tournament.matches);
-  // Both inputs matter. Sixteen matches spread over sixteen tables is a wide,
-  // shallow board; the same sixteen on two tables is a deep one. Depth no
-  // longer decides whether the board fits — `useFitToStage` does that — but a
-  // deep board should reach for smaller type before it reaches for the scale,
-  // because type that was chosen is nicer than type that was shrunk.
-  const size = density(sections.length, deepestSection(sections));
+  // How many cards there are, and nothing about where they currently sit
+  // (issue #87). A round's match list is fixed the moment it is drawn, so the
+  // type step is settled once for the whole round and cannot change under the
+  // room: not when a result lands, not when the host starts the next pair off
+  // the queue, not when a table is locked mid-round. How those cards are
+  // *arranged* still follows the sections, which is the one thing that may
+  // legitimately move — and only ever because the host started a match.
+  const size = density(tournament.matches.length);
   const columns = fitColumns(sections.length, SECTION_CELL_ASPECT);
 
   const byId: ReadonlyMap<GroupId, Group> = new Map(
@@ -141,7 +150,6 @@ function Section({
 }) {
   const { table } = section;
   const isQueue = table === null;
-  const isDisabled = table?.status === 'DISABLED';
 
   return (
     <section
@@ -165,28 +173,27 @@ function Section({
         {isQueue ? de.beamer.roundBoard.queueTitle : tableNumber(table.label)}
       </h2>
 
-      {section.matches.length === 0 ? (
-        <p className={`text-wm-text-faint ${LABEL[size]}`} data-table-idle="">
-          {isDisabled ? de.beamer.roundBoard.tableDisabled : de.beamer.roundBoard.tableIdle}
-        </p>
-      ) : (
-        <ul
-          className={isQueue ? 'grid auto-rows-min gap-2' : 'flex flex-col gap-2'}
-          style={
-            isQueue ? gridColumns(fitColumns(section.matches.length, QUEUE_CELL_ASPECT)) : undefined
-          }
-        >
-          {section.matches.map((match) => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              groups={groups}
-              size={size}
-              flip={flipping.has(match.id)}
-            />
-          ))}
-        </ul>
-      )}
+      {/*
+       * No empty case: `beamerBoard` only hands over sections that have a match
+       * in them (issue #87), so a heading on this board always has cards under
+       * it — including the table whose only match is already over.
+       */}
+      <ul
+        className={isQueue ? 'grid auto-rows-min gap-2' : 'flex flex-col gap-2'}
+        style={
+          isQueue ? gridColumns(fitColumns(section.matches.length, QUEUE_CELL_ASPECT)) : undefined
+        }
+      >
+        {section.matches.map((match) => (
+          <MatchCard
+            key={match.id}
+            match={match}
+            groups={groups}
+            size={size}
+            flip={flipping.has(match.id)}
+          />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -384,16 +391,22 @@ const QUEUE_CELL_ASPECT = 4;
  */
 type Density = 'roomy' | 'normal' | 'dense';
 
-function density(sections: number, deepest: number): Density {
-  if (sections <= 4 && deepest <= 2) {
+/**
+ * Keyed on the round's card count alone (issue #87).
+ *
+ * It used to be keyed on the sections and on the deepest one, and both of those
+ * move while the round is being played: the queue section disappears when the
+ * last waiting pair is started, and a section's depth changes every time one
+ * is. So the type step could change under a room mid-round, which is the reflow
+ * issue #76 removed from the draw and this board must not reintroduce. A
+ * round's match list is fixed when it is drawn, so this is computed once in
+ * effect — the same three steps, from the one number that cannot move.
+ */
+function density(cards: number): Density {
+  if (cards <= 4) {
     return 'roomy';
   }
-  return sections <= 9 && deepest <= 4 ? 'normal' : 'dense';
-}
-
-/** The most matches any one section has to hold. */
-function deepestSection(sections: readonly BoardSection[]): number {
-  return sections.reduce((most, section) => Math.max(most, section.matches.length), 0);
+  return cards <= 9 ? 'normal' : 'dense';
 }
 
 /**

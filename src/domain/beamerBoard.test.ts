@@ -4,13 +4,21 @@ import { beamerBoard, matchPhase } from '@/domain/round';
 import { groupId, match, occupiedTable, table, tableId } from '@/domain/testFixtures';
 
 /**
- * The beamer's round board, grouped by table (issue #19).
+ * The beamer's round board, grouped by table (issue #19, narrowed by #87).
  *
  * The load-bearing decision here is that a match is grouped by its **own**
  * `tableId`, not by `table.currentMatchId`. Marking a winner frees the table,
  * so the other reading would make the card disappear from its slot at the exact
  * moment the audience is looking at it — and the green/red flip the whole issue
  * is about would never be seen.
+ *
+ * Issue #87 narrows *which tables get a section* and nothing else, and the two
+ * rules are one step apart in a way that is easy to get backwards. "Unused"
+ * means **no match assigned this round**; it does not mean "the match there has
+ * finished". Both readings drop the same table off a board where nothing has
+ * happened yet, and only one of them keeps a result on the wall — so most of
+ * what is asserted below is that a table which *has* been played on this round
+ * stays, whatever state its match or the table itself has since reached.
  */
 
 const pairing = (n: number, table: number | null, extra = {}) =>
@@ -30,8 +38,17 @@ describe('beamerBoard', () => {
     expect(board[0]?.matches.map((entry) => entry.id)).toEqual([pairing(1, 1).id]);
   });
 
+  /*
+   * The host's order, not the order the matches were assigned in: the board is
+   * read left to right by a room that is looking at the physical tables, so a
+   * match started on table 3 first must not pull table 3 to the front.
+   */
   it('keeps the tables in the order the host arranged them', () => {
-    const board = beamerBoard([table(3), table(1), table(2)], []);
+    const board = beamerBoard(
+      [table(3), table(1), table(2)],
+      [pairing(1, 2), pairing(2, 3), pairing(3, 1)],
+    );
+
     expect(board.map((section) => section.table?.label)).toEqual(['Table 3', 'Table 1', 'Table 2']);
   });
 
@@ -75,15 +92,55 @@ describe('beamerBoard', () => {
     expect(board.every((section) => section.table !== null)).toBe(true);
   });
 
-  it('keeps a table with nothing on it, so the room can see it is free', () => {
-    const board = beamerBoard([table(1), table(2)], [pairing(1, 1)]);
+  /*
+   * Issue #87's first acceptance criterion. Ten tables and three matches is
+   * three sections — the seven the round never touched are dead space, and on
+   * a projector dead space is paid for in numeral size.
+   */
+  it('leaves out a table that has no match this round', () => {
+    const tables = Array.from({ length: 10 }, (_, index) => table(index + 1));
+    const board = beamerBoard(tables, [pairing(1, 1), pairing(2, 2), pairing(3, 3)]);
 
-    expect(board).toHaveLength(2);
-    expect(board[1]?.matches).toEqual([]);
+    expect(board).toHaveLength(3);
+    expect(board.map((section) => section.table?.label)).toEqual(['Table 1', 'Table 2', 'Table 3']);
+  });
+
+  /*
+   * The mistake the issue warns about, stated as a test. A table whose only
+   * match is over has *not* gone unused — dropping it would delete the result
+   * the board exists to show, at the moment the room is reading it.
+   */
+  it('keeps a table whose only match is already decided', () => {
+    const decided = pairing(1, 1, { winnerId: groupId(1), status: 'DONE' as const });
+    const board = beamerBoard([table(1, { status: 'FREE' }), table(2)], [decided]);
+
+    expect(board).toHaveLength(1);
+    expect(board[0]?.table?.id).toBe(tableId(1));
+    expect(board[0]?.matches.map((entry) => entry.id)).toEqual([decided.id]);
+  });
+
+  /*
+   * Issue #87's third acceptance criterion. A table taken out of service
+   * mid-round keeps whatever it is hosting: `disableTable` can leave a running
+   * match where it is, and a board that read `status` rather than the matches
+   * would blank a match that is still being played.
+   */
+  it('keeps a table that was locked while its match was running', () => {
+    const running = pairing(1, 1, { status: 'RUNNING' as const });
+    const board = beamerBoard([table(1, { status: 'DISABLED' })], [running]);
+
+    expect(board).toHaveLength(1);
+    expect(board[0]?.matches.map((entry) => entry.id)).toEqual([running.id]);
+  });
+
+  it('leaves out a table that is out of service and empty', () => {
+    const board = beamerBoard([table(1), table(2, { status: 'DISABLED' })], [pairing(1, 1)]);
+
+    expect(board.map((section) => section.table?.id)).toEqual([tableId(1)]);
   });
 
   it('handles a round with no matches at all', () => {
-    expect(beamerBoard([table(1)], [])).toEqual([{ table: table(1), matches: [] }]);
+    expect(beamerBoard([table(1)], [])).toEqual([]);
   });
 
   /* A bye never touches a table, so it belongs in the queue section — it is
