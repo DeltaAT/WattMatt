@@ -15,9 +15,11 @@ Every rule below follows from that split.
    retargets or snaps to its end state. Nothing is ever queued behind a visual effect.
 2. **The host can always skip.** `Space` jumps any beamer animation to its settled state.
    The host never has to wait for a reveal to finish before continuing.
-3. **Animate `transform`, `opacity` and `filter` only.** Never animate `width`, `height`,
-   `top`, `left`, `margin` or `box-shadow` on the beamer. Layout animation at 1080p on an
-   integrated GPU drops frames, and the audience sees every dropped frame.
+3. **Animate `transform`, `opacity` and `filter` only** — plus the paint-only colour
+   properties `background-color` and `border-color`, which change no geometry. Never animate
+   `width`, `height`, `top`, `left`, `margin`, `border-width` or `box-shadow` on the beamer.
+   Layout animation at 1080p on an integrated GPU drops frames, and the audience sees every
+   dropped frame.
 
 ## 2. Should it animate at all?
 
@@ -109,13 +111,23 @@ the slide moved a card the audience had already read. All three are gone.
 
 ### 4.2 Result flip
 
-The instant the host marks a winner:
+The instant the host marks a winner, both number boxes change colour together over 320 ms
+`--ease-out` (issue #77). Nothing else happens, and nothing moves.
 
-- Winner card: background → `--wm-win-bg`, left border → `--wm-win` (6 px), `✓` scales
-  `0.9 → 1` in 240 ms `--ease-out`, label `SIEGER` fades in.
-- Loser card: background → `--wm-lose-bg`, `scale(0.98)`, `opacity: .6`, saturation down,
-  `✗` fades in. 320 ms.
-- The two run simultaneously — a stagger here would look like hesitation about the result.
+- Winner box: background → `--wm-win-bg`, border → `--wm-win`. `✓` scales `0.9 → 1` in
+  240 ms `--ease-out`.
+- Loser box: background → `--wm-lose-bg`, border → `--wm-lose`, `opacity: .6`, saturation
+  down. `✗` in place of the dot.
+- **The two run simultaneously and for the same length.** A stagger here would look like
+  hesitation about the result, and the winner settling a beat early reads as the app
+  deciding rather than reporting.
+- **No transform, no words.** The `SIEGER` / `AUSGESCHIEDEN` labels are gone and the loser's
+  old `scale(0.98)` with them: the criterion is that a result changes colour and nothing
+  shifts. The winner's 6 px edge is 2 px of border plus an inset ring, so even the border
+  does not grow.
+
+What carries the result without the words is docs/STYLEGUIDE.md §1 — luminance, geometry and
+weight, measured rather than assumed.
 
 ### 4.3 Hoffnungsrunde — repechage draw
 

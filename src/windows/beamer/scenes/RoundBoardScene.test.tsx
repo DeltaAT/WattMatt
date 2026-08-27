@@ -126,26 +126,55 @@ describe('the round board', () => {
     });
 
     /*
-     * The acceptance criterion: the board is fully understandable in greyscale.
-     * Colour is one of three signals (docs/STYLEGUIDE.md §1) and the other two
-     * — the icon and the German word — must both survive on their own.
+     * The acceptance criterion, in the half a class-name grep can answer: with
+     * every colour class gone the two outcomes still differ. The word is no
+     * longer one of the signals (issue #77), so what is left here is the icon
+     * and the geometry — `wm-result-ring` is the winner's extra edge and it is
+     * not a colour class. How far apart the two actually are *in* greyscale is
+     * arithmetic, and `src/styles/resultContrast.test.ts` computes it.
      */
     it('is readable with every colour class stripped out', () => {
       const plain = greyscale(scene(board({ pairs: 2, decided: 1 })));
 
       expect(plain).toContain('✓');
       expect(plain).toContain('✗');
-      expect(plain).toContain(de.beamer.roundBoard.winner);
-      expect(plain).toContain(de.beamer.roundBoard.loser);
+      expect(plain).toContain('wm-result-ring');
+    });
+
+    /* Issue #77's first acceptance criterion: no result text on the beamer. */
+    it('carries no result word anywhere', () => {
+      const markup = scene(board({ pairs: 3, decided: 3 }));
+
+      for (const word of ['SIEGER', 'AUSGESCHIEDEN']) {
+        expect(markup, word).not.toContain(word);
+      }
+      expect(markup).not.toContain('data-outcome-label');
+      expect(markup).not.toContain('data-outcome-slot');
     });
 
     /*
-     * The three signals must not drift apart, and they have to be checked
-     * *together*. Counting ticks and `SIEGER`s across the whole document
-     * passes just as happily when the loser is the one wearing the tick —
-     * which is why this reads each side as a unit.
+     * "The number itself stays at full contrast — colour the box, not the
+     * digits." A loser whose number was drawn in the muted text colour would be
+     * harder to read than the winner beside it, which is a penalty the room
+     * does not need on top of losing.
      */
-    it('binds the icon and the word to the outcome on the same side', () => {
+    it('draws the number at full contrast whatever the result', () => {
+      const markup = scene(board({ pairs: 1, decided: 1 }));
+
+      const loser = /class="([^"]*)"[^>]*data-outcome="LOSER"/.exec(markup)?.[1] ?? '';
+      const classes = loser.split(' ');
+
+      expect(classes).toContain('text-wm-text');
+      expect(classes).not.toContain('text-wm-text-muted');
+    });
+
+    /*
+     * The signals must not drift apart, and they have to be checked
+     * *together*. Counting ticks and rings across the whole document passes
+     * just as happily when the loser is the one wearing the tick — which is
+     * why this reads each side as a unit.
+     */
+    it('binds the icon and the ring to the outcome on the same side', () => {
       const markup = scene(board({ pairs: 3, decided: 3 }));
       const sides = readSides(markup);
 
@@ -153,10 +182,10 @@ describe('the round board', () => {
       for (const side of sides) {
         if (side.outcome === 'WINNER') {
           expect(side.icon, 'winner icon').toBe('✓');
-          expect(side.label, 'winner word').toBe(de.beamer.roundBoard.winner);
+          expect(side.ring, 'winner ring').toBe(true);
         } else {
           expect(side.icon, 'loser icon').toBe('✗');
-          expect(side.label, 'loser word').toBe(de.beamer.roundBoard.loser);
+          expect(side.ring, 'loser ring').toBe(false);
         }
       }
     });
@@ -214,10 +243,13 @@ describe('the round board', () => {
       expect(markup).not.toContain('wm-result-win');
       expect(markup).not.toContain('wm-result-lose');
 
-      // The result is there all the same — colour, icon and word (§1).
+      // The result is there all the same — colour, icon and the winner's ring.
+      // The ring in particular is a state class and not an animation, so a
+      // board that is only catching up still carries the signal that survives
+      // greyscale (golden rule 4, issue #77).
       expect(markup).toContain('data-outcome="WINNER"');
       expect(markup).toContain('data-outcome="LOSER"');
-      expect(markup).toContain('data-outcome-label=""');
+      expect(markup).toContain('wm-result-ring');
     });
   });
 
@@ -313,16 +345,22 @@ describe('the round board', () => {
   });
 
   /*
-   * The layout-shift criterion, one level in from the card. Rendering the
-   * result word only once decided re-truncates the participant name at the
-   * exact moment the room is reading it, because the name is `flex-1 truncate`
-   * and a new sibling takes width from it. The slot is therefore always there.
+   * The layout-shift criterion, one level in from the card. Since issue #77 a
+   * decided box gains no element and no border width at all — the winner's
+   * extra 4 px are an inset shadow, which paints inside a box the browser had
+   * already laid out. So the box that arrives is the box that was there.
    */
-  it('reserves the result slot before there is a result', () => {
+  it('changes no box geometry when a result lands', () => {
     const open = scene(board({ pairs: 1 }));
+    const decided = scene(board({ pairs: 1, decided: 1 }));
 
-    expect(open).toContain('data-outcome-slot');
-    expect(open).not.toContain('data-outcome-label');
+    // The same border width in every state, and only one width in the file.
+    expect(open.match(/border-\[2px\]/g)).toHaveLength(2);
+    expect(decided.match(/border-\[2px\]/g)).toHaveLength(2);
+    expect(decided).not.toMatch(/border-\[6px\]/);
+
+    // And the same number of elements inside each side.
+    expect(slots(decided)).toEqual(slots(open));
   });
 
   it(`does not change a card inner structure when its result lands`, () => {
@@ -358,23 +396,19 @@ function sections(markup: string): string[] {
  * Reading them as units is the point: three independent global counts of
  * `WINNER`, `✓` and `SIEGER` all pass while the tick sits on the loser.
  */
-function readSides(markup: string): { outcome: string; icon: string; label: string }[] {
-  return [...markup.matchAll(/data-outcome="(WINNER|LOSER)"[\s\S]*?<\/span><\/span>/g)].map(
-    (hit) => {
-      const block = hit[0];
-      return {
-        outcome: hit[1] ?? '',
-        icon: /data-outcome-icon="">([^<]*)</.exec(block)?.[1] ?? '',
-        label: /data-outcome-label="">([^<]*)</.exec(block)?.[1] ?? '',
-      };
-    },
-  );
+function readSides(markup: string): { outcome: string; icon: string; ring: boolean }[] {
+  const side = /class="([^"]*)"[^>]*data-outcome="(WINNER|LOSER)"[\s\S]*?<\/span><\/span>/g;
+  return [...markup.matchAll(side)].map((hit) => ({
+    outcome: hit[2] ?? '',
+    icon: /data-outcome-icon="">([^<]*)</.exec(hit[0])?.[1] ?? '',
+    ring: (hit[1] ?? '').includes('wm-result-ring'),
+  }));
 }
 
-/** How many reserved result slots and icons each board renders. */
-function slots(markup: string): { slots: number; icons: number } {
+/** How many number boxes and icons each board renders. */
+function slots(markup: string): { boxes: number; icons: number } {
   return {
-    slots: (markup.match(/data-outcome-slot/g) ?? []).length,
+    boxes: (markup.match(/data-outcome="/g) ?? []).length,
     icons: (markup.match(/data-outcome-icon/g) ?? []).length,
   };
 }

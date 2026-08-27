@@ -1213,9 +1213,13 @@ export const deAT = {
         RUNNING: 'LÄUFT',
         FINISHED: 'BEENDET',
       },
-      /** The third signal on a result, beside the colour and the icon. */
-      winner: 'SIEGER',
-      loser: 'AUSGESCHIEDEN',
+      /*
+       * `SIEGER` and `AUSGESCHIEDEN` are gone from this scene (issue #77): the
+       * coloured number box says the same thing without a word, and at the
+       * numeral sizes issue #75 gave the board there was no room beside them
+       * for a word worth reading. The `Turnierbaum` keeps its own pair
+       * (`de.beamer.bracket`) — the final phase is names and has the room.
+       */
       /** The heading over the matches that have no table yet. */
       queueTitle: 'Warteschlange',
       /** On a table with nothing on it this round. */

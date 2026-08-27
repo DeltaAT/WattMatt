@@ -486,8 +486,10 @@ Publikum die Auslosung mitlaufen. Danach wechseln Sie auf **Runde** (Ziffer `5`)
 ```
 
 **Einen Sieger festlegen:** Klicken Sie auf der Karte auf die Gruppe, die gewonnen hat. Der
-ganze Knopf ist die Gruppe — Sie müssen nicht zielen. Auf der Leinwand wird der Sieger grün
-und der Verlierer rot; zusätzlich stehen dort die Wörter **SIEGER** und **AUSGESCHIEDEN**.
+ganze Knopf ist die Gruppe — Sie müssen nicht zielen. Auf der Leinwand bekommt der Sieger sofort
+einen kräftigen grünen Rahmen um seine Nummer und ein Hakerl, der Verlierer einen dünnen roten
+Rahmen, ein Kreuzerl und wird blasser. Beides zugleich, in einer knappen Drittelsekunde, und
+nichts auf der Leinwand verrutscht dabei.
 
 Sobald ein Sieger feststeht, wird der Tisch frei.
 
@@ -1088,17 +1090,28 @@ dem sie fällt. Mit der **Leertaste** springen Sie sofort auf das fertige Bild.
    1                          2                        Warteschlange
    ┌────────────────────┐    ┌────────────────────┐    ┌────────────┐
    │       LÄUFT        │    │      BEENDET       │    │   WARTET   │
-   │ ·  4               │    │ ✓  2       SIEGER  │    │ ·  1        │
-   │ ·  9               │    │ ✗  7  AUSGESCHIEDEN│    │ · 11        │
+   │  ┌──────────┐   │    │  ╔══════════╗   │    │ ┌──────┐ │
+   │  │  ·    4  │   │    │  ║  ✓    2  ║   │    │ │ ·  1 │ │
+   │  └──────────┘   │    │  ╚══════════╝   │    │ └──────┘ │
+   │  ┌──────────┐   │    │  ┌──────────┐   │    │ ┌──────┐ │
+   │  │  ·    9  │   │    │  │  ✗    7  │   │    │ │ · 11 │ │
+   │  └──────────┘   │    │  └──────────┘   │    │ └──────┘ │
    └────────────────────┘    └────────────────────┘    └────────────┘
 ```
 
 Das Bild, das den größten Teil des Abends auf der Leinwand steht. Über jeder Spalte steht die
 Tischnummer, auf den Karten stehen die Gruppennummern — groß, weil auf der Leinwand kein Wort
-davorsteht. Jede Karte trägt oben **WARTET**, **LÄUFT** oder **BEENDET**. Ein Ergebnis wird immer dreifach angezeigt: durch die
-Farbe, durch ein Zeichen und durch das Wort **SIEGER** oder **AUSGESCHIEDEN**. Farbe allein
-genügt nicht — etwa jeder zwölfte Mann unterscheidet Rot und Grün schlecht, und ein heller Saal
-wäscht die Farben ohnehin aus.
+davorsteht. Jede Karte trägt oben **WARTET**, **LÄUFT** oder **BEENDET**.
+
+**Das Ergebnis steckt im Kästchen um die Nummer.** Der Sieger bekommt einen kräftigen grünen
+Rahmen und ein Hakerl, der Ausgeschiedene einen dünnen roten Rahmen, ein Kreuzerl und wird
+insgesamt blasser. Wörter wie *Sieger* stehen nicht mehr dabei — dafür sind die Zahlen jetzt
+groß genug für die letzte Reihe.
+
+Auf die Farbe allein ist dabei bewusst kein Verlass: etwa jeder zwölfte Mann unterscheidet Rot
+und Grün schlecht, und ein heller Saal wäscht die Farben ohnehin aus. Deshalb sind Sieger und
+Verlierer auch **ohne Farbe** auseinanderzuhalten — an der Rahmenstärke, an der Helligkeit und
+am Zeichen. Die Nummer selbst bleibt in beiden Fällen gut lesbar.
 
 ### 6 — Hoffnungsrunde
 
