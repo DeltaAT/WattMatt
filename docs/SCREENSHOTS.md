@@ -75,7 +75,7 @@ uses.
 | `beamer-3-tables.png` | `TABLE_OVERVIEW` | A mix of occupied, free and `gesperrt`. |
 | `beamer-4-draw.png` | `DRAW` | Mid-sequence: about half the slots filled, the rest still empty and dashed, one *Wartet auf Tisch*. |
 | `beamer-4-draw-bye.png` | `DRAW` | The `Freilos` reveal (odd field — the 13-group run). |
-| `beamer-5-round.png` | `ROUND_BOARD` | One `LÄUFT`, one `BEENDET` with `SIEGER`/`AUSGESCHIEDEN`, a non-empty *Warteschlange*. |
+| `beamer-5-round.png` | `ROUND_BOARD` | One `LÄUFT`, one `BEENDET` with a green winner box and a dimmed red loser box, a non-empty *Warteschlange*. **Also save a greyscale copy** — issue #77's acceptance criterion is that the two are still tellable apart with the colour gone. |
 | `beamer-6-repechage.png` | `REPECHAGE` | A card in `GEZOGEN`, one `VERZICHTET`, places left on the counter. |
 | `beamer-7-naming.png` | `NAMING` | The holding picture. |
 | `beamer-8-bracket.png` | `BRACKET` | Full tree, round of 16 decided, `Spiel um Platz 3` visible. |

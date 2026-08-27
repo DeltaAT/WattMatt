@@ -48,14 +48,45 @@ UI in a dark room is painful to look at.
 ### Colour is never the only signal
 
 Roughly 8 % of men have a red–green deficiency, and a beamer in a bright room destroys subtle
-hue differences anyway. **Every win/lose state must carry three signals:**
+hue differences anyway. **Hue may never be the only thing that separates two states.**
 
-1. colour (`--wm-win` / `--wm-lose`),
-2. an icon (`✓` / `✗`, filled shapes, not thin outlines),
-3. a German text label (`SIEGER` / `AUSGESCHIEDEN`).
+This used to be spelled "three signals: colour, an icon, and a German text label". Issue #77
+dropped the label from the group-round board — at the numeral sizes issue #75 gave that scene
+there is no room beside a number for a word worth reading — so the rule is now stated as the
+property it was always protecting, and what is left has to satisfy it without the word.
 
-Losers additionally drop to `opacity: .6` and desaturate. Winners keep full contrast and get a
-left border of 6 px. The layout must remain readable in greyscale — test it.
+**A win/lose state must differ in at least two of these, one of which is not hue:**
+
+1. **Luminance.** Two states must be tellable apart with the colour thrown away. Measured, not
+   eyeballed: `src/styles/resultContrast.test.ts` composites what is actually painted — the
+   loser's `opacity: .6` included — and asserts the separation.
+2. **Geometry.** Border weight, ring, or shape. The winner's edge reads 6 px against the
+   loser's 2 px. It must cost no layout: on the round board the extra 4 px are an inset
+   shadow, so a result landing moves nothing.
+3. **Weight.** Losers drop to `opacity: .6` and half saturation. Winners stay at full strength.
+4. **An icon** (`✓` / `✗`, filled shapes, not thin outlines) where one fits.
+
+On the round board all four are present. The numbers below are the ones that test pins:
+
+| Pair, in greyscale | Ratio | |
+| --- | --- | --- |
+| winner edge vs loser edge | ≈ 3.2:1 | clears the 3:1 non-text target |
+| winner fill vs loser fill | ≈ 1.4:1 | **the fills alone cannot carry it** |
+| winner edge vs winner fill | ≈ 6.3:1 | the ring is what finds the winner in a grid of 32 |
+
+The second row is why the border colours and the winner's ring are not decoration. A later
+change that drops them "because the fill already says it" would leave a board that a real part
+of the audience cannot read, and nothing would look wrong on a dev machine.
+
+**One stated exception to the contrast table below.** The loser's number is dimmed with its
+box and lands at ≈ 6.1:1, under the 7:1 beamer-text target. That dimming is what buys the
+3.2:1 edge separation — without it the two borders are 1.5:1 apart and the whole scheme fails.
+6.1:1 on a 64–160 px numeral is affordable; hue a twelfth of the room cannot see is not. The
+digits themselves are `--wm-text` in every state — the box is coloured, never the number —
+which took the loser's number from 3.2:1 to 6.1:1 when the muted colour went.
+
+The `Turnierbaum` and the `Siegerehrung` keep their words: the final phase is names, at sizes
+that leave room beside them (issue #23).
 
 ### Contrast targets
 

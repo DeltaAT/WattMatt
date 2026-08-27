@@ -125,6 +125,10 @@ describe('docs/MOTION.md §1 law 3: only transform, opacity and filter animate',
       'opacity',
       'filter',
       'background-color',
+      // Paint-only, exactly like `background-color`: a colour change on a
+      // border of fixed width triggers no layout (issue #77). `border-width`
+      // would, and is not on this list.
+      'border-color',
       'stroke-dashoffset',
       'stroke-dasharray',
     ]);

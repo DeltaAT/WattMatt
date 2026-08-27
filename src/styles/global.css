@@ -266,20 +266,29 @@
 }
 
 /* ---------------------------------------------------------------------------
- * The result flip (issue #19, docs/MOTION.md §4.2).
+ * The result flip (issue #19, redesigned by issue #77, docs/MOTION.md §4.2).
  *
- * Both sides run at once — a stagger here would look like hesitation about the
- * result. Neither keyframe moves the card: the acceptance criterion is that a
- * result changes colour and nothing shifts, so the loser's `scale(0.98)` is on
- * the side only and the card's own box is untouched.
+ * Both sides run at once and for the same length — a stagger here would look
+ * like hesitation about the result. Neither keyframe moves the box: the
+ * acceptance criterion is that a result changes colour and nothing shifts, so
+ * even the loser's fade is opacity and saturation and never a transform.
+ *
+ * What animates is the box, not the number inside it: issue #77 colours the
+ * container and leaves the digits at full contrast, so a number stays exactly
+ * as readable when its match is lost as when it is won.
  * ------------------------------------------------------------------------- */
 
 @keyframes wm-result-win {
   from {
-    background-color: transparent;
+    /* Exactly what `OUTCOME_BOX.OPEN` paints, so the flip starts from the box
+     * that is on screen. `transparent` here would jump the fill away for one
+     * frame before it grew back — invisible on a laptop, a flicker on a wall. */
+    background-color: var(--wm-bg-elevated);
+    border-color: var(--wm-border-strong);
   }
   to {
     background-color: var(--wm-win-bg);
+    border-color: var(--wm-win);
   }
 }
 
@@ -296,33 +305,58 @@
 
 @keyframes wm-result-lose {
   from {
-    background-color: transparent;
+    background-color: var(--wm-bg-elevated);
+    border-color: var(--wm-border-strong);
     opacity: 1;
     filter: saturate(1);
   }
   to {
     background-color: var(--wm-lose-bg);
+    border-color: var(--wm-lose);
     opacity: 0.6;
     filter: saturate(0.5);
   }
 }
 
+/* 340 ms, which is the token arithmetic nearest §4.2's "320 ms". Both sides now
+ * take it: issue #77 asks for one simultaneous colour change rather than the
+ * winner settling a beat before the loser. */
 @utility wm-result-win {
-  animation: wm-result-win var(--dur-base) var(--ease-out) both;
+  animation: wm-result-win calc(var(--dur-base) + var(--dur-instant)) var(--ease-out) both;
 }
 
 @utility wm-result-lose {
-  /* 320 ms against the winner's 240 ms, per §4.2: the loser settles a moment
-   * later, which reads as the result landing rather than as two things. */
   animation: wm-result-lose calc(var(--dur-base) + var(--dur-instant)) var(--ease-out) both;
+}
+
+/*
+ * The winner's edge: 6 px in total, of which the box itself draws 2 (issue #77,
+ * docs/STYLEGUIDE.md §1).
+ *
+ * Drawn **inward**, so it costs no layout at all. A border that grew from 2 px
+ * to 6 px when a result landed would push every card on its row sideways, and
+ * "no layout shift when a result comes in" is the one hard requirement of the
+ * issue. An inset shadow paints inside the box the browser had already laid
+ * out.
+ *
+ * Not animated: §1 law 3 bans animating `box-shadow` on the beamer, and this is
+ * the class that is on a caught-up board as well as a flipping one. It arrives
+ * with the colour, which reads as one event rather than two — and it is what
+ * carries the result in greyscale, so it must be there whether the window
+ * watched the flip or not (`resultContrast.test.ts`).
+ */
+@utility wm-result-ring {
+  box-shadow: inset 0 0 0 4px var(--wm-win);
 }
 
 .wm-result-win [data-outcome-icon] {
   animation: wm-result-win-icon var(--dur-base) var(--ease-out) both;
 }
 
-/* docs/MOTION.md §6: reduced motion keeps colour and opacity, which carry the
- * meaning here, and drops the scale. The result still arrives visibly. */
+/* docs/MOTION.md §6: reduced motion keeps colour and opacity, which is what
+ * carries the meaning here, and drops the scale. The result still arrives
+ * visibly — and since issue #77 the colour is the whole of it, so there is
+ * nothing here that may be switched off. */
 @media (prefers-reduced-motion: reduce) {
   .wm-result-win [data-outcome-icon] {
     animation: none;

@@ -223,11 +223,33 @@ function MatchCard({
 }
 
 /**
- * One participant of a match, with its result.
+ * One participant of a match, as a box that carries the result (issue #77).
  *
- * The three signals live here together so they cannot drift apart: a card that
- * was green without the word, or carried `SIEGER` without the tick, would fail
- * the greyscale reading the issue asks for.
+ * The `SIEGER` / `AUSGESCHIEDEN` words are gone: at the sizes issue #75 gave
+ * the numerals there is no room for a word beside them that is worth reading,
+ * and the box around the number can say the same thing without any.
+ *
+ * **What replaced the word, and why it is not just colour.** docs/STYLEGUIDE.md
+ * §1 used to require three signals because roughly 8 % of men have a red–green
+ * deficiency and a projector in a lit room flattens hue. Dropping the text
+ * leaves three that are not hue at all, and `resultContrast.test.ts` computes
+ * them rather than trusting the eye:
+ *
+ *  - **Luminance.** The winner's edge and the loser's differ by 3.2:1 in
+ *    greyscale once the loser's dimming is composited — past §1's 3:1 bar for
+ *    non-text UI. The *fills* alone manage only 1.4:1, which is why the edge
+ *    does the work and not the background.
+ *  - **Geometry.** The winner's edge reads 6 px against the loser's 2 px
+ *    (`wm-result-ring`), drawn inward so it costs no layout.
+ *  - **Weight.** The loser stays at `opacity .6` and half saturation — the
+ *    issue #19 treatment, kept deliberately. Winner at full strength.
+ *
+ * The `✓` / `✗` glyph stays too. The issue's own warning counts the text as
+ * *one* of the three signals, so the icon is the one that survives, and it is
+ * the cheapest non-hue signal there is.
+ *
+ * The digits themselves are `--wm-text` in every state: the box is coloured,
+ * never the number (issue #77).
  */
 function Side({
   match,
@@ -249,23 +271,27 @@ function Side({
 
   return (
     <span
-      // The 6 px left border is the winner's, per docs/STYLEGUIDE.md §1. The
-      // loser drops to .6 opacity and desaturates; both are colour-independent
-      // on purpose, so the difference survives greyscale.
-      className={`flex min-w-0 items-baseline gap-3 border-l-[6px] pl-3 ${OUTCOME_SIDE[outcome]} ${
+      // 2 px of border in every state, and never more: the winner's extra 4 px
+      // are drawn inward by `wm-result-ring`, so the box is exactly the same
+      // size decided and undecided. A border that grew when a result landed
+      // would move every card on the row — "no layout shift when a result comes
+      // in" is issue #77's one hard requirement.
+      className={`flex min-w-0 items-baseline justify-center gap-3 rounded-wm-lg border-[2px] px-4 py-2 ${
+        OUTCOME_BOX[outcome]
+      } ${
         // The flip itself. Only the decided sides animate, and both run at once
         // — a stagger would look like hesitation about the result
         // (docs/MOTION.md §4.2). A board that is only *arriving* does not flip
-        // at all: `OUTCOME_SIDE` already carries every settled colour, so the
+        // at all: `OUTCOME_BOX` already carries every settled colour, so the
         // results are there, they simply do not replay (issue #29).
         outcome === 'OPEN' || !flip ? '' : OUTCOME_ANIMATION[outcome]
       }`}
       data-outcome={outcome}
     >
       {/*
-       * A fixed box, so `·` → `✓` cannot nudge the name sideways. The three
+       * A fixed box, so `·` → `✓` cannot nudge the number sideways. The three
        * glyphs have different advance widths, and the acceptance criterion is
-       * that nothing moves when a result lands — inside the card as much as
+       * that nothing moves when a result lands — inside the box as much as
        * outside it.
        */}
       <span
@@ -282,45 +308,12 @@ function Side({
        * there is no length here to defend against, so the type is the size the
        * room needs rather than the size the longest label allowed.
        */}
-      <span
-        className={`min-w-0 flex-1 wm-display wm-tnum font-extrabold ${TYPE[size]}`}
-        data-group-number=""
-      >
+      <span className={`wm-display wm-tnum font-extrabold ${TYPE[size]}`} data-group-number="">
         {label.text}
-      </span>
-
-      {/*
-       * The result word always occupies its slot, even before there is a
-       * result. Rendering it only once decided would re-truncate the name at
-       * the exact moment the room is reading it — the same layout shift the
-       * criterion forbids, one level further in.
-       *
-       * The slot is sized by the longest of the two words rather than by a
-       * hardcoded width: an invisible copy sits in the same grid cell and does
-       * the measuring, so the reservation stays correct if the wording changes.
-       */}
-      <span className={`grid shrink-0 ${RIBBON[size]}`} data-outcome-slot="">
-        <span aria-hidden="true" className="invisible col-start-1 row-start-1 wm-beamer-label">
-          {LONGEST_OUTCOME_LABEL}
-        </span>
-        {outcome === 'OPEN' ? null : (
-          <span
-            className="col-start-1 row-start-1 wm-beamer-label text-right"
-            data-outcome-label=""
-          >
-            {outcome === 'WINNER' ? de.beamer.roundBoard.winner : de.beamer.roundBoard.loser}
-          </span>
-        )}
       </span>
     </span>
   );
 }
-
-/** Whichever of the two result words is wider, for the reserved slot above. */
-const LONGEST_OUTCOME_LABEL =
-  de.beamer.roundBoard.winner.length >= de.beamer.roundBoard.loser.length
-    ? de.beamer.roundBoard.winner
-    : de.beamer.roundBoard.loser;
 
 type Outcome = 'OPEN' | 'WINNER' | 'LOSER';
 
@@ -331,10 +324,19 @@ const OUTCOME_ICON: Record<Outcome, string> = {
   LOSER: '✗',
 };
 
-const OUTCOME_SIDE: Record<Outcome, string> = {
-  OPEN: 'border-transparent text-wm-text',
-  WINNER: 'border-wm-win bg-wm-win-bg text-wm-text',
-  LOSER: 'border-wm-lose bg-wm-lose-bg text-wm-text-muted opacity-60 saturate-50',
+/**
+ * The three states of a number box (issue #77).
+ *
+ * `text-wm-text` throughout: the box is coloured and the digits are not, so a
+ * number is exactly as readable when its match is lost as when it is won.
+ * `wm-result-ring` is the winner's extra 4 px of edge, and it is applied here
+ * rather than in the animation so a board that is merely catching up wears it
+ * too (golden rule 4).
+ */
+const OUTCOME_BOX: Record<Outcome, string> = {
+  OPEN: 'border-wm-border-strong bg-wm-bg-elevated text-wm-text',
+  WINNER: 'wm-result-ring border-wm-win bg-wm-win-bg text-wm-text',
+  LOSER: 'border-wm-lose bg-wm-lose-bg text-wm-text opacity-60 saturate-50',
 };
 
 const OUTCOME_ANIMATION: Record<Exclude<Outcome, 'OPEN'>, string> = {
