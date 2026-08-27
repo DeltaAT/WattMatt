@@ -17,6 +17,7 @@ import {
 import { useBracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useDrawSequence } from '@/windows/beamer/useDrawSequence';
 import { useRepechageBeat } from '@/windows/beamer/useRepechageBeat';
+import { useRepechageTravel } from '@/windows/beamer/useRepechageTravel';
 import { useSkipKey } from '@/windows/beamer/useSkipKey';
 import { useSkipSignal } from '@/windows/beamer/useSkipSignal';
 
@@ -47,7 +48,9 @@ export function BeamerScenePlaceholder({
   settled: boolean;
   /**
    * How many times the host has asked for the running sequence to be skipped
-   * (issue #28). Only the draw has one to skip; the rest ignore it.
+   * (issue #28). Two scenes have something to skip — the `Auslosung`'s reveal
+   * and the `Hoffnungsrunde`'s travelling highlight (issue #89); the rest
+   * ignore it.
    */
   skipToken: number;
   /**
@@ -152,7 +155,7 @@ export function BeamerScenePlaceholder({
      * state the host can reach by staging the scene by hand before starting the
      * phase, and one the room must be able to read rather than stare at.
      */
-    return <RepechageSceneHost tournament={tournament} delivery={delivery} />;
+    return <RepechageSceneHost tournament={tournament} delivery={delivery} skipToken={skipToken} />;
   }
 
   if (scene.id === 'BRACKET') {
@@ -317,13 +320,46 @@ function stageRound(tournament: TournamentSnapshot, roundId: RoundId): Tournamen
 function RepechageSceneHost({
   tournament,
   delivery,
+  skipToken,
 }: {
   tournament: TournamentSnapshot;
   delivery: SnapshotDelivery;
+  skipToken: number;
 }) {
-  const beat = useRepechageBeat(tournament.repechage?.last ?? null, delivery);
+  const repechage = tournament.repechage;
+  const beat = useRepechageBeat(repechage?.last ?? null, delivery);
 
-  return <RepechageScene tournament={tournament} beat={beat} />;
+  /*
+   * The travel runs for a *draw* and for nothing else (issue #89). An accept
+   * and a decline are answers to a question the room has already been asked,
+   * and sending a light back out across the pot for one would say a second
+   * candidate had been picked.
+   */
+  const drawn = beat !== null && repechage?.last?.accepted === null ? beat : null;
+
+  /*
+   * The cards the light may visit: everybody the draw could still have landed
+   * on. Cards that are already through or already out are settled pictures, and
+   * a highlight passing over one would suggest it was back in play.
+   */
+  const candidates = (repechage?.pot ?? [])
+    .filter((entry) => entry.status === 'POOL' || entry.status === 'DRAWN')
+    .map((entry) => entry.groupId);
+
+  const travel = useRepechageTravel({
+    drawn,
+    candidates,
+    performanceMode: tournament.performanceMode,
+  });
+
+  // Two ways in, one skip — the same pair the draw has (issue #28). The key
+  // covers a beamer window the host has clicked into; the token covers the
+  // ordinary case, where they are on the laptop and the projector has no focus
+  // at all (docs/OPEN-QUESTIONS.md #53).
+  useSkipKey(travel.skip, travel.isTravelling);
+  useSkipSignal(skipToken, travel.skip, travel.isTravelling);
+
+  return <RepechageScene tournament={tournament} beat={beat} travel={travel} />;
 }
 
 /**

@@ -312,6 +312,7 @@ src/
     beamer/fit.ts      how many columns a grid takes, and how far a scene shrinks
     beamer/useFitToStage.ts  measures the stage and scales the scene body to it
     beamer/useRepechageBeat.ts  which card this window may animate, if any
+    beamer/useRepechageTravel.ts where the Hoffnungsrunde's highlight is, hop by hop
     beamer/useBracketAdvance.ts which chip moves into the round above, and from where
     beamer/useBlackout.ts    the 200 ms veil, and the picture kept under it
     beamer/useSkipSignal.ts  the host's Space, arriving from the other window
