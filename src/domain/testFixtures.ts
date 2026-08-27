@@ -90,6 +90,7 @@ export function round(n: number, overrides: Partial<Round> = {}): Round {
     id: roundId(n),
     index: n,
     kind: 'QUALIFYING',
+    track: 'MAIN',
     label: `Round ${n}`,
     state: 'DRAWN',
     matches: [],

@@ -19,7 +19,7 @@ import {
 } from '@/domain/repechage';
 import { createRng } from '@/domain/rng';
 import { nextPowerOfTwo } from '@/domain/round';
-import { tournamentFileSchema } from '@/domain/schema';
+import { SCHEMA_VERSION, tournamentFileSchema } from '@/domain/schema';
 import { activeGroups, currentRound } from '@/domain/selectors';
 import { FIXED_NOW, group, table, tournament } from '@/domain/testFixtures';
 import { tournamentSchema, type Round, type Tournament } from '@/domain/types';
@@ -588,7 +588,11 @@ describe('a repechage that has to survive the file', () => {
 
   it('carries the pot through the whole file wrapper as well', () => {
     const mid = drawCandidate(inRepechage(13));
-    const file = { schemaVersion: 4, app: { name: 'WattMatt', version: '0.1.0' }, ...mid };
+    const file = {
+      schemaVersion: SCHEMA_VERSION,
+      app: { name: 'WattMatt', version: '0.1.0' },
+      ...mid,
+    };
 
     const parsed = tournamentFileSchema.parse(JSON.parse(JSON.stringify(file)));
 

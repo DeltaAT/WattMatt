@@ -159,10 +159,15 @@ export function BeamerScenePlaceholder({
      * board is shown settled, which is the honest picture: this is the round
      * that exists, and nothing is being drawn right now.
      */
-    const isStagedRound = tournament.round?.id === scene.roundId;
+    // Either track's open round counts as staged, and the snapshot is staged to
+    // it: a `DRAW` scene pointed at the `Trostrunde` has to animate the
+    // pairings the room is watching being dealt, not the main field's under the
+    // side event's heading (issue #73, §10).
+    const isStagedRound =
+      tournament.round?.id === scene.roundId || tournament.consolationRound?.id === scene.roundId;
     return (
       <DrawSceneHost
-        tournament={tournament}
+        tournament={stageRound(tournament, scene.roundId)}
         settled={settled || !isStagedRound}
         roundId={scene.roundId}
         skipToken={skipToken}
@@ -202,10 +207,24 @@ export function BeamerScenePlaceholder({
  * one. Cheaper than teaching the scene about the history, and it keeps
  * `RoundBoardScene` a pure function of one round — which is what lets a closed
  * round and a live one be tested through the same component.
+ *
+ * Three places to look since issue #73, not two: the open main-field round, the
+ * open `Trostrunde` round, and the closed rounds of both. That is the whole of
+ * "the beamer can show either track" — the host stages a round id, and the
+ * projector finds it wherever it lives (docs/TOURNAMENT-RULES.md §10). Which
+ * picture the room sees stays the host's decision and nothing else's
+ * (CLAUDE.md golden rule 3).
  */
 function stageRound(tournament: TournamentSnapshot, roundId: RoundId): TournamentSnapshot {
   if (tournament.round?.id === roundId) {
     return tournament;
+  }
+  if (tournament.consolationRound?.id === roundId) {
+    return {
+      ...tournament,
+      matches: tournament.consolationMatches,
+      round: tournament.consolationRound,
+    };
   }
 
   const past = tournament.history.find((round) => round.id === roundId);

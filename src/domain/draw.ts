@@ -11,15 +11,24 @@ import {
 import { allMatches } from '@/domain/lookup';
 import { drawPairing, type Pairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
-import { activeGroups, currentRound, freeTables, undecidedMatches } from '@/domain/selectors';
+import {
+  activeGroups,
+  consolationGroups,
+  currentRound,
+  freeTables,
+  roundsOfTrack,
+  undecidedMatches,
+} from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
 import type {
   Group,
+  GroupStatus,
   Match,
   Phase,
   Round,
   RoundKind,
   RoundState,
+  RoundTrack,
   Timestamp,
   Tournament,
 } from '@/domain/types';
@@ -51,6 +60,18 @@ import type {
  * explicit call the host makes (CLAUDE.md golden rule 3,
  * docs/TOURNAMENT-RULES.md §3, docs/OPEN-QUESTIONS.md #35).
  *
+ * **Two rounds can be open at once.** Since issue #73 the `Trostrunde` runs
+ * beside the main field, so every function that used to mean "the open round"
+ * takes a `RoundTrack` and means "the open round of this track" (§10). The
+ * default is `MAIN` everywhere, because that is what every main-field caller
+ * means and what the side event must stay invisible to.
+ *
+ * The **tables are not split**. Both tracks draw from the one `freeTables` pool
+ * and `occupyTable` refuses a table that is not `FREE`, so no table can carry
+ * two matches however the two rounds interleave — the invariant is the table's
+ * own status rather than a rule about tracks. Which tables a track may use is a
+ * separate question the host answers by reserving them, and it is issue #79's.
+ *
  * Every function returns its argument unchanged when it is asked for something
  * that cannot happen — a winner for a bye, a match onto an occupied table, a
  * round closed with matches still open. The host UI disables those controls;
@@ -79,6 +100,33 @@ const ROUND_KIND_BY_PHASE: Partial<Record<Phase, RoundKind>> = {
   QUALIFYING: 'QUALIFYING',
   ELIMINATION: 'ELIMINATION',
 };
+
+/**
+ * What kind of round the next draw on a track would be, or undefined when that
+ * track has nothing to deal.
+ *
+ * The main field asks the phase, because §1 is what decides whether a draw is a
+ * qualifying round or an elimination round. The `Trostrunde` does not: it is
+ * outside the phase machine entirely and runs the same kind of round over and
+ * over until one group is left, whatever the main field happens to be doing at
+ * the time (§10). That difference is the reason this is a function rather than
+ * one wider table.
+ */
+function roundKindFor(tournament: Tournament, track: RoundTrack): RoundKind | undefined {
+  return track === 'CONSOLATION' ? 'CONSOLATION' : ROUND_KIND_BY_PHASE[tournament.phase];
+}
+
+/**
+ * The groups a track's next draw would deal, before any `Freilose` are added.
+ *
+ * The two are disjoint by construction — `activeGroups` is `status === 'ACTIVE'`
+ * and `consolationGroups` is `status === 'CONSOLATION'` — which is what makes
+ * "a `Trostrunde` group never appears in a main-field draw" true of the model
+ * rather than of a filter (issue #73).
+ */
+function fieldOf(tournament: Tournament, track: RoundTrack): readonly Group[] {
+  return track === 'CONSOLATION' ? consolationGroups(tournament) : activeGroups(tournament);
+}
 
 /**
  * The field size at or below which the final phase begins
@@ -120,7 +168,12 @@ export type DrawBlocker =
    * The field is already the one the bracket is built on, so another round
    * would take it below a bracket (docs/TOURNAMENT-RULES.md §5, issue #22).
    */
-  | 'FINAL_PHASE_REACHED';
+  | 'FINAL_PHASE_REACHED'
+  /**
+   * The `CONSOLATION` track has nothing to deal: the host has not started the
+   * `Trostrunde`, declined it, or it is already decided (§10, issue #73).
+   */
+  | 'CONSOLATION_NOT_RUNNING';
 
 /**
  * Everything standing between the host and the next draw, all of it at once.
@@ -130,16 +183,28 @@ export type DrawBlocker =
  * panel every time, and a check that vanishes when it passes is one they cannot
  * confirm they have satisfied.
  */
-export function drawBlockers(tournament: Tournament): readonly DrawBlocker[] {
+export function drawBlockers(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly DrawBlocker[] {
   const blockers: DrawBlocker[] = [];
 
-  if (ROUND_KIND_BY_PHASE[tournament.phase] === undefined) {
+  if (track === 'CONSOLATION') {
+    // The side event is outside the phase machine — it runs beside whatever the
+    // main field is doing — so what stands in for "is this a drawing phase?" is
+    // whether the host has started it and it is not yet decided (§10). Read off
+    // the record rather than through `@/domain/consolation`, which composes this
+    // module and must not be composed by it.
+    if (tournament.consolation?.state !== 'RUNNING') {
+      blockers.push('CONSOLATION_NOT_RUNNING');
+    }
+  } else if (ROUND_KIND_BY_PHASE[tournament.phase] === undefined) {
     blockers.push('NOT_A_DRAWING_PHASE');
   }
-  if (currentRound(tournament) !== null) {
+  if (currentRound(tournament, track) !== null) {
     blockers.push('ROUND_OPEN');
   }
-  if (activeGroups(tournament).length < MINIMUM_GROUPS) {
+  if (fieldOf(tournament, track).length < MINIMUM_GROUPS) {
     blockers.push('TOO_FEW_GROUPS');
   }
   // The qualifying round is *round 1*, singular. Moving on to the elimination
@@ -147,6 +212,7 @@ export function drawBlockers(tournament: Tournament): readonly DrawBlocker[] {
   // second press of the draw button would deal a second qualifying round over
   // the top of the first one's winners.
   if (
+    track === 'MAIN' &&
     tournament.phase === 'QUALIFYING' &&
     tournament.rounds.some((round) => round.kind === 'QUALIFYING')
   ) {
@@ -158,8 +224,16 @@ export function drawBlockers(tournament: Tournament): readonly DrawBlocker[] {
   // qualifying round is measured against the smallest bracket instead, because
   // §3 plays it at every size — except at two, where the one match there is to
   // play is the `Finale` itself (§9 case 5).
+  //
+  // The `Trostrunde` has no floor at all: it feeds no bracket, so it keeps
+  // halving until one group is left, and `TOO_FEW_GROUPS` above is what stops
+  // it there (§10).
   const floor = tournament.phase === 'ELIMINATION' ? FINAL_PHASE_SIZE : MINIMUM_BRACKET_SIZE;
-  if (ROUND_KIND_BY_PHASE[tournament.phase] !== undefined && fieldSize(tournament) <= floor) {
+  if (
+    track === 'MAIN' &&
+    ROUND_KIND_BY_PHASE[tournament.phase] !== undefined &&
+    fieldSize(tournament) <= floor
+  ) {
     blockers.push('FINAL_PHASE_REACHED');
   }
 
@@ -214,9 +288,9 @@ export function byesOwed(tournament: Tournament): number {
   return Math.max(0, repechage.target - winners - accepted);
 }
 
-/** Whether `drawRound` would produce a round. */
-export function canDrawRound(tournament: Tournament): boolean {
-  return drawBlockers(tournament).length === 0;
+/** Whether `drawRound` would produce a round on this track. */
+export function canDrawRound(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return drawBlockers(tournament, track).length === 0;
 }
 
 export interface DrawRoundInput {
@@ -242,6 +316,17 @@ export interface DrawRoundInput {
    * writing a cursor into the fixture.
    */
   rng?: Rng;
+  /**
+   * Which of the two parallel tournaments this draw is for
+   * (docs/TOURNAMENT-RULES.md §10).
+   *
+   * Both tracks run through the same engine and the same seeded stream: the
+   * `Trostrunde` is the ordinary draw of §3, and its pairings have to be as
+   * reproducible from the file as the main field's. What the track changes is
+   * which groups are in the pot, what the round is called, and which of the two
+   * boards it appears on.
+   */
+  track?: RoundTrack;
 }
 
 /**
@@ -279,15 +364,20 @@ export interface DrawRoundInput {
  */
 export function drawRound(
   tournament: Tournament,
-  { at, label, rng = createRng(tournament.rngSeed, tournament.rngCursor) }: DrawRoundInput,
+  {
+    at,
+    label,
+    track = 'MAIN',
+    rng = createRng(tournament.rngSeed, tournament.rngCursor),
+  }: DrawRoundInput,
 ): Tournament {
-  const kind = ROUND_KIND_BY_PHASE[tournament.phase];
-  if (kind === undefined || !canDrawRound(tournament)) {
+  const kind = roundKindFor(tournament, track);
+  if (kind === undefined || !canDrawRound(tournament, track)) {
     return tournament;
   }
 
   const pairing = drawPairing(
-    activeGroups(tournament).map((group) => group.id),
+    fieldOf(tournament, track).map((group) => group.id),
     {
       // Derived from the rounds that exist rather than carried in a field of
       // its own, so it cannot drift from the match history it describes
@@ -299,16 +389,25 @@ export function drawRound(
       // forgot to pass it would deal 20 groups into 10 pairs where the bracket
       // is waiting for a field of 32 (docs/TOURNAMENT-RULES.md §4 fallback 1,
       // issue #22).
-      byes: byesOwed(tournament),
+      //
+      // Never on the `CONSOLATION` track: the debt belongs to the bracket the
+      // side event does not feed, and paying it there would hand a `Freilos` to
+      // a `Trostrunde` that owes nobody one (§10).
+      byes: track === 'CONSOLATION' ? 0 : byesOwed(tournament),
     },
   );
   const matches = pair(pairing, nextMatchNumber(tournament));
 
-  const index = tournament.rounds.length + 1;
+  // Counted over the track, not over the file: `Runde 3` and `Trostrunde 2` are
+  // each the third and second thing their own half of the evening has played,
+  // and a number that counted both would call the side event's first round
+  // `Trostrunde 7` in front of the room.
+  const index = roundsOfTrack(tournament, track).length + 1;
   const round: Round = {
     id: nextRoundId(tournament),
     index,
     kind,
+    track,
     label: label(index),
     state: 'DRAWN',
     matches,
@@ -359,6 +458,9 @@ export function previewDrawRound(
   tournament: Tournament,
   input: DrawRoundInput,
 ): DrawPreview | null {
+  // The whole input travels, `track` included: a `Trostrunde` draw is confirmed
+  // the same way a main-field one is, and the preview has to be of the round
+  // the commit will actually deal (§10).
   const drawn = drawRound(tournament, input);
   if (drawn === tournament) {
     return null;
@@ -485,8 +587,8 @@ export function queuedMatches(round: Round): readonly Match[] {
  * confirming it (CLAUDE.md golden rule 3), so this is the question and
  * `assignNextQueuedMatch` is the answer.
  */
-export function nextQueuedMatch(tournament: Tournament): Match | null {
-  const round = currentRound(tournament);
+export function nextQueuedMatch(tournament: Tournament, track: RoundTrack = 'MAIN'): Match | null {
+  const round = currentRound(tournament, track);
   if (round === null) {
     return null;
   }
@@ -511,7 +613,11 @@ export function assignMatch(
   tournament: Tournament,
   { matchId, tableId, at }: AssignMatchInput,
 ): Tournament {
-  const round = currentRound(tournament);
+  // Looked up across the open rounds rather than in one track's, because the
+  // match id already says which round it is in and a caller that had to name
+  // the track as well could name the wrong one. Two open rounds never share a
+  // match id — ids are handed out from one counter over the whole file (§10).
+  const round = openRoundOf(tournament, matchId);
   if (round === null) {
     return tournament;
   }
@@ -537,9 +643,12 @@ export function assignMatch(
  */
 export function assignNextQueuedMatch(
   tournament: Tournament,
-  { tableId, at }: { tableId: TableId; at: Timestamp },
+  { tableId, at, track = 'MAIN' }: { tableId: TableId; at: Timestamp; track?: RoundTrack },
 ): Tournament {
-  const match = nextQueuedMatch(tournament);
+  // The track is the host's: a freed table serves the queue the host points it
+  // at, and with two rounds live that is a decision rather than an ordering
+  // rule (§10, issue #79 for the reservation that makes it a standing one).
+  const match = nextQueuedMatch(tournament, track);
   if (match === null) {
     return tournament;
   }
@@ -565,7 +674,10 @@ export function assignNextQueuedMatch(
  * way back (CLAUDE.md golden rule 6).
  */
 export function setWinner(tournament: Tournament, matchId: MatchId, winnerId: GroupId): Tournament {
-  const round = currentRound(tournament);
+  // Across the open rounds, for the reason `assignMatch` gives: the id names
+  // the round, and with the `Trostrunde` live beside the main field a caller
+  // that also had to name the track could name the wrong one (§10).
+  const round = openRoundOf(tournament, matchId);
   if (round === null) {
     return tournament;
   }
@@ -582,6 +694,11 @@ export function setWinner(tournament: Tournament, matchId: MatchId, winnerId: Gr
   }
 
   const loserId = winnerId === match.a ? match.b : match.a;
+  // Winning a `Trostrunde` round keeps a group in the `Trostrunde`; it does not
+  // put it back into the main field. The side event is self-contained and its
+  // winner never rejoins — the only way back is the §4 lottery, which has
+  // closed by the time this track exists (§10, issue #73).
+  const throughStatus: GroupStatus = round.track === 'CONSOLATION' ? 'CONSOLATION' : 'ACTIVE';
 
   const decided = mapRound(tournament, round.id, (open) => ({
     ...open,
@@ -599,7 +716,7 @@ export function setWinner(tournament: Tournament, matchId: MatchId, winnerId: Gr
       return group.status === 'ELIMINATED' ? group : { ...group, status: 'ELIMINATED' };
     }
     if (group.id === winnerId) {
-      return group.status === 'ACTIVE' ? group : { ...group, status: 'ACTIVE' };
+      return group.status === throughStatus ? group : { ...group, status: throughStatus };
     }
     return group;
   });
@@ -652,8 +769,11 @@ export type CloseRoundBlocker =
   /** At least one match still has no winner. */
   | 'MATCHES_UNDECIDED';
 
-export function closeRoundBlockers(tournament: Tournament): readonly CloseRoundBlocker[] {
-  const round = currentRound(tournament);
+export function closeRoundBlockers(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly CloseRoundBlocker[] {
+  const round = currentRound(tournament, track);
   if (round === null) {
     return ['NO_OPEN_ROUND'];
   }
@@ -664,8 +784,8 @@ export function closeRoundBlockers(tournament: Tournament): readonly CloseRoundB
  * Whether every match of the open round has a winner
  * (docs/TOURNAMENT-RULES.md §3).
  */
-export function canCloseRound(tournament: Tournament): boolean {
-  return closeRoundBlockers(tournament).length === 0;
+export function canCloseRound(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return closeRoundBlockers(tournament, track).length === 0;
 }
 
 /**
@@ -677,9 +797,9 @@ export function canCloseRound(tournament: Tournament): boolean {
  * nobody will play again — which is a table the host would have to delete and
  * re-create mid-event to get back.
  */
-export function closeRound(tournament: Tournament): Tournament {
-  const round = currentRound(tournament);
-  if (round === null || !canCloseRound(tournament)) {
+export function closeRound(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  const round = currentRound(tournament, track);
+  if (round === null || !canCloseRound(tournament, track)) {
     return tournament;
   }
 
@@ -693,6 +813,29 @@ export function closeRound(tournament: Tournament): Tournament {
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
+
+/**
+ * The open round that holds a match, whichever track it is on, or null.
+ *
+ * Since issue #73 there can be two open rounds, and a match id belongs to
+ * exactly one of them: ids come from a single counter over the whole file, so
+ * the lookup cannot be ambiguous. Closed rounds are deliberately not searched —
+ * a decided round is corrected by undo, not by reaching back into it
+ * (docs/TOURNAMENT-RULES.md §3).
+ */
+function openRoundOf(tournament: Tournament, matchId: MatchId): Round | null {
+  for (let index = tournament.rounds.length - 1; index >= 0; index -= 1) {
+    const round = tournament.rounds[index];
+    if (
+      round !== undefined &&
+      round.state !== 'CLOSED' &&
+      round.matches.some((match) => match.id === matchId)
+    ) {
+      return round;
+    }
+  }
+  return null;
+}
 
 /**
  * The id of the round about to be drawn.

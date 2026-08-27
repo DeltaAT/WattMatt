@@ -118,6 +118,7 @@ describe('the beamer scene surface', () => {
       id: round('rnd_1'),
       index: 1,
       kind: 'QUALIFYING',
+      track: 'MAIN',
       label: 'Runde 1',
       state: 'CLOSED',
       matches: [
@@ -143,6 +144,7 @@ describe('the beamer scene surface', () => {
         id: round('rnd_2'),
         index: 2,
         kind: 'ELIMINATION',
+        track: 'MAIN',
         label: 'Runde 2',
         state: 'RUNNING',
       },
@@ -202,6 +204,114 @@ describe('the beamer scene surface', () => {
       expect(markup).toContain('data-scene="ROUND_BOARD"');
       expect(markup).not.toContain(past.label);
       expect(markup).not.toContain('Runde 2');
+    });
+  });
+
+  /*
+   * Issue #73: from the `Hoffnungsrunde` on there are two rounds open, one per
+   * track, and the host decides which of them the room is looking at. The
+   * beamer holds no state of its own (golden rule 4), so all it has to do is
+   * find the round the descriptor names wherever the snapshot carries it.
+   */
+  describe('a round board pointed at the Trostrunde', () => {
+    const snapshot: TournamentSnapshot = {
+      ...EMPTY_TOURNAMENT,
+      groups: [
+        { id: groupIdSchema.parse('grp_1'), number: 1, name: null, status: 'ACTIVE' },
+        { id: groupIdSchema.parse('grp_2'), number: 2, name: null, status: 'ACTIVE' },
+        { id: groupIdSchema.parse('grp_7'), number: 7, name: null, status: 'CONSOLATION' },
+        { id: groupIdSchema.parse('grp_8'), number: 8, name: null, status: 'CONSOLATION' },
+      ],
+      round: {
+        id: round('rnd_2'),
+        index: 2,
+        kind: 'ELIMINATION',
+        track: 'MAIN',
+        label: 'Runde 2',
+        state: 'RUNNING',
+      },
+      matches: [
+        {
+          id: matchIdSchema.parse('mt_1'),
+          tableId: null,
+          a: groupIdSchema.parse('grp_1'),
+          b: groupIdSchema.parse('grp_2'),
+          winnerId: null,
+          status: 'WAITING_FOR_TABLE',
+        },
+      ],
+      consolationRound: {
+        id: round('rnd_3'),
+        index: 1,
+        kind: 'CONSOLATION',
+        track: 'CONSOLATION',
+        label: 'Trostrunde 1',
+        state: 'RUNNING',
+      },
+      consolationMatches: [
+        {
+          id: matchIdSchema.parse('mt_9'),
+          tableId: null,
+          a: groupIdSchema.parse('grp_7'),
+          b: groupIdSchema.parse('grp_8'),
+          winnerId: null,
+          status: 'WAITING_FOR_TABLE',
+        },
+      ],
+    };
+
+    it('draws the side event when the scene names its round', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_3') }}
+          tournament={snapshot}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('Trostrunde 1');
+      // Its pairing, not the main field's.
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 7 }));
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 8 }));
+      expect(markup).not.toContain('Runde 2');
+    });
+
+    it('still draws the main field when that is the one named', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2') }}
+          tournament={snapshot}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('Runde 2');
+      expect(markup).not.toContain('Trostrunde 1');
+      expect(markup).not.toContain(de.participant.GROUP.numbered({ n: 7 }));
+    });
+
+    /*
+     * A `Trostrunde` draw animates like any other: the room watches the pot
+     * being emptied, and a scene that fell through to the holding picture would
+     * show them nothing at all.
+     */
+    it('animates a draw of the side event', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'DRAW', roundId: round('rnd_3') }}
+          tournament={snapshot}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('data-scene="DRAW"');
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 7 }));
     });
   });
 

@@ -80,7 +80,7 @@ describe('the German host manual', () => {
   it('lists exactly the shortcuts the app binds', () => {
     const { key, action } = deAT.beamerControl.shortcuts;
     const rows = [
-      ...section(manual, '## 15. Tastenkürzel').matchAll(/^\| \*\*(.+?)\*\* \| (.+?)\s*\|\s*$/gm),
+      ...section(manual, '## 16. Tastenkürzel').matchAll(/^\| \*\*(.+?)\*\* \| (.+?)\s*\|\s*$/gm),
     ];
 
     expect(rows.map(([, cell]) => cell).sort()).toEqual(Object.values(key).sort());

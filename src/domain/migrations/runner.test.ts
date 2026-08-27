@@ -350,6 +350,7 @@ function exampleFile(): RawTournamentFile {
         id: 'rnd_1',
         index: 1,
         kind: 'QUALIFYING',
+        track: 'MAIN',
         label: 'Runde 1',
         state: 'RUNNING',
         matches: [
@@ -358,6 +359,7 @@ function exampleFile(): RawTournamentFile {
       },
     ],
     repechage: null,
+    consolation: null,
     bracket: null,
     log: [],
   };

@@ -656,6 +656,7 @@ describe('Freilose owed by the repechage fallback', () => {
           id: roundIdSchema.parse('rnd_1'),
           index: 1,
           kind: 'QUALIFYING',
+          track: 'MAIN',
           label: 'Runde 1',
           state: 'CLOSED',
           matches: base.groups.map((entry, index) => ({
@@ -938,6 +939,7 @@ describe('rematches (issue #72)', () => {
             id: roundIdSchema.parse('rnd_1'),
             index: 1,
             kind: 'QUALIFYING',
+            track: 'MAIN',
             label: 'Runde 1',
             state: 'CLOSED',
             matches,

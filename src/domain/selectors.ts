@@ -1,4 +1,4 @@
-import type { Group, Match, Round, Table, Tournament } from '@/domain/types';
+import type { Group, Match, Round, RoundTrack, Table, Tournament } from '@/domain/types';
 
 /**
  * Derived reads over a tournament. Pure, cheap, and never cached — the store
@@ -44,21 +44,54 @@ export function undecidedMatches(round: Round): readonly Match[] {
 }
 
 /**
- * The round the host is working in: the last one not yet closed.
+ * The round the host is working in **on one track**: the last one of that track
+ * not yet closed (docs/TOURNAMENT-RULES.md §10).
  *
  * Searched from the end because rounds only ever get appended, and the newest
- * open round is always the live one. Returns null before the first draw and
- * again in the gap after a round is closed but the next has not been drawn —
- * both are real states the host UI has to render.
+ * open round of a track is always its live one. Returns null before the first
+ * draw and again in the gap after a round is closed but the next has not been
+ * drawn — both are real states the host UI has to render.
+ *
+ * The track defaults to `MAIN`, which is what every caller written before the
+ * `Trostrunde` existed meant and what every caller that is about the main
+ * tournament still means. That default is load-bearing rather than convenient:
+ * the side event must be invisible to the main field, so a main-field check
+ * that forgot to say which track it meant has to keep answering about the main
+ * field rather than start seeing a `Trostrunde` round as "the open round"
+ * (issue #73).
  */
-export function currentRound(tournament: Tournament): Round | null {
+export function currentRound(tournament: Tournament, track: RoundTrack = 'MAIN'): Round | null {
   for (let index = tournament.rounds.length - 1; index >= 0; index -= 1) {
     const round = tournament.rounds[index];
-    if (round !== undefined && round.state !== 'CLOSED') {
+    if (round !== undefined && round.track === track && round.state !== 'CLOSED') {
       return round;
     }
   }
   return null;
+}
+
+/**
+ * Every round of a track, oldest first.
+ *
+ * The two tracks are counted separately — `Runde 3` and `Trostrunde 2` are both
+ * the third and second thing their own half of the evening has played — so the
+ * index a draw hands out is a count over this, not over `rounds`.
+ */
+export function roundsOfTrack(tournament: Tournament, track: RoundTrack): readonly Round[] {
+  return tournament.rounds.filter((round) => round.track === track);
+}
+
+/**
+ * The groups still playing in the `Trostrunde` (docs/TOURNAMENT-RULES.md §10).
+ *
+ * The counterpart of `activeGroups`, and deliberately disjoint from it: a group
+ * has one status, so it is in the main field or in the side event or out, and
+ * never in two of them. That is what makes "a `Trostrunde` group never appears
+ * in a main-field draw" a property of the model rather than a filter somebody
+ * has to remember to apply (issue #73).
+ */
+export function consolationGroups(tournament: Tournament): readonly Group[] {
+  return tournament.groups.filter((group) => group.status === 'CONSOLATION');
 }
 
 /**

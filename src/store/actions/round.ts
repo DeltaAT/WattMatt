@@ -1,8 +1,9 @@
 import type { BeamerScene } from '@/domain/beamerScene';
+import { closeConsolationRound } from '@/domain/consolation';
 import * as draw from '@/domain/draw';
 import type { GroupId, MatchId, RoundId, TableId } from '@/domain/ids';
 import { currentRound } from '@/domain/selectors';
-import type { Clock, Match, Tournament } from '@/domain/types';
+import type { Clock, Match, RoundTrack, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { systemClock } from '@/platform/clock';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
@@ -20,7 +21,22 @@ import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
  * timestamps these actions write end up in the file as the moment a match
  * started, and a test that could not pin them would be asserting against the
  * wall clock (ARCHITECTURE.md §5).
+ *
+ * Since issue #73 each of them takes a `RoundTrack`, defaulting to `MAIN`. The
+ * `Trostrunde` is run with the same four decisions the main field is — draw,
+ * mark a winner, start the next pair, close — so it gets the same four actions
+ * rather than a parallel set that would drift from them
+ * (docs/TOURNAMENT-RULES.md §10). `setMatchWinner` is the exception that proves
+ * it: a match id already names its round, so that one never needed a track at
+ * all.
  */
+
+/** What a round of this track is called, in German (`de.round.title`). */
+function roundLabel(track: RoundTrack): (index: number) => string {
+  return track === 'CONSOLATION'
+    ? (index) => de.consolation.title({ n: index })
+    : (index) => de.round.title({ n: index });
+}
 
 /**
  * Draws the next round and puts the draw on the projector, in one commit.
@@ -38,16 +54,16 @@ import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
  * picture with the animated sequence; the scene descriptor it animates into is
  * this one.
  */
-export function drawRound(store: TournamentStore, clock: Clock = systemClock): void {
+export function drawRound(
+  store: TournamentStore,
+  track: RoundTrack = 'MAIN',
+  clock: Clock = systemClock,
+): void {
   change(
     store,
-    (document) =>
-      draw.drawRound(document, {
-        at: clock.now(),
-        label: (index) => de.round.title({ n: index }),
-      }),
+    (document) => draw.drawRound(document, { at: clock.now(), label: roundLabel(track), track }),
     (_before, after) => {
-      const round = currentRound(after);
+      const round = currentRound(after, track);
       // A forced rematch is the §4-fallback moment of the draw engine: rare,
       // confirmed by the host, and the first thing anybody asks about
       // afterwards. It goes in the record with the pairings themselves
@@ -83,7 +99,7 @@ export function drawRound(store: TournamentStore, clock: Clock = systemClock): v
       };
     },
     (after) => {
-      const roundId = currentRoundId(after);
+      const roundId = currentRoundId(after, track);
       return roundId === null ? {} : { scene: { id: 'DRAW', roundId } };
     },
   );
@@ -132,11 +148,12 @@ export function setMatchWinner(store: TournamentStore, matchId: MatchId, winnerI
 export function startNextMatch(
   store: TournamentStore,
   tableId: TableId,
+  track: RoundTrack = 'MAIN',
   clock: Clock = systemClock,
 ): void {
   change(
     store,
-    (document) => draw.assignNextQueuedMatch(document, { tableId, at: clock.now() }),
+    (document) => draw.assignNextQueuedMatch(document, { tableId, at: clock.now(), track }),
     (before, after) => ({
       undoLabel: de.undo.action.matchStarted({ table: tableLabel(after, tableId) }),
       log: {
@@ -144,10 +161,11 @@ export function startNextMatch(
         payload: {
           tableId,
           matchId: after.tables.find((table) => table.id === tableId)?.currentMatchId ?? null,
+          track,
           // Read off the tournament from before: afterwards the match is no
           // longer waiting, and how long the queue was is the thing a host
           // reconstructing the evening wants to know.
-          queued: queueLength(before),
+          queued: queueLength(before, track),
         },
       },
     }),
@@ -160,12 +178,17 @@ export function startNextMatch(
  * Refused while anything is undecided — the button is disabled with the reason
  * on it, and this guard is what makes a click that arrived anyway cost nothing.
  */
-export function closeRound(store: TournamentStore): void {
+export function closeRound(store: TournamentStore, track: RoundTrack = 'MAIN'): void {
   change(
     store,
-    (document) => draw.closeRound(document),
+    // The `Trostrunde` close goes through `@/domain/consolation`, which closes
+    // the round *and* records the winner when that round left one group
+    // standing. The two are one fact and must land in one commit, or an undo
+    // could take the close back and leave the side event decided (§10).
+    (document) =>
+      track === 'CONSOLATION' ? closeConsolationRound(document) : draw.closeRound(document),
     (before) => {
-      const round = currentRound(before);
+      const round = currentRound(before, track);
       const outcome = round === null ? { winners: [], losers: [] } : draw.roundOutcome(round);
       return {
         // The other moment `CommitOptions.urgent` was written for: a closed
@@ -176,6 +199,7 @@ export function closeRound(store: TournamentStore): void {
           action: 'ROUND_CLOSED',
           payload: {
             roundId: round?.id ?? null,
+            track,
             winners: outcome.winners,
             losers: outcome.losers,
           },
@@ -231,12 +255,29 @@ function change(
  * round is taken as the answer rather than asserting, because an action that
  * throws during a live event is worse than a beamer pointed at the wrong round.
  */
-function currentRoundId(document: Tournament): RoundId | null {
-  return (currentRound(document) ?? document.rounds.at(-1))?.id ?? null;
+function currentRoundId(document: Tournament, track: RoundTrack): RoundId | null {
+  return (currentRound(document, track) ?? document.rounds.at(-1))?.id ?? null;
 }
 
+/**
+ * The match, in whichever open round holds it.
+ *
+ * Both tracks are searched because `setMatchWinner` does not take one: the id
+ * already names the round, and the log entry this feeds has to record the
+ * result it replaced whether the correction was in the main field or in the
+ * `Trostrunde` (§10).
+ */
 function matchOf(document: Tournament, matchId: MatchId): Match | undefined {
-  return currentRound(document)?.matches.find((match) => match.id === matchId);
+  for (const round of document.rounds) {
+    if (round.state === 'CLOSED') {
+      continue;
+    }
+    const match = round.matches.find((candidate) => candidate.id === matchId);
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  return undefined;
 }
 
 /** What this tournament calls the group, in the host's chosen wording. */
@@ -254,7 +295,7 @@ function tableLabel(document: Tournament, tableId: TableId): string {
   return document.tables.find((table) => table.id === tableId)?.label ?? de.table.label;
 }
 
-function queueLength(document: Tournament): number {
-  const round = currentRound(document);
+function queueLength(document: Tournament, track: RoundTrack): number {
+  const round = currentRound(document, track);
   return round === null ? 0 : draw.queuedMatches(round).length;
 }

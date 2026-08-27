@@ -57,6 +57,11 @@ export function createTournament(input: CreateTournamentInput): Tournament {
     // never happened must be distinguishable from one with an empty draw list
     // (docs/TOURNAMENT-RULES.md §4, edge case 2).
     repechage: null,
+    // Null rather than `DECLINED` for the same reason: the host is asked about
+    // the `Trostrunde` once the `Hoffnungsrunde` closes, and a new tournament
+    // that already said no would take the question away before it was put
+    // (docs/TOURNAMENT-RULES.md §10, issue #73).
+    consolation: null,
     bracket: null,
 
     log: [],

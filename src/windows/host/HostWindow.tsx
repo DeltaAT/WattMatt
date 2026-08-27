@@ -4,6 +4,7 @@ import { setSleepInhibited } from '@/platform/beamerWindow';
 import { reportProblem } from '@/store/problems';
 import { BeamerControlPanel } from '@/windows/host/BeamerControlPanel';
 import { BracketPanel } from '@/windows/host/BracketPanel';
+import { ConsolationPanel } from '@/windows/host/ConsolationPanel';
 import { FileNotice } from '@/windows/host/FileNotice';
 import { GroupPanel } from '@/windows/host/GroupPanel';
 import { NamingPanel } from '@/windows/host/NamingPanel';
@@ -24,6 +25,7 @@ import { UnsavedChangesDialog } from '@/windows/host/UnsavedChangesDialog';
 import { useBeamerControl } from '@/windows/host/useBeamerControl';
 import { useBeamerShortcuts } from '@/windows/host/useBeamerShortcuts';
 import { useBracket } from '@/windows/host/useBracket';
+import { useConsolation } from '@/windows/host/useConsolation';
 import { useGroups } from '@/windows/host/useGroups';
 import { useBeamerAlive } from '@/windows/host/useHostSync';
 import { useNaming } from '@/windows/host/useNaming';
@@ -61,6 +63,7 @@ export function HostWindow() {
   const preStart = usePreStart();
   const round = useRound();
   const repechage = useRepechage();
+  const consolation = useConsolation();
   const naming = useNaming();
   const bracket = useBracket();
   const phase = usePhase();
@@ -204,6 +207,42 @@ export function HostWindow() {
                 onDecline={repechage.decline}
                 onFallback={repechage.useFallback}
                 onShowOnBeamer={repechage.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              Directly under the `Hoffnungsrunde`, because that is the order §10
+              puts them in: the lottery decides who leaves the loser pool, and
+              only then is there a `Trostrunde` field. It stays on screen for
+              the rest of the evening beside the main field's panels, because
+              from here on the host is running two tournaments at once and
+              neither may be behind a tab (issue #73).
+            */}
+            {consolation.isActive ? (
+              <ConsolationPanel
+                isOffered={consolation.isOffered}
+                fieldSize={consolation.fieldSize}
+                blockers={consolation.blockers}
+                summary={consolation.summary}
+                board={consolation.board}
+                roundSummary={consolation.roundSummary}
+                groups={consolation.groups}
+                participant={consolation.participant}
+                now={now}
+                drawBlockers={consolation.drawBlockers}
+                canDraw={consolation.canDraw}
+                closeBlockers={consolation.closeBlockers}
+                canClose={consolation.canClose}
+                undecided={consolation.undecided}
+                rematches={consolation.rematches}
+                onStart={consolation.start}
+                onDecline={consolation.decline}
+                onPreviewDraw={consolation.previewDraw}
+                onDraw={consolation.draw}
+                onSetWinner={consolation.setWinner}
+                onStartNext={consolation.startNext}
+                onClose={consolation.close}
+                onShowOnBeamer={consolation.showOnBeamer}
               />
             ) : null}
 

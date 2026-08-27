@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v4)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v5)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -35,8 +35,17 @@ import { tournamentSchema } from '@/domain/types';
  * required rather than optional because an absent pool and an empty one are the
  * two states §4 has to tell apart — the second is what triggers the fallback
  * dialog.
+ *
+ * v5 gave every round a `track` and the tournament a `consolation` record
+ * (issue #73, docs/TOURNAMENT-RULES.md §10). The `Trostrunde` runs beside the
+ * main field rather than after it, so "the open round" became a question with
+ * two answers and the file has to say which one each round is. Both fields are
+ * required rather than optional for the reason `nextGroupNumber` is: a track
+ * that may be absent is one every queue, board and undo has to guess a default
+ * for, and a guess about which half of the evening a round belongs to is a
+ * guess made in front of an audience.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -46,7 +55,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v4)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v5)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *

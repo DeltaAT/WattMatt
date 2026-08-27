@@ -12,10 +12,12 @@ import {
 import {
   bracketNodeId,
   group,
+  groupId,
   match,
   matchId,
   midTournament,
   occupiedTable,
+  round,
   roundId,
   table,
   tournament,
@@ -48,6 +50,8 @@ describe('the snapshot envelope', () => {
         tables: [occupiedTable(1, matchId(4)), table(2, { status: 'DISABLED' })],
         matches: [match(4, { tableId: table(1).id, status: 'RUNNING' })],
         round: null,
+        consolationRound: null,
+        consolationMatches: [],
         repechage: null,
         history: [],
         // The `BRACKET` scene above draws this, and it is the one field with a
@@ -215,6 +219,8 @@ describe('toTournamentSnapshot', () => {
 
     expect(Object.keys(projected).sort()).toEqual([
       'bracket',
+      'consolationMatches',
+      'consolationRound',
       'groups',
       'history',
       'matches',
@@ -237,10 +243,74 @@ describe('toTournamentSnapshot', () => {
       tables: [],
       matches: [],
       round: null,
+      consolationRound: null,
+      consolationMatches: [],
       repechage: null,
       history: [],
       bracket: null,
     });
+  });
+});
+
+/**
+ * The second track on the wire (issue #73, docs/TOURNAMENT-RULES.md §10).
+ *
+ * The beamer holds no state of its own (golden rule 4), so "the host can point
+ * the projector at either track" is a statement about what the snapshot
+ * carries and nothing else.
+ */
+describe('the Trostrunde in a snapshot', () => {
+  const sideRound = round(9, {
+    kind: 'CONSOLATION',
+    track: 'CONSOLATION',
+    label: 'Trostrunde 1',
+    state: 'RUNNING',
+    matches: [match(41, { a: groupId(5), b: groupId(6) })],
+  });
+
+  it('carries the open Trostrunde round beside the main field’s', () => {
+    const withSide = midTournament({ rounds: [...midTournament().rounds, sideRound] });
+
+    const projected = toTournamentSnapshot(withSide);
+
+    // The main field's open round is untouched — every scene written before the
+    // side event existed keeps drawing exactly what it drew.
+    expect(projected.round?.id).toBe(roundId(2));
+    expect(projected.consolationRound?.id).toBe(sideRound.id);
+    expect(projected.consolationMatches.map((entry) => entry.id)).toEqual([matchId(41)]);
+  });
+
+  it('sends the round without duplicating its matches', () => {
+    const withSide = midTournament({ rounds: [...midTournament().rounds, sideRound] });
+
+    const projected = toTournamentSnapshot(withSide);
+
+    expect(projected.consolationRound).not.toHaveProperty('matches');
+    // No match travels twice: the two open rounds are on different tracks and
+    // share nothing.
+    expect(projected.matches.map((entry) => entry.id)).not.toContain(matchId(41));
+  });
+
+  it('is null and empty while there is no side event', () => {
+    const projected = toTournamentSnapshot(midTournament());
+
+    expect(projected.consolationRound).toBeNull();
+    expect(projected.consolationMatches).toEqual([]);
+  });
+
+  /*
+   * A closed `Trostrunde` round travels in `history` like every other closed
+   * round, which is what lets the host put a finished side-event board back on
+   * the wall (issue #22).
+   */
+  it('hands a closed Trostrunde round to the history', () => {
+    const closed = { ...sideRound, state: 'CLOSED' as const };
+    const withSide = midTournament({ rounds: [...midTournament().rounds, closed] });
+
+    const projected = toTournamentSnapshot(withSide);
+
+    expect(projected.consolationRound).toBeNull();
+    expect(projected.history.map((entry) => entry.id)).toContain(closed.id);
   });
 });
 

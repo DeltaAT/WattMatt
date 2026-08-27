@@ -85,6 +85,8 @@ describe('the table overview scene', () => {
       tables: [occupiedTable(1, matchId(99))],
       matches: [],
       round: null,
+      consolationRound: null,
+      consolationMatches: [],
       repechage: null,
       history: [],
       bracket: null,

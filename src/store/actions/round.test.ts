@@ -88,7 +88,7 @@ const restored = (store: TournamentStore) => restorable(documentOf(store));
 describe('drawRound', () => {
   it('draws the round, fills the tables and stages it on the beamer in one commit', () => {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
 
     const drawn = openRound(store);
     expect(drawn.label).toBe(de.round.title({ n: 1 }));
@@ -101,7 +101,7 @@ describe('drawRound', () => {
 
   it('names the round on the undo button and records the draw in the log', () => {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
 
     expect(nextUndo(store.getState().history)?.label).toBe(
       de.undo.action.roundDrawn({ round: de.round.title({ n: 1 }) }),
@@ -120,7 +120,7 @@ describe('drawRound', () => {
     const before = restored(store);
     const scene = store.getState().scene;
 
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     store.undo();
 
     expect(restored(store)).toEqual(before);
@@ -129,10 +129,10 @@ describe('drawRound', () => {
 
   it('does nothing while a round is still open', () => {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     const revision = store.getState().revision;
 
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
 
     expect(store.getState().revision).toBe(revision);
     expect(documentOf(store).rounds).toHaveLength(1);
@@ -140,13 +140,13 @@ describe('drawRound', () => {
 
   it('does nothing with no tournament open', () => {
     const store = createTournamentStore(INITIAL_TOURNAMENT_STATE, { clock: CLOCK });
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     expect(store.getState().revision).toBe(0);
   });
 
   it('leaves a tournament that is valid against the schema', () => {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     expect(() => tournamentSchema.parse(documentOf(store))).not.toThrow();
   });
 });
@@ -155,7 +155,7 @@ describe('setMatchWinner', () => {
   /** A drawn round with its first match on table 1. */
   function drawn(): TournamentStore {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     return store;
   }
 
@@ -221,7 +221,7 @@ describe('setMatchWinner', () => {
   it('does nothing for a bye, which the draw already decided', () => {
     // Five groups: two pairs and a leftover that advances without playing.
     const store = setup(ready(5, 2));
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     const bye = openRound(store).matches.find((each) => each.b === null);
     if (bye === undefined) {
       throw new Error('no bye was drawn');
@@ -268,7 +268,7 @@ describe('startNextMatch', () => {
   /** Eight groups on one table: three pairs are waiting from the first second. */
   function queued(): TournamentStore {
     const store = setup(ready(8, 1));
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     return store;
   }
 
@@ -281,7 +281,7 @@ describe('startNextMatch', () => {
     }
 
     setMatchWinner(store, running.id, running.a);
-    startNextMatch(store, tableId(1), CLOCK);
+    startNextMatch(store, tableId(1), 'MAIN', CLOCK);
 
     const after = documentOf(store);
     expect(after.tables[0]?.currentMatchId).toBe(waiting.id);
@@ -301,7 +301,7 @@ describe('startNextMatch', () => {
     }
 
     setMatchWinner(store, running.id, running.a);
-    startNextMatch(store, tableId(1), CLOCK);
+    startNextMatch(store, tableId(1), 'MAIN', CLOCK);
 
     expect(lastLog(store)?.payload.queued).toBe(3);
   });
@@ -310,14 +310,14 @@ describe('startNextMatch', () => {
     const store = queued();
     const revision = store.getState().revision;
 
-    startNextMatch(store, tableId(1), CLOCK);
+    startNextMatch(store, tableId(1), 'MAIN', CLOCK);
 
     expect(store.getState().revision).toBe(revision);
   });
 
   it('does nothing with an empty queue', () => {
     const store = setup(ready(4, 2));
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     const running = openRound(store).matches[0];
     if (running === undefined) {
       throw new Error('nothing was drawn');
@@ -325,7 +325,7 @@ describe('startNextMatch', () => {
     setMatchWinner(store, running.id, running.a);
     const revision = store.getState().revision;
 
-    startNextMatch(store, tableId(1), CLOCK);
+    startNextMatch(store, tableId(1), 'MAIN', CLOCK);
 
     expect(store.getState().revision).toBe(revision);
   });
@@ -334,7 +334,7 @@ describe('startNextMatch', () => {
 describe('closeRound', () => {
   it('does nothing while a match has no winner', () => {
     const store = setup();
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     const revision = store.getState().revision;
 
     closeRound(store);
@@ -345,7 +345,7 @@ describe('closeRound', () => {
 
   it('closes the round and records who is through and who is out', () => {
     const store = setup(ready(4, 2));
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     const matches = openRound(store).matches;
     const closing = openRound(store);
     for (const each of matches) {
@@ -371,7 +371,7 @@ describe('closeRound', () => {
 
   it('reopens the round exactly as it was on undo', () => {
     const store = setup(ready(4, 2));
-    drawRound(store, CLOCK);
+    drawRound(store, 'MAIN', CLOCK);
     for (const each of openRound(store).matches) {
       setMatchWinner(store, each.id, each.a);
     }

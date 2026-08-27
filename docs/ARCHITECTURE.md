@@ -253,6 +253,7 @@ src/
     pairing.ts         the rematch-free pairing of a shuffled field, and its fallback
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
+    consolation.ts     the Trostrunde: who is in it, when it may start, when it is decided
     progression.ts     the phase machine: what the field carries, where it goes next
     bracket.ts         bracket construction, third-place match
     sceneCatalog.ts    every scene the host can stage, and the one a phase implies

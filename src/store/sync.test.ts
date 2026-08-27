@@ -28,6 +28,8 @@ function groups(count: number): TournamentSnapshot {
     tables: [],
     matches: [],
     round: null,
+    consolationRound: null,
+    consolationMatches: [],
     repechage: null,
     history: [],
     bracket: null,

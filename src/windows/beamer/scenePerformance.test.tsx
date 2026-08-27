@@ -121,6 +121,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
       id: roundIdSchema.parse('round-1'),
       index: 1,
       kind: 'QUALIFYING' as const,
+      track: 'MAIN' as const,
       label: 'Runde 1',
       state: 'DRAWN' as const,
     },
@@ -130,6 +131,8 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
      * worst case for *this* scene is one group short of that: 63 groups leave
      * 31 winners, and all 31 losers stand in the pot at once.
      */
+    consolationRound: null,
+    consolationMatches: [],
     repechage: {
       target: 32,
       need: 1,
@@ -148,6 +151,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
         id: roundIdSchema.parse('round-0'),
         index: 1,
         kind: 'QUALIFYING' as const,
+        track: 'MAIN' as const,
         label: 'Runde 1',
         state: 'CLOSED' as const,
         matches,
