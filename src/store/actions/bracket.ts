@@ -60,6 +60,12 @@ export function drawBracket(store: TournamentStore, clock: Clock = systemClock):
             slotB: node.slotB,
             tableId: node.tableId,
           })),
+          // Empty in every ordinary draw. Non-empty only when the field had
+          // played itself out, which is the thing anybody asks about a week
+          // later (issue #72, docs/FILE-FORMAT.md rule 6).
+          forcedRematches: bracket
+            .forcedBracketRematches(after)
+            .map((node) => ({ nodeId: node.id, slotA: node.slotA, slotB: node.slotB })),
           rngCursor: after.rngCursor,
         },
       },

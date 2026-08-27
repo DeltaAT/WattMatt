@@ -40,6 +40,8 @@ Eine Seite. Ausdrucken und neben den Laptop legen. Ausführlich steht alles im
 | **Falschen Namen erfasst.** | Einfach überschreiben. Namen lassen sich jederzeit ändern. |
 | **Der Rückgängig-Knopf ist grau.** | *Der Verlauf beginnt beim geöffneten Turnier.* Nach einem Schließen und Öffnen ist er leer. Die Ergebnisse selbst sind alle da; korrigieren Sie über **Ergebnis ändern**. |
 | **Ein Knopf ist grau.** | Der Grund steht auf dem Knopf selbst, zum Beispiel *3 Partien ohne Sieger*. Lesen und beheben. |
+| **Beim Auslosen kommt *Wiederholte Paarungen*.** | Kein Fehler. Das Feld ist so klein und so weit gespielt, dass jede Paarung eine Wiederholung wäre. Paarungen vorlesen, dann **Auslosung so übernehmen**. **Abbrechen** ändert nichts — dieselbe Frage kommt beim nächsten Versuch wieder. |
+| **Zwei Gruppen spielen im Turnierbaum zum zweiten Mal gegeneinander.** | Ab der zweiten Runde des Baums entscheiden die Ergebnisse, wer auf wen trifft — das lässt sich nicht auslosen. Die Partie ist mit **Wiederholung** markiert. |
 | **Die Tastenkürzel wirken nicht.** | Sie stehen in einem Textfeld. Klicken Sie irgendwo daneben — dann greifen sie wieder. |
 
 ## Programm und Dateien

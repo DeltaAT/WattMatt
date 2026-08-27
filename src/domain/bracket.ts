@@ -1,12 +1,15 @@
 import { fieldSize, FINAL_PHASE_SIZE, MINIMUM_BRACKET_SIZE } from '@/domain/draw';
+import { NO_HISTORY, playedAgainst, rematchIds, type MatchHistory } from '@/domain/history';
 import {
   bracketNodeIdSchema,
   matchIdSchema,
   type BracketNodeId,
   type GroupId,
+  type MatchId,
   type TableId,
 } from '@/domain/ids';
 import { isNamingComplete } from '@/domain/naming';
+import { drawPairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
 import { nextPowerOfTwo } from '@/domain/round';
 import { activeGroups, freeTables } from '@/domain/selectors';
@@ -198,7 +201,13 @@ export function drawBracket(
     return tournament;
   }
 
-  const bracket = buildBracket(activeGroups(tournament), { rng, size: fieldSize(tournament) });
+  const bracket = buildBracket(activeGroups(tournament), {
+    rng,
+    size: fieldSize(tournament),
+    // Derived from the rounds the evening has played, so the first bracket
+    // round does not re-stage a match the room already watched (issue #72).
+    history: playedAgainst(tournament),
+  });
 
   // The cursor moves on in the same object as the tree it produced. A draw that
   // recorded the bracket but left the cursor behind would hand the identical
@@ -213,6 +222,50 @@ export function drawBracket(
   return fillBracketTables(withBracket, at);
 }
 
+/** What drawing the tree would produce, without producing it (issue #72). */
+export interface BracketPreview {
+  bracket: Bracket;
+  /**
+   * The first-round nodes that repeat a meeting the evening already staged.
+   *
+   * Empty in every ordinary draw. Only the first round can appear here — it is
+   * the only one a draw decides (docs/TOURNAMENT-RULES.md §7).
+   */
+  forced: readonly BracketNode[];
+}
+
+/**
+ * The tree the next press of *Turnierbaum auslosen* would deal, so a forced
+ * rematch reaches the host before it reaches the room (issue #72).
+ *
+ * Nothing is committed and the tournament's cursor does not move, exactly as
+ * `previewDrawRound` does not move it: the host declines, nothing happened, and
+ * pressing the button afterwards deals the same tree.
+ */
+export function previewDrawBracket(
+  tournament: Tournament,
+  input: DrawBracketInput,
+): BracketPreview | null {
+  const drawn = drawBracket(tournament, input);
+  if (drawn === tournament || drawn.bracket === null) {
+    return null;
+  }
+  return { bracket: drawn.bracket, forced: forcedBracketRematches(drawn) };
+}
+
+/**
+ * The bracket nodes whose pairing repeats an earlier meeting.
+ *
+ * Reads the whole tree rather than only its first round, because after the
+ * first round a rematch is not something a draw chose — it is who won, and the
+ * room deserves the same badge on it (docs/TOURNAMENT-RULES.md §7, the
+ * documented limitation of issue #72).
+ */
+export function forcedBracketRematches(tournament: Tournament): readonly BracketNode[] {
+  const ids: ReadonlySet<MatchId> = rematchIds(tournament);
+  return (tournament.bracket?.nodes ?? []).filter((node) => ids.has(matchIdSchema.parse(node.id)));
+}
+
 export interface BuildBracketInput {
   rng: Rng;
   /**
@@ -222,6 +275,16 @@ export interface BuildBracketInput {
    * participants fit into, which is the ordinary case.
    */
   size?: number;
+  /**
+   * Who has already played whom, so the **first** bracket round does not put
+   * two of them back together (issue #72, `@/domain/history`).
+   *
+   * Only the first round can be constrained, and that is a documented rule
+   * rather than an omission: every round above it is decided by who wins, not
+   * by a draw (docs/TOURNAMENT-RULES.md §7). Defaults to remembering nothing,
+   * which is what a tree drawn from a fresh field is.
+   */
+  history?: MatchHistory;
 }
 
 /**
@@ -240,18 +303,27 @@ export interface BuildBracketInput {
  * draw itself and their winner stands in the round above from the start, which
  * is what §3 already does with the bye an odd count earns.
  */
-export function buildBracket(groups: readonly Group[], { rng, size }: BuildBracketInput): Bracket {
-  const drawn = rng.shuffle(groups);
-  const width = bracketWidth(drawn.length, size);
+export function buildBracket(
+  groups: readonly Group[],
+  { rng, size, history = NO_HISTORY }: BuildBracketInput,
+): Bracket {
+  const field = groups.map((group) => group.id);
+  const width = bracketWidth(field.length, size);
   const { nodes, thirdPlaceNodeId } = layOut(width);
 
-  const seeded = seedFirstRound(
-    nodes,
-    width,
-    drawn.map((group) => group.id),
-  );
+  // The first round's nodes are the shuffled order read off in twos, exactly as
+  // a round's matches are — so the same engine keeps old opponents apart here,
+  // and the `Freilose` a short field earns still fall to the last drawn
+  // (issue #72, `@/domain/pairing`).
+  const pairing = drawPairing(field, { history, rng, byes: Math.max(0, width - field.length) });
 
-  return { size: width, nodes: settleByes(seeded), thirdPlaceNodeId };
+  const drawn: GroupId[] = [];
+  for (const [a, b] of pairing.pairs) {
+    drawn.push(a, b);
+  }
+  drawn.push(...pairing.byes);
+
+  return { size: width, nodes: settleByes(seedFirstRound(nodes, width, drawn)), thirdPlaceNodeId };
 }
 
 // ---------------------------------------------------------------------------

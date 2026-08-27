@@ -47,6 +47,7 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Draw (noun) | Auslosung |
 | To draw | auslosen |
 | Bye | Freilos |
+| Rematch | Wiederholung |
 | Winner | Sieger |
 | Loser | Verlierer |
 | Eliminated | ausgeschieden |
@@ -103,6 +104,9 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Candidates still in the field | Im Feld | The winners column, on both screens |
 | Places still open | Plätze frei | The counter the whole `REPECHAGE` scene is about |
 | To hand out byes (§4 fallback 1) | Freilose vergeben | Always available, so the phase can always be left |
+| A repeated pairing | Wiederholung | Two groups drawn together who have already played (issue #72) |
+| Forced rematches, as a dialog | Wiederholte Paarungen | Shown only when no rematch-free pairing exists; the host confirms before the beamer |
+| To take the draw anyway | Auslosung so übernehmen | The confirming answer to that dialog |
 | To readmit the declined (§4 fallback 2) | Ausgeschiedene erneut zulassen | |
 | To move to the next phase | Weiter zur … | Names the phase it leads to, never a bare *Weiter* (issue #22) |
 | The field carried on | Im Feld | How many the phase hands to the next one |

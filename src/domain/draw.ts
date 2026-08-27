@@ -1,4 +1,5 @@
 import { MINIMUM_GROUPS } from '@/domain/groups';
+import { playedAgainst, rematchesIn } from '@/domain/history';
 import {
   matchIdSchema,
   roundIdSchema,
@@ -8,6 +9,7 @@ import {
   type TableId,
 } from '@/domain/ids';
 import { allMatches } from '@/domain/lookup';
+import { drawPairing, type Pairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
 import { activeGroups, currentRound, freeTables, undecidedMatches } from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
@@ -249,9 +251,20 @@ export interface DrawRoundInput {
  * ```text
  * P  := active groups, n := |P|, n >= 2
  * shuffle(P) using the seeded RNG
- * pairs := [(P[0],P[1]), (P[2],P[3]), …]
+ * pairs := the one reading of that shuffle in which nobody meets an opponent
+ *          they have already played (`@/domain/pairing`, issue #72)
  * if n is odd: the last remaining group receives a BYE and advances automatically
  * ```
+ *
+ * The no-rematch constraint is the whole of issue #72 and it is not a filter
+ * applied afterwards: the pairing is searched for, out of the shuffled order,
+ * so the fairness still comes from the shuffle and the room still watches the
+ * same pot being emptied. When the field admits no rematch-free pairing at all
+ * — four groups in their third round, where everyone has played everyone — the
+ * pairing with the fewest repeats is taken instead and the repeats are named,
+ * so the host can say so before the draw reaches the projector. `drawRound`
+ * never asks; `forcedRematches` is how the caller finds out, and issue #72's
+ * host dialog is where the asking happens.
  *
  * The bye is decided the moment it is drawn — `winnerId` is the group itself and
  * the match is `DONE` — and it is never handed a table, because nobody plays it.
@@ -273,12 +286,23 @@ export function drawRound(
     return tournament;
   }
 
-  const drawn = rng.shuffle(activeGroups(tournament));
-  // The `Freilose` §4 owes are settled here and only here, so the count comes
-  // off the tournament rather than off the caller: an action that forgot to
-  // pass it would deal 20 groups into 10 pairs where the bracket is waiting for
-  // a field of 32 (docs/TOURNAMENT-RULES.md §4 fallback 1, issue #22).
-  const matches = pair(drawn, nextMatchNumber(tournament), byesOwed(tournament));
+  const pairing = drawPairing(
+    activeGroups(tournament).map((group) => group.id),
+    {
+      // Derived from the rounds that exist rather than carried in a field of
+      // its own, so it cannot drift from the match history it describes
+      // (issue #72, `@/domain/history`).
+      history: playedAgainst(tournament),
+      rng,
+      // The `Freilose` §4 owes are settled here and only here, so the count
+      // comes off the tournament rather than off the caller: an action that
+      // forgot to pass it would deal 20 groups into 10 pairs where the bracket
+      // is waiting for a field of 32 (docs/TOURNAMENT-RULES.md §4 fallback 1,
+      // issue #22).
+      byes: byesOwed(tournament),
+    },
+  );
+  const matches = pair(pairing, nextMatchNumber(tournament));
 
   const index = tournament.rounds.length + 1;
   const round: Round = {
@@ -302,31 +326,62 @@ export function drawRound(
   return settle(fillTables(withRound, matches, at), round.id);
 }
 
+/** What the next draw would produce, without producing it (issue #72). */
+export interface DrawPreview {
+  /** The round `drawRound` would append. */
+  round: Round;
+  /**
+   * The pairs it could not keep apart, in draw order. Empty in every ordinary
+   * draw; non-empty is the case the host has to confirm.
+   */
+  forced: readonly Match[];
+}
+
 /**
- * Pairs a shuffled field, appending a bye for every group left over.
+ * The round the next draw would deal, so the host can be shown a forced
+ * rematch before the room is (issue #72, docs/TOURNAMENT-RULES.md §3).
  *
- * Sequential and nothing cleverer: the shuffle is where the fairness lives, so
- * pairing neighbours is exactly as random as any other rule, and it is the one
- * a host can explain to a participant standing in front of them. The byes go to
- * the back of the shuffle for the same reason — it is where §3 already puts the
- * one an odd count earns, and "the last ones drawn sit this round out" is a
- * sentence the host can say out loud.
+ * Nothing is committed and the tournament's own cursor does not move — the
+ * `Rng` this builds is thrown away. That is what makes the confirmation safe to
+ * decline: the host says no, nothing happened, and the same press of the button
+ * later deals the same pairings, because the draw is a function of the seed,
+ * the cursor and the history and none of the three have changed.
  *
- * `owed` is the §4 fallback's debt and is usually zero, in which case this is
- * exactly the rule §3 states. On top of it an odd remainder still earns the one
- * bye §3 gives it, so a field of 13 owing two `Freilose` deals three: the two
- * that were promised and the one the count leaves over.
+ * Which is also the one thing to know about the confirmation flow: the host
+ * confirms a *preview*, and the commit re-runs the draw rather than replaying a
+ * stored result. Identical by construction, and it keeps `drawRound` the single
+ * place a round is ever built.
+ *
+ * Null when there is nothing to draw, for the same reasons `drawRound` hands
+ * its argument back.
  */
-function pair(drawn: readonly Group[], firstNumber: number, owed: number): Match[] {
+export function previewDrawRound(
+  tournament: Tournament,
+  input: DrawRoundInput,
+): DrawPreview | null {
+  const drawn = drawRound(tournament, input);
+  if (drawn === tournament) {
+    return null;
+  }
+  const round = drawn.rounds.at(-1);
+  if (round === undefined) {
+    return null;
+  }
+  return { round, forced: forcedRematches(drawn, round) };
+}
+
+/**
+ * Turns a pairing into the round's matches, byes last.
+ *
+ * The order is the pairing's own, which is the shuffle's: pairs in the order
+ * their first group came out of the pot, then the groups sitting the round out.
+ * That is the order tables are handed out in and the order the queue drains in,
+ * and it is what "the last ones drawn sit this round out" means on the beamer
+ * (docs/TOURNAMENT-RULES.md §3).
+ */
+function pair(pairing: Pairing, firstNumber: number): Match[] {
   const matches: Match[] = [];
   let number = firstNumber;
-
-  // Clamped rather than trusted: a file repaired by hand can name a target the
-  // field cannot reach, and a negative pair count would drop groups out of a
-  // round in front of the room.
-  const promised = Math.min(Math.max(owed, 0), drawn.length);
-  const byes = promised + ((drawn.length - promised) % 2);
-  const paired = drawn.length - byes;
 
   const newMatch = (a: GroupId, b: GroupId | null): Match => {
     const match: Match = {
@@ -343,19 +398,30 @@ function pair(drawn: readonly Group[], firstNumber: number, owed: number): Match
     return match;
   };
 
-  for (let index = 0; index + 1 < paired; index += 2) {
-    // Both in range by construction; `noUncheckedIndexedAccess` cannot see it.
-    const a = drawn[index] as Group;
-    const b = drawn[index + 1] as Group;
-    matches.push(newMatch(a.id, b.id));
+  for (const [a, b] of pairing.pairs) {
+    matches.push(newMatch(a, b));
   }
-
-  for (let index = paired; index < drawn.length; index += 1) {
-    const leftover = drawn[index] as Group;
-    matches.push(newMatch(leftover.id, null));
+  for (const leftover of pairing.byes) {
+    matches.push(newMatch(leftover, null));
   }
 
   return matches;
+}
+
+/**
+ * The matches of a round that repeat a meeting the tournament already staged
+ * (issue #72).
+ *
+ * Empty in every ordinary draw. Non-empty only when the field admitted no
+ * rematch-free pairing at all, and then it is what the host has to be shown
+ * *before* the draw goes on the projector — §3 says never silently.
+ *
+ * Derived from the tournament's own history rather than read off a flag, so it
+ * stays right through an undo, a correction and a file repaired by hand
+ * (`@/domain/history`).
+ */
+export function forcedRematches(tournament: Tournament, round: Round): readonly Match[] {
+  return rematchesIn(tournament, round);
 }
 
 /**

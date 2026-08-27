@@ -249,6 +249,8 @@ src/
     settings.ts        the tournament's own settings (participant wording)
     tables.ts          the table lifecycle: create, rename, reorder, block, occupy, free
     rng.ts             seeded PRNG (mulberry32) + Fisher-Yates shuffle
+    history.ts         who has already played whom — derived, never stored
+    pairing.ts         the rematch-free pairing of a shuffled field, and its fallback
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
     progression.ts     the phase machine: what the field carries, where it goes next

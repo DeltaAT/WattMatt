@@ -6,8 +6,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bracketColumns, bracketCorrection, drawBracket, setBracketWinner } from '@/domain/bracket';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
 import { freeTables } from '@/domain/selectors';
-import { FIXED_NOW, group, table, tableId, tournament } from '@/domain/testFixtures';
-import type { Bracket, BracketRound, Tournament } from '@/domain/types';
+import {
+  bracketNodeId,
+  FIXED_NOW,
+  group,
+  groupId,
+  table,
+  tableId,
+  tournament,
+} from '@/domain/testFixtures';
+import type { Bracket, BracketNode, BracketRound, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { BracketPanel } from '@/windows/host/BracketPanel';
 
@@ -49,6 +57,7 @@ function bracketOf(document: Tournament): Bracket {
 }
 
 interface PanelHandlers {
+  onPreviewDraw?: () => readonly BracketNode[];
   onDraw?: () => void;
   onSetWinner?: (nodeId: BracketNodeId, winnerId: GroupId) => void;
   onAssign?: (nodeId: BracketNodeId, tableId: TableId) => void;
@@ -80,6 +89,9 @@ function panel(
       canDraw
       canFinish={false}
       focus={focus}
+      // Nothing to confirm by default: the engine keeps old opponents apart, so
+      // an ordinary tree previews no forced rematch at all (issue #72).
+      onPreviewDraw={handlers.onPreviewDraw ?? (() => [])}
       onDraw={handlers.onDraw ?? NOTHING}
       onSetWinner={handlers.onSetWinner ?? NOTHING}
       // The real thing rather than a stub: what the dialog lists is exactly what
@@ -110,6 +122,7 @@ describe('the bracket panel before the tree exists', () => {
         canDraw={false}
         canFinish={false}
         focus={null}
+        onPreviewDraw={() => []}
         onDraw={() => undefined}
         onSetWinner={() => undefined}
         correctionFor={() => null}
@@ -131,6 +144,34 @@ describe('the bracket panel before the tree exists', () => {
     fireEvent.click(screen.getByText(de.bracket.draw));
 
     expect(onDraw).toHaveBeenCalledOnce();
+  });
+
+  it('asks first when the tree would repeat a pairing (issue #72)', () => {
+    // Only reachable when the field has played itself out, and then §3 says
+    // the host confirms before the room sees it. Never silently.
+    const onDraw = vi.fn();
+    const forced: BracketNode[] = [
+      {
+        id: bracketNodeId(1),
+        round: 'SEMI_FINAL',
+        slotA: groupId(1),
+        slotB: groupId(2),
+        winnerId: null,
+        nextNodeId: null,
+        tableId: null,
+      },
+    ];
+    panel(readyToDraw(4), { onDraw, onPreviewDraw: () => forced });
+
+    fireEvent.click(screen.getByText(de.bracket.draw));
+
+    expect(window.document.querySelector('[data-dialog="rematch"]')).not.toBeNull();
+    expect(onDraw).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: de.draw.rematch.confirm }));
+
+    expect(onDraw).toHaveBeenCalledOnce();
+    expect(window.document.querySelector('[data-dialog="rematch"]')).toBeNull();
   });
 });
 

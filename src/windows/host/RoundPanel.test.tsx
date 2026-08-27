@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { drawRound as drawTheRound } from '@/domain/draw';
+import { rematchIds } from '@/domain/history';
 import type { MatchId } from '@/domain/ids';
 import { roundBoard, roundSummary } from '@/domain/round';
 import { currentRound } from '@/domain/selectors';
@@ -19,7 +20,7 @@ import {
   tableId,
   tournament,
 } from '@/domain/testFixtures';
-import type { Round, Timestamp, Tournament } from '@/domain/types';
+import type { Match, Round, Timestamp, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { RoundPanel } from '@/windows/host/RoundPanel';
 
@@ -57,6 +58,9 @@ const openRound = (document: Tournament): Round => {
 
 function handlers() {
   return {
+    // Nothing to confirm by default: the engine keeps old opponents apart, so
+    // an ordinary draw previews no forced rematch at all (issue #72).
+    onPreviewDraw: vi.fn(() => [] as readonly Match[]),
     onDraw: vi.fn(),
     onSetWinner: vi.fn(),
     onStartNext: vi.fn(),
@@ -86,6 +90,7 @@ function setup(document: Tournament, now: Timestamp = FIXED_NOW) {
       }
       canClose={open !== null && open.matches.every((each) => each.winnerId !== null)}
       undecided={open === null ? 0 : open.matches.filter((each) => each.winnerId === null).length}
+      rematches={rematchIds(document)}
       {...spies}
     />,
   );
@@ -114,6 +119,146 @@ const clickIn = (parent: HTMLElement, selector: string) => {
   }
   fireEvent.click(button);
 };
+
+describe('a draw with forced rematches (issue #72)', () => {
+  /**
+   * A closed round plus a fresh panel over it, with the preview answering
+   * whatever the case needs.
+   *
+   * The forced pairs are handed in rather than produced by a real draw: what
+   * this file tests is the host's experience of them, and the engine that
+   * decides whether they exist is tested in `@/domain/pairing`.
+   */
+  function panel(forced: readonly Match[]) {
+    const document = tournament({
+      phase: 'ELIMINATION',
+      groups: [group(1), group(2), group(3), group(4)],
+      nextGroupNumber: 5,
+      tables: [table(1), table(2)],
+      nextTableNumber: 3,
+    });
+    const spies = { ...handlers(), onPreviewDraw: vi.fn(() => forced) };
+
+    render(
+      <RoundPanel
+        round={null}
+        board={null}
+        summary={null}
+        groups={document.groups}
+        participant={document.settings.participantLabel}
+        now={FIXED_NOW}
+        drawBlockers={[]}
+        canDraw
+        closeBlockers={['NO_OPEN_ROUND']}
+        canClose={false}
+        undecided={0}
+        rematches={new Set<MatchId>()}
+        {...spies}
+      />,
+    );
+
+    return spies;
+  }
+
+  const pressDraw = () => {
+    fireEvent.click(screen.getByRole('button', { name: de.draw.start }));
+  };
+
+  const dialog = () => window.document.querySelector('[data-dialog="rematch"]');
+
+  it('draws straight through when nothing repeats', () => {
+    const spies = panel([]);
+
+    pressDraw();
+
+    // The ordinary draw, which is every draw: one press, no dialog.
+    expect(dialog()).toBeNull();
+    expect(spies.onDraw).toHaveBeenCalledOnce();
+  });
+
+  it('asks before drawing when a pairing repeats, and draws nothing yet', () => {
+    const spies = panel([match(1, { a: groupId(1), b: groupId(2) })]);
+
+    pressDraw();
+
+    expect(dialog()).not.toBeNull();
+    // Nothing was committed. §3 says the host confirms *before* the draw is
+    // published, so the press alone must not deal the round.
+    expect(spies.onDraw).not.toHaveBeenCalled();
+  });
+
+  it('names every repeated pairing, so the host can read them out', () => {
+    panel([match(1, { a: groupId(1), b: groupId(2) }), match(2, { a: groupId(3), b: groupId(4) })]);
+
+    pressDraw();
+
+    const listed = [...window.document.querySelectorAll('[data-dialog-pair]')].map(
+      (node) => node.textContent,
+    );
+
+    expect(listed).toHaveLength(2);
+    expect(listed[0]).toContain(de.participant.GROUP.numbered({ n: 1 }));
+    expect(listed[0]).toContain(de.participant.GROUP.numbered({ n: 2 }));
+    expect(listed[1]).toContain(de.participant.GROUP.numbered({ n: 3 }));
+  });
+
+  it('draws once the host confirms', () => {
+    const spies = panel([match(1, { a: groupId(1), b: groupId(2) })]);
+
+    pressDraw();
+    fireEvent.click(screen.getByRole('button', { name: de.draw.rematch.confirm }));
+
+    expect(spies.onDraw).toHaveBeenCalledOnce();
+    expect(dialog()).toBeNull();
+  });
+
+  it('changes nothing when the host cancels', () => {
+    const spies = panel([match(1, { a: groupId(1), b: groupId(2) })]);
+
+    pressDraw();
+    fireEvent.click(screen.getByRole('button', { name: de.draw.rematch.cancel }));
+
+    expect(spies.onDraw).not.toHaveBeenCalled();
+    expect(dialog()).toBeNull();
+  });
+
+  it('marks the repeated pairing on its card for the rest of the round', () => {
+    // The confirmation is one moment; the panel is the screen the host works
+    // from all evening, so the pairing they were asked about stays marked.
+    const document = drawn(4, 2);
+    const first = openRound(document).matches[0];
+    if (first === undefined) {
+      throw new Error('nothing was drawn');
+    }
+    const open = openRound(document);
+
+    render(
+      <RoundPanel
+        round={open}
+        board={roundBoard(document, open)}
+        summary={roundSummary(open)}
+        groups={document.groups}
+        participant={document.settings.participantLabel}
+        now={FIXED_NOW}
+        drawBlockers={['ROUND_OPEN']}
+        canDraw={false}
+        closeBlockers={['MATCHES_UNDECIDED']}
+        canClose={false}
+        undecided={open.matches.length}
+        rematches={new Set([first.id])}
+        {...handlers()}
+      />,
+    );
+
+    expect(card(first.id).querySelector('[data-match-rematch]')?.textContent).toBe(
+      de.draw.rematch.badge,
+    );
+    const other = openRound(document).matches[1];
+    expect(
+      other === undefined ? null : card(other.id).querySelector('[data-match-rematch]'),
+    ).toBeNull();
+  });
+});
 
 describe('deciding a match', () => {
   it('sets a winner with one click and no dialog', () => {

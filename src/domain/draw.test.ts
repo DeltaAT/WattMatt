@@ -11,7 +11,9 @@ import {
   drawBlockers,
   drawRound,
   fieldSize,
+  forcedRematches,
   nextQueuedMatch,
+  previewDrawRound,
   queuedMatches,
   roundOutcome,
   setWinner,
@@ -813,6 +815,203 @@ describe('a whole qualifying round on too few tables', () => {
     expect(closed.tables.every((table) => table.status === 'FREE')).toBe(true);
     expect(activeGroups(closed)).toHaveLength(7);
     expect(() => tournamentSchema.parse(closed)).not.toThrow();
+  });
+});
+
+describe('rematches (issue #72)', () => {
+  /** Every pairing of a round as an unordered key, so a repeat is comparable. */
+  function meetings(round: Round): readonly string[] {
+    return round.matches
+      .filter((entry) => entry.b !== null)
+      .map((entry) => [entry.a, String(entry.b)].sort().join('+'));
+  }
+
+  /**
+   * Plays the open round out and draws the next one.
+   *
+   * The field has to be above 16 for there to *be* a next round — §5's loop
+   * ends at the final phase — so every case here starts from a large one.
+   */
+  function playOn(document: Tournament): Tournament {
+    const closed = closeRound(decideEverything(document));
+    return drawRound({ ...closed, phase: 'ELIMINATION' }, draw);
+  }
+
+  it('never repeats a pairing from the round before', () => {
+    // With a plain shuffle this fails often enough to be noticed from the
+    // third row, which is the whole of issue #72.
+    const first = drawRound(ready(64, 8), draw);
+    const second = playOn(first);
+
+    const before = meetings(openRound(first));
+    const after = meetings(openRound(second));
+
+    expect(after).toHaveLength(16);
+    expect(after.filter((pairing) => before.includes(pairing))).toEqual([]);
+  });
+
+  it('never repeats a pairing at any point of a whole evening', () => {
+    // Every meeting of the evening distinct, not only consecutive ones: a
+    // group knocked back in by the repechage could otherwise meet somebody
+    // from two rounds ago.
+    let document = drawRound(ready(128, 8), draw);
+    const seen: string[] = [...meetings(openRound(document))];
+
+    while (canDrawRound({ ...closeRound(decideEverything(document)), phase: 'ELIMINATION' })) {
+      document = playOn(document);
+      const next = meetings(openRound(document));
+      expect(next.filter((pairing) => seen.includes(pairing))).toEqual([]);
+      seen.push(...next);
+    }
+
+    // Two elimination rounds after the qualifying one: 128 to 64 to 32 to 16.
+    expect(document.rounds).toHaveLength(3);
+  });
+
+  it('keeps repechage returnees away from the groups that knocked them out', () => {
+    // The issue's fifth case. A `Hoffnungsrunde` that readmitted every loser
+    // puts 34 groups back in front of the draw, and each of the 17 returnees
+    // has already played exactly one of them (docs/TOURNAMENT-RULES.md §4).
+    const first = drawRound(ready(34, 4), draw);
+    const before = meetings(openRound(first));
+
+    const closed = closeRound(decideEverything(first));
+    const returned: Tournament = {
+      ...closed,
+      phase: 'ELIMINATION',
+      groups: closed.groups.map((entry) => ({ ...entry, status: 'ACTIVE' as const })),
+    };
+
+    const second = drawRound(returned, draw);
+
+    expect(meetings(openRound(second))).toHaveLength(17);
+    expect(meetings(openRound(second)).filter((pairing) => before.includes(pairing))).toEqual([]);
+  });
+
+  it('previews nothing when there is nothing to draw', () => {
+    // Same refusal as `drawRound`'s, so the host panel can ask the question
+    // before it knows whether the button is live.
+    expect(previewDrawRound(ready(8, 4, { phase: 'SETUP' }), draw)).toBeNull();
+    expect(previewDrawRound(drawRound(ready(8, 4), draw), draw)).toBeNull();
+  });
+
+  it('reports no forced rematch in an ordinary round', () => {
+    const drawn = drawRound(ready(8, 4), draw);
+
+    expect(forcedRematches(drawn, openRound(drawn))).toEqual([]);
+    expect(previewDrawRound(ready(8, 4), draw)?.forced).toEqual([]);
+  });
+
+  describe('when no rematch-free pairing exists', () => {
+    /**
+     * A field in which everyone has already played everyone.
+     *
+     * Not a state ordinary play reaches — the field halves every round, so
+     * nobody accumulates 17 opponents — but a file repaired by hand can say
+     * it (docs/FILE-FORMAT.md §Encoding invites exactly that), and what the
+     * engine must never do with it is search forever in front of the room.
+     */
+    function exhausted(): Tournament {
+      const base = ready(18, 4, { phase: 'ELIMINATION' });
+      const ids = base.groups.map((entry) => entry.id);
+
+      const matches = [];
+      let number = 1;
+      for (let a = 0; a < ids.length; a += 1) {
+        for (let b = a + 1; b < ids.length; b += 1) {
+          matches.push({
+            id: matchIdSchema.parse(`mt_${String(number)}`),
+            tableId: null,
+            a: ids[a] as GroupId,
+            b: ids[b] as GroupId,
+            winnerId: ids[a] as GroupId,
+            status: 'DONE' as const,
+          });
+          number += 1;
+        }
+      }
+
+      return {
+        ...base,
+        rounds: [
+          {
+            id: roundIdSchema.parse('rnd_1'),
+            index: 1,
+            kind: 'QUALIFYING',
+            label: 'Runde 1',
+            state: 'CLOSED',
+            matches,
+          },
+        ],
+      };
+    }
+
+    it('still deals a sound round rather than looping or throwing', () => {
+      const before = exhausted();
+
+      // The invariant that matters most: everybody in it once, nobody lost.
+      expectSoundDraw(before, drawRound(before, draw));
+    });
+
+    it('marks the pairs it could not avoid, so the host can be asked', () => {
+      const before = exhausted();
+      const after = drawRound(before, draw);
+      const forced = forcedRematches(after, openRound(after));
+
+      // Every pair, because there is no other pairing of a field that has
+      // played itself out.
+      expect(forced).toHaveLength(9);
+      expect(forced.map((entry) => entry.id)).toEqual(
+        openRound(after).matches.map((entry) => entry.id),
+      );
+    });
+
+    it('says so in a preview, without committing anything', () => {
+      const before = exhausted();
+      const preview = previewDrawRound(before, draw);
+
+      expect(preview?.forced).toHaveLength(9);
+      // Nothing happened: no round appended, no cursor spent. Declining the
+      // confirmation costs the host nothing (issue #72).
+      expect(before.rounds).toHaveLength(1);
+      expect(before.rngCursor).toBe(ready(18, 4).rngCursor);
+    });
+
+    it('previews exactly the round the commit then deals', () => {
+      const before = exhausted();
+      const preview = previewDrawRound(before, draw);
+
+      expect(openRound(drawRound(before, draw))).toEqual(preview?.round);
+    });
+  });
+
+  it('reproduces the same pairing from the same seed and the same history', () => {
+    const closed = closeRound(decideEverything(drawRound(ready(64, 8), draw)));
+    const elimination: Tournament = { ...closed, phase: 'ELIMINATION' };
+
+    const once = drawRound(elimination, draw);
+    const again = drawRound(elimination, draw);
+
+    expect(pairings(again)).toEqual(pairings(once));
+    expect(again.rngCursor).toBe(once.rngCursor);
+  });
+
+  it('deals a different pairing once the history changes', () => {
+    // Same seed, same cursor, same field, a different set of past meetings.
+    // The pairing has to follow the history, or the constraint does nothing.
+    const played = drawRound(ready(34, 4), draw);
+    const withHistory: Tournament = {
+      ...played,
+      phase: 'ELIMINATION',
+      groups: played.groups.map((entry) => ({ ...entry, status: 'ACTIVE' as const })),
+      rounds: played.rounds.map((entry) => ({ ...entry, state: 'CLOSED' as const })),
+      rngCursor: 0,
+    };
+    const withoutHistory: Tournament = { ...withHistory, rounds: [] };
+
+    expect(pairings(drawRound(withHistory, draw))).not.toEqual(
+      pairings(drawRound(withoutHistory, draw)),
+    );
   });
 });
 

@@ -1,5 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { bracketRoundForSize } from '@/domain/bracket';
+import { rematchIds } from '@/domain/history';
+import { matchIdSchema } from '@/domain/ids';
 import type { Phase, RepechageFallback, Tournament } from '@/domain/types';
 import {
   decidedResults,
@@ -167,6 +170,8 @@ interface Audit {
   actionsPerPhase: ReadonlyMap<Phase, number>;
   /** Steps taken by the undo probe at the very end of the evening. */
   finalUndoSteps: number;
+  /** The tournament as the evening left it, for the checks that read it whole. */
+  final: Tournament | null;
 }
 
 async function audit(spec: DryRunSpec): Promise<Audit> {
@@ -224,7 +229,15 @@ async function audit(spec: DryRunSpec): Promise<Audit> {
   // the question the issue asks of every scenario.
   const finalUndoSteps = probeUndo(host, history, history.length - 1);
 
-  return { report, recoveredIn, beamerIn, undoneIn, actionsPerPhase, finalUndoSteps };
+  return {
+    report,
+    recoveredIn,
+    beamerIn,
+    undoneIn,
+    actionsPerPhase,
+    finalUndoSteps,
+    final: history.at(-1) ?? null,
+  };
 }
 
 /**
@@ -314,6 +327,34 @@ describe.each(SCENARIOS)('$id — $purpose', (scenario) => {
 
   it('queues matches when there are fewer tables than pairs (§9 case 3)', () => {
     expect(run.report.peakQueue).toBeGreaterThanOrEqual(scenario.expected.minPeakQueue);
+  });
+
+  it('never draws the same two participants against each other twice (issue #72)', () => {
+    // Over a whole evening, not only between consecutive rounds: a group put
+    // back in by the `Hoffnungsrunde` could otherwise meet somebody from two
+    // rounds ago (docs/TOURNAMENT-RULES.md §3).
+    const document = run.final;
+    expect(document).not.toBeNull();
+    if (document === null) {
+      return;
+    }
+
+    const repeated = rematchIds(document);
+    const drawn = new Set(
+      document.rounds.flatMap((each) => each.matches.map((entry) => String(entry.id))),
+    );
+
+    // Nothing a *draw* decided may repeat. A bracket round above the first can,
+    // and that is the documented limitation of §7 — opponents there come from
+    // who wins, not from a draw.
+    expect([...repeated].filter((id) => drawn.has(String(id)))).toEqual([]);
+
+    const firstBracketRound =
+      document.bracket === null ? null : bracketRoundForSize(document.bracket.size);
+    const repeatedNodes = (document.bracket?.nodes ?? []).filter((node) =>
+      repeated.has(matchIdSchema.parse(node.id)),
+    );
+    expect(repeatedNodes.filter((node) => node.round === firstBracketRound)).toEqual([]);
   });
 
   it('hands out the Freilose the counts earn (§9 case 1)', () => {
