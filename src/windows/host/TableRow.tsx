@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { GroupId, TableId } from '@/domain/ids';
 import { elapsedMs, type TableSlot } from '@/domain/tables';
-import type { Group, ParticipantLabel, TableStatus, Timestamp } from '@/domain/types';
+import type { Group, ParticipantLabel, RoundTrack, TableStatus, Timestamp } from '@/domain/types';
 import { de, formatDuration } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 
@@ -21,8 +21,10 @@ export function TableRow({
   now,
   isFirst,
   isLast,
+  canReserve,
   onRename,
   onMove,
+  onReserve,
   onDisable,
   onEnable,
   onRemove,
@@ -34,8 +36,17 @@ export function TableRow({
   now: Timestamp;
   isFirst: boolean;
   isLast: boolean;
+  /**
+   * Whether there are two tracks to choose between (issue #79).
+   *
+   * A tournament with no side event has one answer to "which track does this
+   * table serve", and a control that can only say what is already true is a
+   * control on every row of every event for nothing.
+   */
+  canReserve: boolean;
   onRename: (tableId: TableId, label: string) => void;
   onMove: (tableId: TableId, offset: number) => void;
+  onReserve: (tableId: TableId, track: RoundTrack | null) => void;
   onDisable: () => void;
   onEnable: (tableId: TableId) => void;
   onRemove: () => void;
@@ -65,6 +76,13 @@ export function TableRow({
       <p className="min-w-0 flex-1 truncate text-host-sm text-wm-text-muted" data-table-match="">
         {occupancyText(slot, groups, participant, now)}
       </p>
+
+      {canReserve ? (
+        <ReservationPicker
+          reservedFor={table.reservedFor}
+          onReserve={(track) => onReserve(table.id, track)}
+        />
+      ) : null}
 
       <div className="flex shrink-0 gap-1">
         <button
@@ -121,6 +139,52 @@ export function TableRow({
       </div>
     </li>
   );
+}
+
+/**
+ * Which track this table serves (issue #79, docs/TOURNAMENT-RULES.md §10).
+ *
+ * A select rather than a toggle, because there are three answers and only one
+ * of them is a default: both tracks, the main field, the `Trostrunde`. It sits
+ * on the row rather than behind a dialog for the reason every other table
+ * control does — the host reaches for it while looking at the board that told
+ * them they needed it.
+ *
+ * Committing on change is right here and wrong for the label beside it: a
+ * reservation is one decision and one undo step, where a name typed a character
+ * at a time would be twelve.
+ */
+function ReservationPicker({
+  reservedFor,
+  onReserve,
+}: {
+  reservedFor: RoundTrack | null;
+  onReserve: (track: RoundTrack | null) => void;
+}) {
+  return (
+    <select
+      className="h-8 shrink-0 rounded-wm-sm border border-wm-border-strong bg-wm-bg-elevated px-2 text-host-xs text-wm-text-muted focus:border-wm-accent focus:outline-none"
+      value={reservedFor ?? BOTH}
+      aria-label={de.table.reservation.label}
+      title={de.table.reservation.label}
+      data-table-input="reservation"
+      onChange={(event) =>
+        onReserve(event.target.value === BOTH ? null : toTrack(event.target.value))
+      }
+    >
+      <option value={BOTH}>{de.table.reservation.both}</option>
+      <option value="MAIN">{de.table.reservation.MAIN}</option>
+      <option value="CONSOLATION">{de.table.reservation.CONSOLATION}</option>
+    </select>
+  );
+}
+
+/** The `<option>` value that stands for "no reservation" — `null` is not one. */
+const BOTH = 'BOTH';
+
+/** A `<select>` hands back a string; this is the one place that narrows it. */
+function toTrack(value: string): RoundTrack {
+  return value === 'CONSOLATION' ? 'CONSOLATION' : 'MAIN';
 }
 
 /**

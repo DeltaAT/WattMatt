@@ -24,8 +24,37 @@ export function activeGroups(tournament: Tournament): readonly Group[] {
  * leg, no light above it — must not be handed the next match
  * (docs/TOURNAMENT-RULES.md §0).
  */
-export function freeTables(tournament: Tournament): readonly Table[] {
-  return tournament.tables.filter((table) => table.status === 'FREE');
+export function freeTables(tournament: Tournament, track?: RoundTrack): readonly Table[] {
+  return tournament.tables.filter((table) => table.status === 'FREE' && servesTrack(table, track));
+}
+
+/**
+ * Whether a table may take a match of this track (issue #79).
+ *
+ * An unreserved table serves either, which is the default and stays the common
+ * arrangement. A reserved one serves exactly the track it names.
+ *
+ * `undefined` means the caller is not asking on behalf of a track at all — the
+ * host picking a move target by hand, say. That is deliberately *not* the same
+ * as asking for `MAIN`: a reservation is a standing answer to "where does the
+ * draw put things", never a lock on what the host may do with their own tables
+ * (CLAUDE.md golden rule 3).
+ */
+export function servesTrack(table: Table, track?: RoundTrack): boolean {
+  return track === undefined || table.reservedFor === null || table.reservedFor === track;
+}
+
+/**
+ * The tables this track may ever use — reserved to it or to nobody, and not
+ * out of service.
+ *
+ * The question behind "why is nothing starting?": a track whose every table is
+ * reserved for the other one has a queue that cannot move, and the host has to
+ * be told which of the two problems they have (issue #79). `freeTables` asks
+ * where the next match can go *now*; this asks whether there is anywhere at all.
+ */
+export function tablesForTrack(tournament: Tournament, track: RoundTrack): readonly Table[] {
+  return usableTables(tournament).filter((table) => servesTrack(table, track));
 }
 
 /**

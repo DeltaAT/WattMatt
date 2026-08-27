@@ -3,6 +3,7 @@ import { v1ToV2 } from '@/domain/migrations/v1_to_v2';
 import { v2ToV3 } from '@/domain/migrations/v2_to_v3';
 import { v3ToV4 } from '@/domain/migrations/v3_to_v4';
 import { v4ToV5 } from '@/domain/migrations/v4_to_v5';
+import { v5ToV6 } from '@/domain/migrations/v5_to_v6';
 
 /**
  * Every migration this build knows, in no particular order — the runner picks
@@ -26,4 +27,4 @@ import { v4ToV5 } from '@/domain/migrations/v4_to_v5';
  * `SCHEMA_VERSION`; `runner.test.ts` asserts it, because a gap is a file that
  * opens on the developer's laptop and refuses on the host's.
  */
-export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3, v3ToV4, v4ToV5];
+export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3, v3ToV4, v4ToV5, v5ToV6];

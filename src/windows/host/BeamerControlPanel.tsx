@@ -118,6 +118,25 @@ export function BeamerControlPanel({
           </button>
         </div>
 
+        {/*
+          Both tracks side by side, and only while there are two to show
+          (issue #79). It sits with the two holds rather than in the switcher
+          because it is not a scene — the nine positions are the digits the
+          host's hand has learned, and this is a property of the board they
+          already staged.
+        */}
+        {control.canSplit ? (
+          <button
+            type="button"
+            aria-pressed={control.isSplit}
+            onClick={control.toggleSplit}
+            className={control.isSplit ? FREEZE_ACTIVE_CLASS : SECONDARY_CLASS}
+            data-beamer-action="split"
+          >
+            {control.isSplit ? de.beamerControl.split.release : de.beamerControl.split.label}
+          </button>
+        ) : null}
+
         {control.frozen ? (
           <p className="text-host-xs text-wm-live" role="alert">
             {de.beamerControl.freeze.hint}

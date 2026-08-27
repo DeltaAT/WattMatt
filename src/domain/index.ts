@@ -196,6 +196,7 @@ export {
   type RepechageOutlook,
   type RoundBoard,
   type RoundProgress,
+  type RoundStall,
   type RoundRecord,
   type RoundSummary,
 } from '@/domain/round';
@@ -212,6 +213,8 @@ export {
   currentRound,
   freeTables,
   roundsOfTrack,
+  servesTrack,
+  tablesForTrack,
   undecidedMatches,
   usableTables,
 } from '@/domain/selectors';
@@ -242,6 +245,7 @@ export {
   moveTable,
   nextTableNumber,
   occupancyBoard,
+  reserveTable,
   occupyTable,
   releaseTable,
   removeTable,

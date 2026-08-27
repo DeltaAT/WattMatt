@@ -1,6 +1,6 @@
 import { tableIdSchema, type MatchId, type TableId } from '@/domain/ids';
 import { allMatches, bracketMatches } from '@/domain/lookup';
-import type { BracketNode, Match, Table, Timestamp, Tournament } from '@/domain/types';
+import type { BracketNode, Match, RoundTrack, Table, Timestamp, Tournament } from '@/domain/types';
 
 /**
  * The table lifecycle (issue #13, docs/TOURNAMENT-RULES.md §0 and §3).
@@ -100,6 +100,9 @@ export function addTables(tournament: Tournament, { count, label }: AddTablesInp
       status: 'FREE',
       currentMatchId: null,
       occupiedSince: null,
+      // Serving both tracks, which is what a new table means and what the
+      // overwhelming majority of tables stay (issue #79).
+      reservedFor: null,
     };
   });
 
@@ -220,6 +223,34 @@ export function disableTable(
     return tournament;
   }
   return mapTable(cleared, tableId, (free) => ({ ...free, status: 'DISABLED' }));
+}
+
+/**
+ * Reserves a table for one track, or hands it back to both (issue #79,
+ * docs/TOURNAMENT-RULES.md §10).
+ *
+ * The host's standing answer to *"Trostrunde an den beiden hinteren Tischen"*.
+ * Without it that is a decision they re-make on every table for the whole
+ * evening; with it they say it once and the draw obeys.
+ *
+ * **It changes only what happens next.** A match already running on the table
+ * stays exactly where it is, whichever track it belongs to — the same rule
+ * `disableTable` follows and for the same reason: the pair are playing and the
+ * room is watching (issue #13, rules §0). The reservation takes effect the next
+ * time the table is free and something is looking for one.
+ *
+ * Allowed at any moment, like every other table property. `null` releases it.
+ * A table that already serves that track is returned untouched, so a stale
+ * click costs nothing and writes nothing to the undo stack that means anything.
+ */
+export function reserveTable(
+  tournament: Tournament,
+  tableId: TableId,
+  track: RoundTrack | null,
+): Tournament {
+  return mapTable(tournament, tableId, (table) =>
+    table.reservedFor === track ? table : { ...table, reservedFor: track },
+  );
 }
 
 /** Puts a `gesperrt` table back into service. It comes back free, never busy. */

@@ -90,6 +90,10 @@ export const deAT = {
       tableRemoved: (params: { label: string }) => `Tisch gelöscht: ${params.label}`,
       tableDisabled: (params: { label: string }) => `Tisch gesperrt: ${params.label}`,
       tableEnabled: (params: { label: string }) => `Tisch freigegeben: ${params.label}`,
+      /** Issue #79: which track a table now serves, and giving it back to both. */
+      tableReserved: (params: { label: string; track: string }) =>
+        `Tisch reserviert: ${params.label} für ${params.track}`,
+      tableReleased: (params: { label: string }) => `Tischreservierung aufgehoben: ${params.label}`,
       /**
        * Groups (issue #14). Each is handed the participant wording it needs —
        * `de.participant[label]` — because the host reads the undo button in the
@@ -783,6 +787,30 @@ export const deAT = {
     empty: 'Es ist noch kein Tisch angelegt. Legen Sie mindestens einen Tisch an.',
 
     add: 'Tisch hinzufügen',
+    /**
+     * Reserving a table for one track (issue #79,
+     * docs/TOURNAMENT-RULES.md §10).
+     *
+     * The host says *"Trostrunde an den beiden hinteren Tischen"* to the room
+     * once; this is where they say it to the app once. Only shown while there
+     * are two tracks to choose between — a tournament with no side event has
+     * one answer and does not need a control for it.
+     */
+    reservation: {
+      label: 'Reserviert für',
+      /** The default: this table takes whatever comes next, from either track. */
+      both: 'Beide',
+      MAIN: 'Hauptfeld',
+      CONSOLATION: 'Trostrunde',
+      /** On the round board and the table row, beside a reserved table. */
+      badge: (params: { track: string }) => `nur ${params.track}`,
+      /**
+       * Said once, above the list. The rule hosts get wrong is that reserving a
+       * table does not clear the match on it.
+       */
+      hint: 'Eine Reservierung gilt ab der nächsten Partie. Eine laufende Partie bleibt stehen, wo sie ist.',
+    },
+
     /** The "Anzahl Tische" quick-add of issue #13. */
     quickAddLabel: 'Anzahl Tische',
     quickAdd: 'Tische anlegen',
@@ -881,6 +909,22 @@ export const deAT = {
     queueCount: (params: { n: number }) =>
       `${pluralizeDeAT(params.n, 'Partie', 'Partien')} wartet auf einen Tisch`,
     queueEmpty: 'Keine Partie wartet auf einen Tisch.',
+
+    /**
+     * Why the queue cannot move at all (issue #79, `RoundStall`).
+     *
+     * Not shown while matches are simply running — a queue behind busy tables
+     * is the tournament working. These two are the states in which nothing is
+     * going to happen, and the host has to be told which of them they are in:
+     * one is a problem with the room, the other is a decision of their own that
+     * they can take back in a click.
+     */
+    stalled: {
+      NO_USABLE_TABLE:
+        'Es ist kein Tisch bespielbar. Legen Sie einen Tisch an oder geben Sie einen gesperrten Tisch frei.',
+      RESERVED_ELSEWHERE:
+        'Alle bespielbaren Tische sind für die andere Runde reserviert. Ändern Sie eine Reservierung unter Tische.',
+    },
     decidedTitle: 'Entschieden',
     decidedEmpty: 'Es ist noch keine Partie entschieden.',
 
@@ -1428,6 +1472,20 @@ export const deAT = {
       release: 'Bild freigeben',
       badge: 'Eingefroren',
       hint: 'Die Leinwand bleibt stehen, bis Sie das Bild wieder freigeben.',
+    },
+
+    /**
+     * Both tracks on the wall at once (issue #79,
+     * docs/TOURNAMENT-RULES.md §10).
+     *
+     * Only on screen while there are two live rounds to show. A flag on the
+     * round board rather than a scene of its own: the nine switcher positions
+     * are the keyboard shortcuts, and splitting is a property of the picture
+     * the host already chose.
+     */
+    split: {
+      label: 'Beide Runden zeigen',
+      release: 'Nur eine Runde zeigen',
     },
 
     /** Jumps a running beamer animation straight to its finished picture. */

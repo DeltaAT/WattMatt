@@ -12,7 +12,7 @@ import { isNamingComplete } from '@/domain/naming';
 import { drawPairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
 import { nextPowerOfTwo } from '@/domain/round';
-import { activeGroups, freeTables } from '@/domain/selectors';
+import { activeGroups, freeTables, servesTrack } from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
 import type {
   Bracket,
@@ -516,6 +516,14 @@ export function assignBracketNode(
     return tournament;
   }
   if (node.slotA === null || node.slotB === null) {
+    return tournament;
+  }
+
+  // And a table reserved for the `Trostrunde` is not the bracket's to take
+  // (issue #79): the panel does not offer it, so this is the guard against a
+  // stale click on a table the host set aside a moment ago.
+  const table = tournament.tables.find((candidate) => candidate.id === tableId);
+  if (table === undefined || !servesTrack(table, 'MAIN')) {
     return tournament;
   }
 
@@ -1301,7 +1309,11 @@ function fillBracketTables(tournament: Tournament, at: Timestamp): Tournament {
     return tournament;
   }
 
-  const free = freeTables(tournament);
+  // `MAIN`, always: the bracket is the main field's final phase and the side
+  // event feeds no bracket at all (docs/TOURNAMENT-RULES.md §10). A table the
+  // host reserved for the `Trostrunde` is therefore not one of these, the same
+  // way it is not one of the qualifying round's (issue #79).
+  const free = freeTables(tournament, 'MAIN');
   let next = tournament;
   let slot = 0;
 

@@ -115,6 +115,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
       status: 'OCCUPIED' as const,
       currentMatchId: match.id,
       occupiedSince: '2026-08-23T10:00:00+02:00',
+      reservedFor: null,
     })),
     matches,
     round: {

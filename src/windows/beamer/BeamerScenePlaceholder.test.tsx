@@ -297,6 +297,69 @@ describe('the beamer scene surface', () => {
     });
 
     /*
+     * The split view of issue #79. Two boards rather than one board of
+     * everything, because they are two tournaments: a merged board would tell
+     * the room a `Trostrunde` pair is one result away from the bracket.
+     */
+    it('puts both tracks on the wall when the host asks for a split', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2'), split: true }}
+          tournament={snapshot}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('data-scene-split');
+      expect(markup).toContain('data-split-track="MAIN"');
+      expect(markup).toContain('data-split-track="CONSOLATION"');
+      expect(markup).toContain('Runde 2');
+      expect(markup).toContain('Trostrunde 1');
+      // Both pairings, each on its own board.
+      expect(markup).toContain('>1<');
+      expect(markup).toContain('>7<');
+    });
+
+    /*
+     * A split of one board is not a split. A scene left staged as split after
+     * the side event's round closed falls back rather than putting an empty
+     * half on the wall — the host stages the split, the snapshot decides
+     * whether there is a second track to honour it with.
+     */
+    it('falls back to one board when only one track is live', () => {
+      const alone = { ...snapshot, consolationRound: null, consolationMatches: [] };
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2'), split: true }}
+          tournament={alone}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).not.toContain('data-scene-split');
+      expect(markup).toContain('Runde 2');
+    });
+
+    /* And a board staged without the flag is the single board it always was. */
+    it('draws one board when the host has not asked for a split', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'ROUND_BOARD', roundId: round('rnd_2') }}
+          tournament={snapshot}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).not.toContain('data-scene-split');
+    });
+
+    /*
      * A `Trostrunde` draw animates like any other: the room watches the pot
      * being emptied, and a scene that fell through to the holding picture would
      * show them nothing at all.

@@ -15,6 +15,7 @@ describe('the beamer scene contract', () => {
       { id: 'TABLE_OVERVIEW' },
       { id: 'DRAW', roundId: round('r1') },
       { id: 'ROUND_BOARD', roundId: round('r1') },
+      { id: 'ROUND_BOARD', roundId: round('r1'), split: true },
       { id: 'REPECHAGE' },
       { id: 'NAMING' },
       { id: 'BRACKET' },
@@ -59,6 +60,20 @@ describe('isSameScene', () => {
     // Which is what keeps the welcome screen from re-entering every time the
     // host adds a group: the scene has not changed, only the count on it.
     expect(isSameScene({ id: 'WELCOME' }, { id: 'WELCOME' })).toBe(true);
+  });
+
+  /*
+   * Splitting the wall in two is a different picture, and the beamer animates
+   * into it rather than cutting to it (issue #79).
+   */
+  it('separates a split round board from the single one', () => {
+    const single = { id: 'ROUND_BOARD', roundId: round('r1') } as const;
+
+    expect(isSameScene(single, { ...single, split: true })).toBe(false);
+    expect(isSameScene({ ...single, split: true }, { ...single, split: true })).toBe(true);
+    // An absent flag and an explicit `false` are the same picture, so a scene
+    // built either way is not re-animated into itself.
+    expect(isSameScene(single, { ...single, split: false })).toBe(true);
   });
 
   it('separates different scene ids', () => {

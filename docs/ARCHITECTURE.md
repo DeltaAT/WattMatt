@@ -185,7 +185,7 @@ type BeamerScene =
   | { id: 'GROUP_OVERVIEW' }
   | { id: 'TABLE_OVERVIEW' }
   | { id: 'DRAW'; roundId: RoundId }
-  | { id: 'ROUND_BOARD'; roundId: RoundId }
+  | { id: 'ROUND_BOARD'; roundId: RoundId; split?: boolean }
   | { id: 'REPECHAGE' }
   | { id: 'NAMING' }
   | { id: 'BRACKET' }
@@ -199,6 +199,15 @@ question with a different screen. It takes position 1 of `SCENE_ORDER` from `IDL
 positions are the keyboard shortcuts and they stop at nine; `IDLE` survives as the descriptor
 the app stages for itself when no tournament is open at all, and is no longer anything the host
 reaches for.
+
+`ROUND_BOARD.split` puts both tracks on the wall at once (issue #79, docs/TOURNAMENT-RULES.md
+§10). A flag rather than a scene of its own, because the nine switcher positions are the
+keyboard shortcuts and a tenth would move every digit the host's hand has learned — and because
+splitting is a property of the board the host already staged, the way `BRACKET.focus` is. The
+second board is not named: it is the other track's open round, which the snapshot already
+carries, so a descriptor pointing at it could go stale the moment that round closed. A split
+staged while only one track is live falls back to the single board rather than drawing an empty
+half.
 
 `REPECHAGE` deliberately carries no round: the phase is not one, and everything it shows lives
 in `tournament.repechage` (docs/OPEN-QUESTIONS.md #59).

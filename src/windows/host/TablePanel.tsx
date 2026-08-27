@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { GroupId, TableId } from '@/domain/ids';
 import type { MatchDisposition, TableSlot } from '@/domain/tables';
-import type { Group, ParticipantLabel, Timestamp } from '@/domain/types';
+import type { Group, ParticipantLabel, RoundTrack, Timestamp } from '@/domain/types';
 import { de } from '@/i18n';
 import { TableOccupiedDialog } from '@/windows/host/TableOccupiedDialog';
 import { TableRow } from '@/windows/host/TableRow';
@@ -23,9 +23,11 @@ export function TablePanel({
   groups,
   participant,
   now,
+  canReserve,
   onAdd,
   onRename,
   onMove,
+  onReserve,
   onDisable,
   onEnable,
   onRemove,
@@ -37,9 +39,18 @@ export function TablePanel({
   participant: ParticipantLabel;
   /** Re-read every second by `useNow`, so the running times move on their own. */
   now: Timestamp;
+  /**
+   * Whether there is a `Trostrunde` to reserve a table for (issue #79).
+   *
+   * False for every tournament that never runs one, which is most of them, and
+   * the reservation column is simply not there — the same reasoning that keeps
+   * the side event's own panel off the screen until it is offered.
+   */
+  canReserve: boolean;
   onAdd: (count: number) => void;
   onRename: (tableId: TableId, label: string) => void;
   onMove: (tableId: TableId, offset: number) => void;
+  onReserve: (tableId: TableId, track: RoundTrack | null) => void;
   onDisable: (tableId: TableId, disposition?: MatchDisposition) => void;
   onEnable: (tableId: TableId) => void;
   onRemove: (tableId: TableId, disposition?: MatchDisposition) => void;
@@ -106,6 +117,17 @@ export function TablePanel({
 
       <QuickAdd onAdd={onAdd} />
 
+      {/*
+        Said once above the list rather than on every row: the rule hosts get
+        wrong is that reserving a table does not clear the match on it, and it
+        is the kind of sentence that is read once and then known (issue #79).
+      */}
+      {canReserve ? (
+        <p className="text-host-xs text-wm-text-faint" data-table-reservation-hint="">
+          {de.table.reservation.hint}
+        </p>
+      ) : null}
+
       {board.length === 0 ? (
         <p className="text-host-sm text-wm-text-muted" data-table-empty="">
           {de.table.empty}
@@ -121,8 +143,10 @@ export function TablePanel({
               now={now}
               isFirst={index === 0}
               isLast={index === board.length - 1}
+              canReserve={canReserve}
               onRename={onRename}
               onMove={onMove}
+              onReserve={onReserve}
               onDisable={() => request(slot, 'disable')}
               onEnable={onEnable}
               onRemove={() => request(slot, 'remove')}

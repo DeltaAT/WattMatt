@@ -30,7 +30,26 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
   z.object({ id: z.literal('GROUP_OVERVIEW') }),
   z.object({ id: z.literal('TABLE_OVERVIEW') }),
   z.object({ id: z.literal('DRAW'), roundId: roundIdSchema }),
-  z.object({ id: z.literal('ROUND_BOARD'), roundId: roundIdSchema }),
+  /*
+   * The live round of one track — and, when the host asks for it, of both at
+   * once (issue #79, docs/TOURNAMENT-RULES.md §10).
+   *
+   * `roundId` still names one round and stays the whole descriptor for the
+   * ordinary case. `split` is a flag rather than a second round id, because the
+   * second board is never a *choice*: it is the other track's open round, which
+   * the snapshot already carries, and a descriptor that named it could go stale
+   * the moment that round closed while this one did not.
+   *
+   * Optional rather than nullable, so every way of staging the scene that
+   * existed before still says exactly what it means: `{ id: 'ROUND_BOARD',
+   * roundId }` is one board, and nothing had to learn a new field to keep
+   * saying so — the same shape `BRACKET.focus` uses (issue #26).
+   */
+  z.object({
+    id: z.literal('ROUND_BOARD'),
+    roundId: roundIdSchema,
+    split: z.boolean().optional(),
+  }),
   /*
    * The `Hoffnungsrunde` carries no round id, unlike the two scenes above it
    * (issue #21, docs/OPEN-QUESTIONS.md #59).
@@ -98,6 +117,12 @@ export const BLACKOUT_SCENE: BeamerScene = { id: 'BLACKOUT' };
 export function isSameScene(a: BeamerScene, b: BeamerScene): boolean {
   if (a.id !== b.id) {
     return false;
+  }
+  if (a.id === 'ROUND_BOARD' && b.id === 'ROUND_BOARD') {
+    // Splitting the wall in two is a different picture and the beamer animates
+    // into it rather than cutting (issue #79) — the same reasoning the tree's
+    // focus follows below.
+    return a.roundId === b.roundId && (a.split ?? false) === (b.split ?? false);
   }
   if ('roundId' in a && 'roundId' in b) {
     return a.roundId === b.roundId;

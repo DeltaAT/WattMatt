@@ -45,11 +45,16 @@ function control(overrides: Partial<BeamerControlHandle> = {}): BeamerControlHan
     autoFollow: true,
     frozen: false,
     isBlackout: scene.id === 'BLACKOUT',
+    // The common case: one track, so no split control (issue #79). The tests
+    // that are about it turn it on themselves.
+    canSplit: false,
+    isSplit: scene.id === 'ROUND_BOARD' && scene.split === true,
     show: noop,
     showAt: noop,
     toggleBlackout: noop,
     setAutoFollow: noop,
     toggleFreeze: noop,
+    toggleSplit: noop,
     skip: noop,
     isStaged: (choice) => choice.scene?.id === scene.id,
     ...overrides,

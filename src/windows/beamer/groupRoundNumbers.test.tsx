@@ -75,6 +75,7 @@ function field(count: number): TournamentSnapshot {
     status: 'OCCUPIED',
     currentMatchId: entry.id,
     occupiedSince: '2026-08-23T10:00:00+02:00',
+    reservedFor: null,
   }));
 
   return {
