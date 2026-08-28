@@ -128,6 +128,11 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
     // The next candidate is the front of the list. It is in the file because
     // nothing can rebuild it: the shuffle happened at one position of the RNG
     // stream and every draw since has moved the cursor past it.
+    //
+    // This is the *draw* order and it is never rendered as an order (§4,
+    // issue #97). Anything on screen is sorted ascending by group number, so
+    // the grid cannot tell the room what is coming next. The beamer's snapshot
+    // carries no pool at all — only the pot, already in display order.
     "pool": [ "grp_4", "grp_11" ],
     "draws": [ { "groupId": "grp_9", "accepted": true } ],  // accepted null = not yet answered
     "fallbackUsed": null            // null | BYES | REOPEN_DECLINED — the last one taken

@@ -137,7 +137,8 @@ export function useRepechage(track: RoundTrack = 'MAIN'): RepechageHandle {
     canStart: canStartRepechage(document, track),
     // The engine refuses both of these as well; the button being disabled is
     // what keeps the host from finding that out in front of the room.
-    canDraw: state !== null && state.pending === null && state.pool.length > 0 && state.need > 0,
+    canDraw:
+      state !== null && state.pending === null && state.remaining.length > 0 && state.need > 0,
     groups: document.groups,
     participant: document.settings.participantLabel,
     ...actions,

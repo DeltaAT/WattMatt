@@ -196,7 +196,7 @@ export function RepechagePanel({
             />
             <List
               title={de.repechage.poolTitle}
-              ids={state.pool}
+              ids={state.remaining}
               name={name}
               empty={de.repechage.poolEmpty}
               which="pool"
@@ -329,7 +329,7 @@ function drawReason(state: RepechageState): string | undefined {
   if (state.need === 0) {
     return de.repechage.slotsFilled;
   }
-  return state.pool.length === 0 ? de.repechage.drawPoolEmpty : undefined;
+  return state.remaining.length === 0 ? de.repechage.drawPoolEmpty : undefined;
 }
 
 function blockerText(blocker: RepechageBlocker): string {

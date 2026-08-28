@@ -72,7 +72,7 @@ const started = () => startRepechage(qualified(13));
 /** Draws and declines everybody, which empties the pot with a place open. */
 function exhausted(): Tournament {
   let document = started();
-  while (state(document).pool.length > 0 && state(document).need > 0) {
+  while (state(document).remaining.length > 0 && state(document).need > 0) {
     document = declineCandidate(drawCandidate(document));
   }
   return document;
@@ -100,7 +100,10 @@ function panel(
       blockers={[]}
       canStart={current === null}
       canDraw={
-        current !== null && current.pending === null && current.pool.length > 0 && current.need > 0
+        current !== null &&
+        current.pending === null &&
+        current.remaining.length > 0 &&
+        current.need > 0
       }
       groups={document.groups}
       participant="GROUP"
@@ -222,7 +225,7 @@ describe('the running phase', () => {
       document.querySelectorAll(`[data-repechage-list="${which}"] [data-group-id]`);
 
     expect(list('through')).toHaveLength(current.through.length);
-    expect(list('pool')).toHaveLength(current.pool.length);
+    expect(list('pool')).toHaveLength(current.remaining.length);
     expect(list('declined')).toHaveLength(1);
   });
 
@@ -280,7 +283,7 @@ describe('the fallback dialog', () => {
         ...state(filled),
         need: 1,
         declined: [],
-        pool: [],
+        remaining: [],
         fallbackNeeded: true,
         complete: false,
       },

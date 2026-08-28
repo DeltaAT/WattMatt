@@ -99,7 +99,7 @@ function play(groupCount: number, { tables = 4, declines = 0 } = {}): Played {
         // Draining the pot is the only way to reach §4's fallback.
         document = declined < declines ? declineCandidate(document) : acceptCandidate(document);
         declined += 1;
-      } else if (state.pool.length > 0) {
+      } else if (state.remaining.length > 0) {
         document = drawCandidate(document);
       } else {
         // *Freilose vergeben*: §4's default, and the one answer that is always
