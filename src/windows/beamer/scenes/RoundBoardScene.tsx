@@ -11,10 +11,10 @@ import type { Group, Match } from '@/domain/types';
 import { de } from '@/i18n';
 import { GroupBox, type GroupBoxScale, type GroupBoxState } from '@/ui';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
+import { TABLE_TYPE } from '@/windows/beamer/tableType';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { useResultFlip } from '@/windows/beamer/useResultFlip';
 import { groupNumber } from '@/windows/groupLabel';
-import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `ROUND_BOARD`: the live round, green and red (issue #19).
@@ -168,16 +168,23 @@ function Section({
       data-queue={isQueue ? '' : undefined}
     >
       {/*
-       * The table, small and above its matches — the shape issue #75 asks for,
-       * one level up because this board already groups by table. It is the
-       * table's number and nothing else: `Tisch` printed over every section is
-       * the width the numerals under it could have had.
+       * The table, above its matches — the shape issue #75 asks for, one level
+       * up because this board already groups by table, and at the size issue
+       * #100 asks for. The label is drawn as the host has it, so the default
+       * one reads `Tisch 3`: the word is what stops a number over two numbers
+       * reading as a third one, and it comes from the same string the host
+       * panel shows rather than from a second opinion about what a table is
+       * called.
+       *
+       * `truncate` keeps it one unit that never wraps — `Tisch` and its number
+       * belong on one line, and a section heading that took two would push
+       * every card in the column down.
        */}
       <h2
-        className={`wm-display wm-tnum font-bold text-wm-text-muted ${HEADING[size]}`}
+        className={`wm-display wm-tnum truncate font-bold text-wm-text-muted ${TABLE_TYPE[size]}`}
         data-table-label=""
       >
-        {isQueue ? de.beamer.roundBoard.queueTitle : tableNumber(table.label)}
+        {isQueue ? de.beamer.roundBoard.queueTitle : table.label}
       </h2>
 
       {/*
@@ -351,12 +358,6 @@ const BOX_SCALE: Record<Density, GroupBoxScale> = {
   roomy: 'hero',
   normal: 'h1',
   dense: 'h2',
-};
-
-const HEADING: Record<Density, string> = {
-  roomy: 'text-beamer-h3',
-  normal: 'text-beamer-body',
-  dense: 'text-beamer-body',
 };
 
 const RIBBON: Record<Density, string> = {

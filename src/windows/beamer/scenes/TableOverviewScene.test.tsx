@@ -136,11 +136,14 @@ describe('the table overview scene', () => {
   });
 
   /*
-   * The default label is `Tisch 3` and the word is as redundant on a wall of
-   * tables as `Gruppe` was. A table the host renamed keeps whatever they wrote
-   * (issue #75, `tableNumber`).
+   * The table's own label, drawn as the host has it (issue #100). The default
+   * one already reads `Tisch 3`, so the word issue #75 stripped comes back
+   * from the string the host panel shows rather than from a second opinion
+   * about what a table is called — and a table renamed `Fenster` is still
+   * `Fenster`, because the label is the host's word for a physical thing in
+   * the room.
    */
-  it('drops the word Tisch from a default label and keeps a renamed one', () => {
+  it('draws the label the host has, word and all', () => {
     const renamed = tournament({
       groups: [group(1), group(2)],
       // The real default a host gets, not the fixture's English stand-in.
@@ -153,7 +156,7 @@ describe('the table overview scene', () => {
 
     const markup = scene(toTournamentSnapshot(renamed));
 
-    expect(markup).toContain('data-table-label="">1<');
+    expect(markup).toContain(`data-table-label="">${de.table.defaultLabel({ n: 1 })}<`);
     expect(markup).toContain('data-table-label="">Fenster<');
   });
 

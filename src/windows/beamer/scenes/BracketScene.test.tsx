@@ -334,6 +334,27 @@ describe('the zoom to a round (issue #26)', () => {
      * placeholder, no dash, and above all no `0`." A queued node and an empty
      * one are simply nodes.
      */
+    /*
+     * The deliberate divergence from issue #100 (docs/STYLEGUIDE.md §4). The
+     * group rounds put the word `Tisch` back in front of the number, because a
+     * bare numeral above two other bare numerals is a third one. Nothing on a
+     * bracket node is a numeral, and the corner this badge sits in has no room
+     * for a word, so here the number stays alone. Pinned with the label a host
+     * actually gets, not the fixture's English stand-in, since the short form
+     * is exactly what that label is cut down to.
+     */
+    it('names it by the number alone, unlike the group rounds', () => {
+      const renamed: Tournament = {
+        ...drawn(8, 2),
+        tables: drawn(8, 2).tables.map((entry, index) => ({
+          ...entry,
+          label: de.table.defaultLabel({ n: index + 1 }),
+        })),
+      };
+
+      expect(Object.values(tablesOn(scene(renamed)))).toEqual(['1', '2']);
+    });
+
     it('names nothing at all on a node that has no table', () => {
       const markup = scene(drawn(8, 2));
       const named = Object.keys(tablesOn(markup));
@@ -395,19 +416,22 @@ describe('the zoom to a round (issue #26)', () => {
 
     /*
      * Small and subordinate: the names are the content, the table is a
-     * reference. One step under the names at every density, bottoming out at
-     * `beamer-caption` — which is the step the issue asks for.
+     * reference. One step under the names where there is a step left, and
+     * never below the 32 px floor (issue #100) — `beamer-caption` is what
+     * docs/STYLEGUIDE.md §2 reserves for persistent chrome, and the number a
+     * pair walks to a table on is not chrome.
      */
-    it('is drawn under the names at every field size', () => {
+    it('is drawn no larger than the names and never below the floor', () => {
       for (const [size, expected] of [
-        [4, 'text-beamer-body'],
-        [8, 'text-beamer-caption'],
-        [16, 'text-beamer-caption'],
+        [4, 'text-beamer-h3'],
+        [8, 'text-beamer-body'],
+        [16, 'text-beamer-body'],
       ] as const) {
         const markup = scene(drawn(size, 2));
         const badge = /class="([^"]*)"\s+data-node-table/.exec(markup)?.[1] ?? '';
 
         expect(badge, `field of ${String(size)}`).toContain(expected);
+        expect(badge, `field of ${String(size)}`).not.toContain('text-beamer-caption');
       }
     });
 
@@ -424,7 +448,7 @@ describe('the zoom to a round (issue #26)', () => {
       );
       const badge = /class="([^"]*)"\s+data-node-table/.exec(markup)?.[1] ?? '';
 
-      expect(badge).toContain('text-beamer-body');
+      expect(badge).toContain('text-beamer-h3');
     });
 
     /*

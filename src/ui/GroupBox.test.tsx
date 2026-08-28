@@ -38,6 +38,9 @@ function numberClasses(markup: string): string[] {
   return (/class="([^"]*)"[^>]*data-group-number/.exec(markup)?.[1] ?? '').split(' ');
 }
 
+/** The middle dot the neutral box used to draw, as a char code so it is visible. */
+const DOT = String.fromCharCode(0xb7);
+
 const STATES: GroupBoxState[] = ['NEUTRAL', 'WINNER', 'LOSER'];
 const SCALES: GroupBoxScale[] = ['hero', 'h1', 'h2'];
 
@@ -91,6 +94,58 @@ describe('the group box', () => {
     expect(numberClasses(two)).toEqual(numberClasses(one));
     expect(numberClasses(one)).toContain('min-w-[2ch]');
     expect(numberClasses(one)).toContain('wm-tnum');
+  });
+
+  /*
+   * Issue #100. The neutral box used to draw a `·`, and on a pairing that put
+   * one squarely in the gap between the two numbers — the one place issue #88
+   * wanted empty, because a mark between two numerals is what lets them read
+   * as a single string again. The slot stays reserved so a result landing
+   * still moves nothing; it is simply blank until there is a result.
+   */
+  it('draws no glyph at all while there is no result', () => {
+    const markup = box({ number: '7', state: 'NEUTRAL', scale: 'hero' });
+
+    expect(markup).toContain('data-outcome-icon=""></span>');
+    expect(markup).not.toContain(DOT);
+  });
+
+  /*
+   * "Centre on the numeral, not on the text box" (issue #100).
+   *
+   * `justify-center` centres the row — glyph, gap and number — so the numeral
+   * itself sat half a glyph right of the box's middle, and a box stretched to
+   * the width of a match card sat a long way right of it. The fix is a mirror
+   * of the glyph slot on the other side, which is only a fix while the two are
+   * the same width.
+   */
+  it('reserves the same width on both sides of the numeral', () => {
+    for (const scale of SCALES) {
+      for (const state of STATES) {
+        const markup = box({ number: '12', state, scale });
+        const icon = /class="([^"]*)"[^>]*data-outcome-icon/.exec(markup)?.[1] ?? '';
+        const balance = /class="([^"]*)"[^>]*data-outcome-balance/.exec(markup)?.[1] ?? '';
+
+        const widths = (classes: string) =>
+          classes
+            .split(' ')
+            .filter((name) => /^(?:w-|shrink-|text-beamer-)/.test(name))
+            .sort();
+
+        expect(widths(balance), `${scale} / ${state}`).toEqual(widths(icon));
+        expect(widths(icon), `${scale} / ${state}`).toContain('w-[1.2em]');
+      }
+    }
+  });
+
+  /* The mirror is a spacer, not a second signal: whatever the glyph slot says,
+   * the other side says nothing. */
+  it('keeps the mirrored slot empty in every state', () => {
+    for (const state of STATES) {
+      expect(box({ number: '7', state, scale: 'h1' }), state).toContain(
+        'data-outcome-balance=""></span>',
+      );
+    }
   });
 
   /*
