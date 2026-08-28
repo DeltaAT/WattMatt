@@ -14,7 +14,7 @@ import {
 
 /**
  * Issue #7 acceptance criterion: the example in docs/FILE-FORMAT.md
- * §"Schema (v1)" round-trips through the schema unchanged.
+ * §"Schema (v8)" round-trips through the schema unchanged.
  *
  * The example is read out of the document rather than copied into a fixture.
  * A copy is a second source of truth that goes stale silently — and the

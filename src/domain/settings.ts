@@ -1,4 +1,4 @@
-import type { ParticipantLabel, Tournament } from '@/domain/types';
+import type { ParticipantLabel, TableAssignmentOrder, Tournament } from '@/domain/types';
 
 /**
  * The host's choices about a tournament that are not part of its algorithm
@@ -111,6 +111,37 @@ export function isNamingAtEditable(tournament: Tournament): boolean {
 
 /** The phases from `NAMING` on — every one of them past the threshold. */
 const NAMES_REQUESTED = new Set<Tournament['phase']>(['NAMING', 'BRACKET', 'CEREMONY']);
+
+/**
+ * Which end of the table list free tables are handed out from (issue #101,
+ * docs/TOURNAMENT-RULES.md §3).
+ *
+ * Which end of a hall is the good end is a property of the room and not
+ * something the app can work out: the high-numbered tables may be the ones by
+ * the beamer, the bar or the stage, and a host who set the room up that way
+ * wants those filled first.
+ *
+ * **Never locked, and it changes only what happens next.** The same rule
+ * `reserveTable` follows and for the same reason (`@/domain/tables`): a match
+ * already on a table stays on it whichever way the setting is flipped, because
+ * the pair are playing and the room is watching. Flipping it mid-round moves
+ * nothing and reorders no queue — `queuedMatches` is still draw order, which is
+ * the position each pair earned. It decides which table the *next* assignment
+ * reaches for, and nothing else.
+ *
+ * With one table it is a setting with no observable effect, which is the
+ * honest answer rather than a reason to hide the control: a host who adds a
+ * second table an hour later should not have to discover the option then.
+ */
+export function setTableAssignmentOrder(
+  tournament: Tournament,
+  tableAssignmentOrder: TableAssignmentOrder,
+): Tournament {
+  if (tournament.settings.tableAssignmentOrder === tableAssignmentOrder) {
+    return tournament;
+  }
+  return { ...tournament, settings: { ...tournament.settings, tableAssignmentOrder } };
+}
 
 /**
  * Halves animation durations for weak graphics or a laggy projector

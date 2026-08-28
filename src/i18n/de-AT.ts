@@ -113,6 +113,8 @@ export const deAT = {
       namingAtSet: (params: { n: number }) => `Namen ab ${params.n} Teilnehmenden`,
       performanceModeOn: 'Performance-Modus eingeschaltet',
       performanceModeOff: 'Performance-Modus ausgeschaltet',
+      /** The direction is read back out of the tournament, like the name above. */
+      tableAssignmentOrderSet: (params: { order: string }) => `Tischvergabe: ${params.order}`,
       tournamentStarted: 'Turnier gestartet',
 
       /**
@@ -726,6 +728,20 @@ export const deAT = {
     performanceMode: 'Performance-Modus',
     performanceModeHint:
       'Für schwache Grafik oder einen trägen Beamer: Animationen laufen in halber Zeit. Jederzeit umschaltbar.',
+
+    /** Which end of the table list gets filled first (issue #101). */
+    tableAssignmentOrder: 'Tischvergabe',
+    tableAssignmentOrderHint:
+      'An welchem Ende der Tischliste freie Tische vergeben werden. Betrifft nur künftige Zuteilungen — laufende Partien bleiben, wo sie sind.',
+    /**
+     * Named by the end of the list rather than by a table number: the list can
+     * be reordered and a table can be renamed (issue #13), so "last table"
+     * means the last row of the list the host is looking at.
+     */
+    tableAssignmentOrderOption: {
+      ASCENDING: 'Erster Tisch zuerst',
+      DESCENDING: 'Letzter Tisch zuerst',
+    },
 
     /**
      * The draw seed, shown and never editable (CLAUDE.md golden rule 7). It is

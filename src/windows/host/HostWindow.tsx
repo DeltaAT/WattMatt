@@ -413,6 +413,7 @@ export function HostWindow() {
               onParticipantChange={settings.setParticipant}
               onNamingAtChange={settings.setNamingAt}
               onPerformanceModeChange={settings.setPerformanceMode}
+              onTableAssignmentOrderChange={settings.setTableAssignmentOrder}
             />
 
             {/*

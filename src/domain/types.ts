@@ -10,7 +10,7 @@ import {
 } from '@/domain/ids';
 
 /**
- * The shape of everything — docs/FILE-FORMAT.md §"Schema (v1)".
+ * The shape of everything — docs/FILE-FORMAT.md §"Schema (v8)".
  *
  * Schema first, type second: every entity is a Zod schema and its TypeScript
  * type is inferred from it. One definition, so a schema and its type cannot
@@ -137,6 +137,22 @@ export type BracketRound = z.infer<typeof bracketRoundSchema>;
 /** Affects German UI wording only (docs/FILE-FORMAT.md `settings`). */
 export const participantLabelSchema = z.enum(['GROUP', 'TEAM', 'PLAYER']);
 export type ParticipantLabel = z.infer<typeof participantLabelSchema>;
+
+/**
+ * Which end of the host's table list the app hands tables out from (issue #101).
+ *
+ * `ASCENDING` is the first table first and the behaviour every build until now
+ * had. `DESCENDING` is the last table first, for the room where the
+ * high-numbered tables are the ones by the beamer, the bar or the stage — which
+ * end of the hall is the good end is a property of the venue and nothing the
+ * app can work out.
+ *
+ * It orders the host's **list**, never a number parsed out of a label: tables
+ * can be renamed and reordered (issue #13), and "the last table" means the last
+ * row of the list the host is looking at (docs/TOURNAMENT-RULES.md §3).
+ */
+export const tableAssignmentOrderSchema = z.enum(['ASCENDING', 'DESCENDING']);
+export type TableAssignmentOrder = z.infer<typeof tableAssignmentOrderSchema>;
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -330,7 +346,7 @@ export type Bracket = z.infer<typeof bracketSchema>;
  * pot at one position of the RNG stream — it is simply everyone the
  * `Hoffnungsrunde` left behind, which is written on the groups themselves as
  * `status === 'CONSOLATION'` and survives a reload without anything having to
- * remember a shuffle (docs/FILE-FORMAT.md §"Schema (v5)").
+ * remember a shuffle (docs/FILE-FORMAT.md §"Schema (v8)").
  */
 export const consolationStateSchema = z.enum(['DECLINED', 'RUNNING', 'FINISHED']);
 export type ConsolationState = z.infer<typeof consolationStateSchema>;
@@ -385,6 +401,8 @@ export const settingsSchema = z.object({
   /** Field size at which names become required (docs/OPEN-QUESTIONS.md #8). */
   namingAt: z.number().int().positive(),
   performanceMode: z.boolean(),
+  /** Which end of the table list a free table is taken from (issue #101). */
+  tableAssignmentOrder: tableAssignmentOrderSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

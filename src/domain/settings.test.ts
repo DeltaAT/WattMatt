@@ -7,6 +7,7 @@ import {
   setNamingAt,
   setParticipantLabel,
   setPerformanceMode,
+  setTableAssignmentOrder,
   setTournamentName,
 } from '@/domain/settings';
 import { midTournament, tournament } from '@/domain/testFixtures';
@@ -170,5 +171,59 @@ describe('setPerformanceMode', () => {
     const before = tournament();
 
     expect(setPerformanceMode(before, false)).toBe(before);
+  });
+});
+
+/**
+ * Which end of the table list free tables are handed out from (issue #101).
+ *
+ * Where the direction is *applied* is `freeTables` and the tests around the
+ * draw; what matters here is the same claim every other setting makes — it
+ * decides one thing and touches nothing else. This one is worth stating
+ * plainly, because the thing it must not touch is a match a room is watching.
+ */
+describe('setTableAssignmentOrder', () => {
+  it('records the direction the host chose', () => {
+    expect(setTableAssignmentOrder(tournament(), 'DESCENDING').settings.tableAssignmentOrder).toBe(
+      'DESCENDING',
+    );
+  });
+
+  it('starts out filling from the first table', () => {
+    expect(tournament().settings.tableAssignmentOrder).toBe('ASCENDING');
+  });
+
+  /*
+   * The rule this setting shares with `reserveTable`: it changes what happens
+   * next and never what is happening. A tournament mid-event has a match on a
+   * table and a bracket on the wall, and neither may move because the host
+   * pointed the next assignment at the other end of the hall.
+   */
+  it('changes nothing else about a tournament that is under way', () => {
+    const before = midTournament();
+
+    const after = setTableAssignmentOrder(before, 'DESCENDING');
+
+    expect({ ...after, settings: before.settings }).toEqual(before);
+    expect(after.tables).toBe(before.tables);
+    expect(after.rounds).toBe(before.rounds);
+  });
+
+  /* A no-op must not commit, for the reason `setParticipantLabel` gives: a step
+   * on the undo stack that undoes nothing, and a saved file marked dirty. */
+  it('hands the tournament straight back when it is already that direction', () => {
+    const before = tournament();
+
+    expect(setTableAssignmentOrder(before, 'ASCENDING')).toBe(before);
+  });
+
+  /* Never locked by the phase. The host carries two more tables in during the
+   * quarter-finals, and the setting is exactly as usable then. */
+  it('is allowed at any phase', () => {
+    const late = midTournament();
+
+    expect(setTableAssignmentOrder(late, 'DESCENDING').settings.tableAssignmentOrder).toBe(
+      'DESCENDING',
+    );
   });
 });

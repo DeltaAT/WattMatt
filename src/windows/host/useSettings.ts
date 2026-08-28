@@ -2,9 +2,14 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 import { DEFAULT_SETTINGS } from '@/domain/factory';
 import { isNamingAtEditable } from '@/domain/settings';
-import type { ParticipantLabel, Settings } from '@/domain/types';
+import type { ParticipantLabel, Settings, TableAssignmentOrder } from '@/domain/types';
 import { setParticipantLabel } from '@/store/actions/groups';
-import { setNamingAt, setPerformanceMode, setTournamentName } from '@/store/actions/settings';
+import {
+  setNamingAt,
+  setPerformanceMode,
+  setTableAssignmentOrder,
+  setTournamentName,
+} from '@/store/actions/settings';
 import { tournamentStore } from '@/store/session';
 
 /**
@@ -30,6 +35,7 @@ export interface SettingsHandle {
   setParticipant: (label: ParticipantLabel) => void;
   setNamingAt: (namingAt: number) => void;
   setPerformanceMode: (performanceMode: boolean) => void;
+  setTableAssignmentOrder: (order: TableAssignmentOrder) => void;
 }
 
 export function useSettings(): SettingsHandle {
@@ -57,6 +63,10 @@ export function useSettings(): SettingsHandle {
     setNamingAt: useCallback((namingAt: number) => setNamingAt(tournamentStore, namingAt), []),
     setPerformanceMode: useCallback(
       (performanceMode: boolean) => setPerformanceMode(tournamentStore, performanceMode),
+      [],
+    ),
+    setTableAssignmentOrder: useCallback(
+      (order: TableAssignmentOrder) => setTableAssignmentOrder(tournamentStore, order),
       [],
     ),
   };
