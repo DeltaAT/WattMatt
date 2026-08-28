@@ -4,9 +4,9 @@ import { occupancyBoard, type TableSlot } from '@/domain/tables';
 import type { Group } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
+import { TABLE_TYPE } from '@/windows/beamer/tableType';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupNumber } from '@/windows/groupLabel';
-import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `TABLE_OVERVIEW`: who plays where, on the projector (issue #13).
@@ -98,13 +98,22 @@ function TableCard({
       data-table-status={table.status}
     >
       {/*
-       * The table's number, which is what somebody scans this wall for. It
-       * keeps a step of its own — this is the one scene whose subject *is* the
-       * tables, and shrinking their labels to make room for the numerals would
-       * be optimising the wrong half (issue #75).
+       * The table's label, which is what somebody scans this wall for, drawn as
+       * the host has it — `Tisch 3` by default (issue #100). It keeps a step of
+       * its own: this is the one scene whose subject *is* the tables, and
+       * shrinking their labels to make room for the numerals would be
+       * optimising the wrong half (issue #75). `TABLE_TYPE` is the same ladder
+       * the `Auslosung` and the round board use, so a table is the same size on
+       * all three screens the room sees it on.
+       *
+       * `whitespace-nowrap` with `shrink-0`: the label is one unit, and a
+       * `Tisch` that wrapped away from its number would be two.
        */}
-      <span className={`wm-display wm-tnum shrink-0 font-bold ${TYPE[size]}`} data-table-label="">
-        {tableNumber(table.label)}
+      <span
+        className={`wm-display wm-tnum shrink-0 whitespace-nowrap font-bold ${TABLE_TYPE[size]}`}
+        data-table-label=""
+      >
+        {table.label}
       </span>
 
       {/*

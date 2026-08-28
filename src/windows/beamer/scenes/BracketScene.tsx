@@ -348,6 +348,14 @@ function Node({
  * Nothing at all when there is no table — no placeholder, no dash, no `0`. A
  * node without one is simply a node, which is what the issue means by "looks
  * deliberate, not broken": there is nothing there to be broken.
+ *
+ * **And it keeps the bare number while the group rounds went back to the
+ * word** (issue #100, docs/STYLEGUIDE.md §4). That divergence is chosen, not
+ * inherited: `Tisch` came back to the round board because a bare number over
+ * two bare numbers is a third number, and there is no numeral anywhere on a
+ * bracket node for this one to be confused with. The node is also the one
+ * place genuinely short of room — this badge sits in a corner it must not grow
+ * out of, over a box reserved for another word.
  */
 function NodeTable({ node, chips }: { node: BracketNode; chips: ChipContext }) {
   const tableId = bracketNodeTableId(node);

@@ -122,8 +122,8 @@ The beamer root font size is resolution-relative so the same layout works on 720
 | --- | --- | --- | --- |
 | `beamer-hero` | 10 | 160 px | Winner name, single-number reveals |
 | `beamer-h1` | 6 | 96 px | Scene title (`ACHTELFINALE`) |
-| `beamer-h2` | 4 | 64 px | Group name in a match card |
-| `beamer-h3` | 3 | 48 px | Table label, round label |
+| `beamer-h2` | 4 | 64 px | Group name in a match card, table label where the field leaves room |
+| `beamer-h3` | 3 | 48 px | Table label on a crowded board, round label |
 | `beamer-body` | 2 | 32 px | **The floor a scene is designed to.** See the note below |
 | `beamer-caption` | 1.5 | 24 px | Persistent chrome (clock, tournament name), and the bracket's table reference |
 
@@ -183,7 +183,10 @@ beamer. It gets a box, and it is this box in every group-round scene, driven by 
 the way the group chip is.
 
 One component, three states — `NEUTRAL` while the pairing is only drawn or still being played,
-then `WINNER` or `LOSER`. **The three differ in paint and in nothing else.** Padding, radius,
+then `WINNER` or `LOSER`. `NEUTRAL` draws no glyph at all (issue #100): it used to draw a `·`,
+which on a pairing put a dot squarely in the gap between the two numbers — the one place issue #88
+needs empty, since a mark between two numerals is what lets them read as a single string again.
+**The three differ in paint and in nothing else.** Padding, radius,
 border weight and the position of the number are identical in all of them, which is what makes
 two separate promises true at once: nothing moves when a result lands (issue #77), and the box
 the room watches a pairing land in during the `Auslosung` is the same object that turns green
@@ -200,6 +203,12 @@ Two lengths in it are relative rather than tokens, and deliberately so:
   stays true across the type ladder if it is stated in numerals; the row keeps `wm-display`
   and its type step for exactly this reason, since that is what `ch` is measured in.
 
+The glyph slot is **mirrored** — the same width, empty, on the far side of the numeral (issue
+#100). `justify-center` centres the row, so with a glyph on one side only the numeral itself sat
+half a glyph right of the box's middle, and a box stretched to the width of a match card sat a
+long way right of it. `text-align: center` was true and the picture was still off-centre. Centre
+on the numeral, never on the text box, and check it optically at 10 m.
+
 **Bracket node** (`BRACKET`, issue #90) — two name slots, and the number of the table the
 match is on in the top-right corner. The table is a *reference*, not content: one type step
 under the names at every density (`beamer-body` → `beamer-caption`), muted, and **absolutely
@@ -207,6 +216,12 @@ positioned**, so the names keep every pixel they had and no node changes height 
 starts or ends. It lands over the box each slot reserves for `SIEGER` / `AUSGESCHIEDEN`, which
 can never collide with it — that word appears only once the match is decided, and a decided
 match has no table to name.
+
+It also keeps the **bare number** while the group rounds went back to the word (issue #100),
+and that divergence is a decision rather than a leftover. `Tisch` came back to the round board
+because a bare numeral above two other bare numerals reads as a third one; nothing on a bracket
+node is a numeral, so there is nothing here for it to be confused with — and the corner it sits
+in is the one place on the beamer genuinely short of room.
 
 Whether there is one to name is `bracketNodeTableId` in `@/domain/bracket`, shared with the
 host panel. A node keeps its `tableId` after it is played (docs/OPEN-QUESTIONS.md #37) but the
@@ -229,12 +244,33 @@ is the rule (issue #75):
 - **On the host screen it is the full label** — `groupLabel`, participant wording and all.
   A 50 cm control panel has no density problem, and the host needs the sentence.
 
-Same rule for the table: on the beamer a match card names it by its number
-(`tableNumber` in `@/windows/tableLabel`), which is the default label `Tisch 3` with the word
-taken off. It sits above both group boxes and outside them, so a bare `3` over a bare `7`
-cannot read as a third participant (issue #88). A table the host renamed keeps whatever they wrote — the label is their word for a
-physical thing in the room. If a dry run shows a bare number over a bare number is ambiguous,
-the fallback the issue holds in reserve is a compact `T` marker, not the whole word.
+**Not the same rule for the table — issue #100 reversed that half of #75.** A group-round beamer
+scene draws `table.label` verbatim, which is `Tisch 3` for every table nobody renamed and the
+host's own word for the ones they did. The word carries its weight after all: a bare `3` above a
+bare `7` and a bare `12` is a third number, and the fallback #75 held in reserve — a compact `T`
+— was not what a room at ten metres needed. It comes from `de.table.defaultLabel` by way of the
+stored label, so the wall and the host panel cannot disagree about what a table is called.
+
+The label sits above both group boxes and outside them (issue #88), is **one unit** that never
+wraps, and ladders through `TABLE_TYPE` in `@/windows/beamer/tableType.ts`: `beamer-h2` where
+the field leaves room, `beamer-h3` below that, and never the 32 px floor it used to sit on. The
+same ladder in all three scenes that name a table — the `Auslosung`, the round board and the
+`Tischbelegung` — so a table is the same size on every screen the room sees it on.
+
+It stays **subordinate to the group numbers**, which remain the dominant element on the card:
+the numbers answer "is this mine" and the table answers "where". Subordination is carried by
+three things at once and not by size alone — the label is muted, a weight lighter, and it
+carries a word while the numbers are bare — which is what lets the densest step sit at three
+quarters of the numerals' size without competing with them.
+
+A match with no table shows **no table label at all**: not `Tisch —`, not `Tisch 0`. The
+`Auslosung` puts a sentence there instead — `Wartet auf Tisch`, or `Freilos — steigt auf` — at
+the 32 px floor, because those are sentences rather than labels and four words at the label's
+step would truncate on a crowded board. The step lives on the inner element, so the line box is
+still the label's height whatever it holds and an undrawn slot reserves the right space for all
+three (issue #76).
+
+`tableNumber` in `@/windows/tableLabel` is therefore the bracket's function alone.
 
 `settings.participantLabel` therefore no longer reaches a beamer **match card** at all. It
 still decides the wording of the one-line scene headings that count participants rather than

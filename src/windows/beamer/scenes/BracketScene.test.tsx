@@ -334,6 +334,27 @@ describe('the zoom to a round (issue #26)', () => {
      * placeholder, no dash, and above all no `0`." A queued node and an empty
      * one are simply nodes.
      */
+    /*
+     * The deliberate divergence from issue #100 (docs/STYLEGUIDE.md §4). The
+     * group rounds put the word `Tisch` back in front of the number, because a
+     * bare numeral above two other bare numerals is a third one. Nothing on a
+     * bracket node is a numeral, and the corner this badge sits in has no room
+     * for a word, so here the number stays alone. Pinned with the label a host
+     * actually gets, not the fixture's English stand-in, since the short form
+     * is exactly what that label is cut down to.
+     */
+    it('names it by the number alone, unlike the group rounds', () => {
+      const renamed: Tournament = {
+        ...drawn(8, 2),
+        tables: drawn(8, 2).tables.map((entry, index) => ({
+          ...entry,
+          label: de.table.defaultLabel({ n: index + 1 }),
+        })),
+      };
+
+      expect(Object.values(tablesOn(scene(renamed)))).toEqual(['1', '2']);
+    });
+
     it('names nothing at all on a node that has no table', () => {
       const markup = scene(drawn(8, 2));
       const named = Object.keys(tablesOn(markup));

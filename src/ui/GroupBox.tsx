@@ -85,7 +85,7 @@ export function GroupBox({
       data-outcome={state}
     >
       {/*
-       * A fixed box, so `·` → `✓` cannot nudge the number sideways. The three
+       * A fixed box, so `✓` → `✗` cannot nudge the number sideways. The two
        * glyphs have different advance widths, and nothing may move when a
        * result lands — inside the box as much as outside it.
        */}
@@ -111,13 +111,43 @@ export function GroupBox({
       >
         {number}
       </span>
+
+      {/*
+       * The empty half of the glyph slot (issue #100).
+       *
+       * `justify-center` centres the *row*, which is the icon, the gap and the
+       * number — so the numeral itself sat half a glyph to the right of the
+       * box's middle, and a box stretched to the width of a match card sat a
+       * long way right of it. `text-align: center` was true and the picture was
+       * still off-centre, which is the whole of the issue's "centre on the
+       * numeral, not on the text box".
+       *
+       * So the slot is mirrored: the same width and the same gap on the other
+       * side, empty. The numeral is then centred on the box's axis in every
+       * state, and the geometry is still identical across the three — both
+       * slots are reserved whether or not there is a glyph to put in one.
+       */}
+      <span
+        aria-hidden="true"
+        className={`w-[1.2em] shrink-0 ${ICON_TYPE[scale]}`}
+        data-outcome-balance=""
+      />
     </span>
   );
 }
 
-/** Filled shapes, not thin outlines — a hairline glyph dies on a projector. */
+/**
+ * Filled shapes, not thin outlines — a hairline glyph dies on a projector.
+ *
+ * `NEUTRAL` draws nothing at all (issue #100). It used to draw a `·`, and on a
+ * pairing that put a dot squarely in the gap between the two numbers — `7 · 12`
+ * — which is the one place issue #88 wanted empty, because a mark between two
+ * numerals is what makes them read as one string again. The slot is still
+ * reserved, so a result landing still moves nothing; it is simply blank until
+ * there is a result to report.
+ */
 const STATE_ICON: Record<GroupBoxState, string> = {
-  NEUTRAL: '·',
+  NEUTRAL: '',
   WINNER: '✓',
   LOSER: '✗',
 };

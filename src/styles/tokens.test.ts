@@ -207,18 +207,53 @@ describe('colour literals live only in the token file', () => {
   // `#0f0`, `#0e1116`, `#0e1116ff` — but not `#root`, which is a selector.
   const HEX_COLOUR = /#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\b/gi;
 
+  /**
+   * Comments are stripped before the scan (issue #100).
+   *
+   * The rule is that no colour literal can reach the screen from outside the
+   * token file, and a comment cannot put one there. It has to be stripped
+   * rather than tolerated, because from issue #100 on a three-digit issue
+   * reference is character-for-character a three-digit hex colour, `#100`
+   * being both, and this file is full of them by design: every non-obvious
+   * rule in the codebase cites the issue it came from (CLAUDE.md section 6).
+   *
+   * A line comment is only recognised at the start of a line or after
+   * whitespace, so a `//` inside a string is left alone and cannot swallow the
+   * rest of the line with a real colour on it.
+   */
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+  }
+
   it('finds no hex colour outside src/styles/tokens.css', () => {
     const offenders: string[] = [];
     for (const file of [...renderingSources('src'), 'index.html']) {
       if (file === TOKENS_FILE) {
         continue;
       }
-      const contents = readFileSync(join(REPO_ROOT, file), 'utf8');
+      const contents = withoutComments(readFileSync(join(REPO_ROOT, file), 'utf8'));
       for (const match of contents.matchAll(HEX_COLOUR)) {
         offenders.push(`${file}: ${match[0]}`);
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  /*
+   * The strip must not become a hole in the rule it serves: a colour written in
+   * code is still found, and the `#` of an issue reference in a comment is not.
+   */
+  it('still finds a colour in code, and no longer an issue number in a comment', () => {
+    const sample = [
+      "const brand = '#0f0';",
+      '/** Restated from issue #100, and again in #123456 words. */',
+      "const url = 'https://example.invalid/#abc';",
+      '// #fff would be a token, not a literal',
+    ].join('\n');
+
+    const found = [...withoutComments(sample).matchAll(HEX_COLOUR)].map(([hit]) => hit);
+
+    expect(found).toEqual(['#0f0', '#abc']);
   });
 
   it('scans the files it claims to scan', () => {

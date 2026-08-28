@@ -4,9 +4,9 @@ import type { Group, Match, Table } from '@/domain/types';
 import { de } from '@/i18n';
 import { GroupBox, type GroupBoxScale } from '@/ui';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
+import { TABLE_TYPE } from '@/windows/beamer/tableType';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
 import { groupNumber } from '@/windows/groupLabel';
-import { tableNumber } from '@/windows/tableLabel';
 
 /**
  * `DRAW`: the Auslosung, live in front of the room (issue #18, redesigned by
@@ -198,13 +198,20 @@ function PairingCard({
       aria-hidden={revealed ? undefined : 'true'}
     >
       {/*
-       * Where the pairing is going, small and above the numbers — the shape
-       * issue #75 asks for. The table is its number and nothing else: `Tisch`
-       * repeated across thirty-two cards is the width the numerals could have
-       * had. It is drawn muted and at a fifth of the numerals' size, which is
-       * what keeps a bare `3` over a bare `7` from reading as a third
-       * participant — the `Tisch`/`T` marker the issue holds in reserve is one
-       * line away if a dry run says the size difference is not enough.
+       * Where the pairing is going, above the numbers and outside their boxes —
+       * the shape issue #75 asks for, at the size issue #100 asks for. The
+       * label is the table's own, drawn exactly as the host has it: the default
+       * one already reads `Tisch 3`, so the word comes back from the same
+       * string the host panel shows and the wall and the control screen cannot
+       * disagree about what a table is called. A table renamed `Fenster` still
+       * says `Fenster` — the label is the host's word for a physical thing in
+       * the room.
+       *
+       * Muted, a weight lighter than the numerals and a step or two under them
+       * (`TABLE_TYPE`), which is what keeps it subordinate now that it is big
+       * enough to read: the group numbers stay the dominant element on the
+       * card. The word is what stops it reading as a third participant, which
+       * the size difference alone was being asked to do before.
        *
        * Not uppercased, unlike the ribbons that share this slot elsewhere: a
        * table label is the host's own word for a physical thing in the room,
@@ -215,24 +222,40 @@ function PairingCard({
        * the audience's only explanation of why somebody advanced without
        * playing (docs/TOURNAMENT-RULES.md §9 case 1).
        *
-       * A pairing with no table says so too: there are routinely more matches
-       * than tables (§3), and a card with nothing where the table goes sends
-       * people looking for one.
+       * A pairing with no table says so too — in words, and never as a table
+       * label with a placeholder in it (issue #100): there are routinely more
+       * matches than tables (§3), and both a card with nothing where the table
+       * goes and a card reading `Tisch —` send people looking for one.
+       *
+       * Those two are sentences and stay at the 32 px floor, where a label goes
+       * up. Four words at the label's step would truncate on a crowded board,
+       * and truncating the audience's only explanation of a `Freilos` is worse
+       * than drawing it small. The step lives on the inner element so the line
+       * box is still the label's height whatever it holds — an undrawn slot
+       * cannot know which of the three it will turn out to be, and its reserve
+       * has to be right for all of them (issue #76).
        *
        * `truncate` so this is always exactly one line: it is half of what makes
-       * an empty slot the same height as the card that will replace it.
+       * an empty slot the same height as the card that will replace it, and it
+       * is what keeps `Tisch` and its number one unit that never wraps.
        */}
       <span
-        className="truncate text-beamer-body font-semibold text-wm-text-muted"
+        className={`truncate font-semibold text-wm-text-muted ${TABLE_TYPE[size]}`}
         data-pairing-where=""
       >
-        {!revealed
-          ? EMPTY_SLOT_TEXT
-          : isBye
-            ? de.beamer.draw.byeAdvances
-            : table === null
-              ? de.beamer.draw.waitingForTable
-              : tableNumber(table.label)}
+        {!revealed ? (
+          EMPTY_SLOT_TEXT
+        ) : isBye ? (
+          <span className="text-beamer-body" data-pairing-note="">
+            {de.beamer.draw.byeAdvances}
+          </span>
+        ) : table === null ? (
+          <span className="text-beamer-body" data-pairing-note="">
+            {de.beamer.draw.waitingForTable}
+          </span>
+        ) : (
+          table.label
+        )}
       </span>
 
       {/*
