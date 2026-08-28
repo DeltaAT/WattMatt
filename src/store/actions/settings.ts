@@ -1,5 +1,5 @@
 import * as settings from '@/domain/settings';
-import type { Tournament } from '@/domain/types';
+import type { TableAssignmentOrder, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
 
@@ -64,6 +64,31 @@ export function setPerformanceMode(store: TournamentStore, performanceMode: bool
         ? de.undo.action.performanceModeOn
         : de.undo.action.performanceModeOff,
       log: { action: 'PERFORMANCE_MODE_SET', payload: { performanceMode } },
+    }),
+  );
+}
+
+/**
+ * Chooses which end of the table list free tables are handed out from
+ * (docs/TOURNAMENT-RULES.md §3).
+ *
+ * On the undo stack like every other decision, and worth being there: it is
+ * one press, but the next draw hands out every table by it. Undoing it puts
+ * the direction back and moves nothing else, because the setting only ever
+ * decided what happens next.
+ */
+export function setTableAssignmentOrder(
+  store: TournamentStore,
+  tableAssignmentOrder: TableAssignmentOrder,
+): void {
+  change(
+    store,
+    (document) => settings.setTableAssignmentOrder(document, tableAssignmentOrder),
+    (_before, after) => ({
+      undoLabel: de.undo.action.tableAssignmentOrderSet({
+        order: de.settings.tableAssignmentOrderOption[after.settings.tableAssignmentOrder],
+      }),
+      log: { action: 'TABLE_ASSIGNMENT_ORDER_SET', payload: { tableAssignmentOrder } },
     }),
   );
 }

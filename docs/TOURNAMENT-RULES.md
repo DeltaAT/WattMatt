@@ -107,6 +107,22 @@ matches than tables, the remaining matches get status `WAITING_FOR_TABLE` and ar
 When the host closes a match, its table returns to `FREE` and the next queued match is offered
 to it — the host confirms, so nothing moves on the beamer without the host wanting it.
 
+**Which free table comes next is configurable** (`settings.tableAssignmentOrder`, issue #101).
+`ASCENDING` takes the first table of the host's list and is the default; `DESCENDING` takes the
+last. Which end of a hall is the good end — nearest the beamer, the bar, the stage — is a
+property of the room and nothing the app can work out, so it is the host's to set.
+
+Three things it deliberately does not do:
+
+- It orders the host's **list**, never a number parsed out of a label. Tables can be renamed and
+  reordered (issue #13), so “the last table” means the last row of the table panel.
+- It changes only what happens **next**. Flipping it mid-round moves no running match and
+  reorders no queue — a pair's place in the queue is the one they earned in the draw. The same
+  rule a table reservation follows (§10).
+- A `gesperrt` table is skipped in both directions: out of service is not a table at either end.
+
+It is never locked by the phase, and with a single table it has no observable effect.
+
 A table that is taken out of service or deleted **while a match is on it** does not simply drop
 that match: the host is asked whether it goes back into the queue or straight onto another free
 table, and a table added mid-round joins the free ones immediately (issue #13,

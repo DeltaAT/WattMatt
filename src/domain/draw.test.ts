@@ -29,8 +29,9 @@ import {
 import { indexTournament } from '@/domain/lookup';
 import { createRng } from '@/domain/rng';
 import { activeGroups, currentRound, freeTables } from '@/domain/selectors';
+import { setTableAssignmentOrder } from '@/domain/settings';
 import { startTournament } from '@/domain/start';
-import { addTables, disableTable } from '@/domain/tables';
+import { addTables, disableTable, moveTable } from '@/domain/tables';
 import { FIXED_NOW, group, groupId, tournament } from '@/domain/testFixtures';
 import { tournamentSchema, type Match, type Round, type Tournament } from '@/domain/types';
 
@@ -290,6 +291,177 @@ describe('table assignment and the queue', () => {
       tableIdAt(after, 2),
     ]);
     expect(queuedMatches(round)).toEqual([matchAt(round, 2)]);
+  });
+
+  /*
+   * Issue #101: which end of the host's table list gets filled first.
+   *
+   * Which end of a hall is the good end is a property of the room — the
+   * high-numbered tables may be the ones by the beamer, the bar or the stage —
+   * so the direction is the host's to set. The draw order of the *pairs* never
+   * changes: the front of the draw still plays first, it just plays at the
+   * other end of the room.
+   */
+  describe('the direction tables are handed out in', () => {
+    const descending = (groups: number, tables: number): Tournament =>
+      ready(groups, tables, {
+        settings: { ...tournament().settings, tableAssignmentOrder: 'DESCENDING' },
+      });
+
+    /** The issue's first test: 6 tables, 3 matches, DESCENDING -> 6, 5, 4. */
+    it('fills from the last table when the host asks for it', () => {
+      const before = descending(6, 6);
+      const after = drawRound(before, draw);
+      const round = openRound(after);
+
+      expect(round.matches).toHaveLength(3);
+      expect(round.matches.map(playedOn)).toEqual([
+        tableIdAt(after, 5),
+        tableIdAt(after, 4),
+        tableIdAt(after, 3),
+      ]);
+      // And the three at the near end are still free, which is the whole point.
+      expect(freeTables(after).map((table) => table.id)).toEqual([
+        tableIdAt(after, 2),
+        tableIdAt(after, 1),
+        tableIdAt(after, 0),
+      ]);
+    });
+
+    /* The default is what every build before this one did, so a host who never
+     * opens the setting sees no change at all. */
+    it('fills from the first table by default', () => {
+      const after = drawRound(ready(6, 6), draw);
+
+      expect(openRound(after).matches.map(playedOn)).toEqual([
+        tableIdAt(after, 0),
+        tableIdAt(after, 1),
+        tableIdAt(after, 2),
+      ]);
+    });
+
+    /*
+     * "`gesperrt` tables are skipped in both directions." The filter runs
+     * before the reversal, so both ends walk the same pool — a table out of
+     * service is not the last table, it is not a table.
+     */
+    it('skips a table that is out of service, whichever end it starts from', () => {
+      const withTables = descending(4, 4);
+      const before = disableTable(withTables, tableIdAt(withTables, 3));
+      const after = drawRound(before, draw);
+      const round = openRound(after);
+
+      expect(after.tables[3]?.status).toBe('DISABLED');
+      expect(after.tables[3]?.currentMatchId).toBeNull();
+      expect(round.matches.map(playedOn)).toEqual([tableIdAt(after, 2), tableIdAt(after, 1)]);
+    });
+
+    /*
+     * "Ordering is by the table's position in the host's table list, not by
+     * parsing its label." The list is the thing the host is looking at, and it
+     * can be reordered (issue #13) — so moving a table changes what "last"
+     * means, even though every label stayed where it was.
+     */
+    it('follows the list when the host reorders it, not the labels', () => {
+      const before = descending(4, 3);
+      const moved = moveTable(before, tableIdAt(before, 0), 2);
+      const after = drawRound(moved, draw);
+
+      // `Tisch 1` is now the last row, so it is the first table handed out —
+      // and its label says 1, which is exactly the point.
+      expect(after.tables.map((table) => table.label)).toEqual([
+        tableLabel(2),
+        tableLabel(3),
+        tableLabel(1),
+      ]);
+      expect(openRound(after).matches.map(playedOn)).toEqual([
+        tableIdAt(after, 2),
+        tableIdAt(after, 1),
+      ]);
+    });
+
+    /*
+     * "With one table the setting has no observable effect and must not error."
+     * Reversing a list of one is the same list, which is the honest reason
+     * rather than a special case in the code.
+     */
+    it('does nothing observable with a single table', () => {
+      const one = drawRound(descending(4, 1), draw);
+      const other = drawRound(ready(4, 1), draw);
+      const tables = (document: Tournament) =>
+        openRound(document).matches.map((entry) => entry.tableId);
+
+      expect(tables(one)).toEqual(tables(other));
+      // One table, two pairs: the first plays and the second queues, whichever
+      // end of a list of one the app starts from.
+      expect(tables(one)).toEqual([tableIdAt(one, 0), null]);
+      expect(freeTables(one)).toHaveLength(0);
+    });
+
+    /*
+     * The queue drain. Nothing moves onto a table without the host pressing for
+     * it (CLAUDE.md golden rule 3), so what the direction decides is which of
+     * the free tables the app *offers* first — and with two of them back in the
+     * pool, that is the one further down the host's list.
+     *
+     * Flipped on a round already under way on purpose: it is the same tables,
+     * the same queue and the same running match either way, and only the offer
+     * differs. That is the whole of "it changes what happens next".
+     */
+    it('offers the far end of the room first once tables free up', () => {
+      const drawn = drawRound(ready(8, 3), draw);
+      const round = openRound(drawn);
+      const first = matchAt(round, 0);
+      const second = matchAt(round, 1);
+
+      // Four pairs on three tables: the fourth is queued. Finishing the first
+      // two hands back tables 1 and 2 and leaves table 3 playing.
+      const freed = setWinner(setWinner(drawn, first.id, first.a), second.id, second.a);
+      const flipped = setTableAssignmentOrder(freed, 'DESCENDING');
+
+      expect(freeTables(freed).map((table) => table.id)).toEqual([
+        tableIdAt(freed, 0),
+        tableIdAt(freed, 1),
+      ]);
+      expect(freeTables(flipped).map((table) => table.id)).toEqual([
+        tableIdAt(flipped, 1),
+        tableIdAt(flipped, 0),
+      ]);
+
+      const offered = freeTables(flipped)[0];
+      if (offered === undefined) {
+        throw new Error('expected a free table to be offered');
+      }
+      const started = assignNextQueuedMatch(flipped, { tableId: offered.id, at: FIXED_NOW });
+
+      // The queue itself did not move: it is still the fourth pair drawn that
+      // goes next, it just goes to the other table.
+      expect(matchAt(openRound(started), 3).tableId).toBe(tableIdAt(started, 1));
+    });
+
+    /*
+     * "Changing direction mid-round does not reassign matches that are already
+     * running", and it does not reorder the queue either — a pair's position in
+     * it is the one they earned in the draw.
+     */
+    it('leaves a round already under way exactly where it is', () => {
+      const drawn = drawRound(ready(10, 3), draw);
+      const before = openRound(drawn);
+
+      const flipped = setTableAssignmentOrder(drawn, 'DESCENDING');
+      const after = openRound(flipped);
+
+      // Not merely equal counts: the same matches, on the same tables, in the
+      // same queue order. A pair's position in the queue is the one they
+      // earned in the draw and nothing about a table may move it.
+      expect(after.matches).toEqual(before.matches);
+      expect(flipped.tables).toEqual(drawn.tables);
+      expect(queuedMatches(after)).toEqual(queuedMatches(before));
+      // Everything the round is playing on stays playing: five pairs on three
+      // tables leaves nothing free for the new direction to reach for yet.
+      expect(freeTables(flipped)).toHaveLength(0);
+      expect(flipped.settings.tableAssignmentOrder).toBe('DESCENDING');
+    });
   });
 
   it('offers the queue in draw order, and moves nothing until the host confirms', () => {

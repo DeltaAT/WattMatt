@@ -331,7 +331,12 @@ function exampleFile(): RawTournamentFile {
     updatedAt: '2026-08-22T19:31:12+02:00',
     rngSeed: 'seed',
     rngCursor: 42,
-    settings: { participantLabel: 'GROUP', namingAt: 16, performanceMode: false },
+    settings: {
+      participantLabel: 'GROUP',
+      namingAt: 16,
+      performanceMode: false,
+      tableAssignmentOrder: 'ASCENDING',
+    },
     phase: 'QUALIFYING',
     tables: [
       {

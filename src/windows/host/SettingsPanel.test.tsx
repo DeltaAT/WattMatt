@@ -25,6 +25,7 @@ function handlers() {
     onParticipantChange: vi.fn(),
     onNamingAtChange: vi.fn(),
     onPerformanceModeChange: vi.fn(),
+    onTableAssignmentOrderChange: vi.fn(),
   };
 }
 
@@ -52,6 +53,10 @@ const participantField = () =>
   screen.getByLabelText(de.settings.participantLabel) as HTMLSelectElement;
 const performanceToggle = () =>
   screen.getByRole('checkbox', { name: de.settings.performanceMode }) as HTMLInputElement;
+const orderRadio = (order: 'ASCENDING' | 'DESCENDING') =>
+  screen.getByRole('radio', {
+    name: de.settings.tableAssignmentOrderOption[order],
+  }) as HTMLInputElement;
 
 describe('the tournament name', () => {
   it('shows the name the tournament has', () => {
@@ -197,5 +202,55 @@ describe('the participant wording', () => {
 
     expect(spies.onParticipantChange).toHaveBeenCalledTimes(1);
     expect(spies.onParticipantChange).toHaveBeenCalledWith('TEAM');
+  });
+});
+
+/**
+ * Which end of the table list gets filled first (issue #101).
+ *
+ * Two radios rather than a checkbox, because both directions are ordinary
+ * choices about a room and neither is the "on" of the other. Never disabled at
+ * any phase: it decides only what the *next* assignment reaches for, so a host
+ * who has just carried two more tables into the far end of the hall may flip it
+ * mid-round.
+ */
+describe('the table assignment direction', () => {
+  it('shows the direction the tournament is set to', () => {
+    setup({ settings: { ...DEFAULT_SETTINGS, tableAssignmentOrder: 'DESCENDING' } });
+
+    expect(orderRadio('DESCENDING').checked).toBe(true);
+    expect(orderRadio('ASCENDING').checked).toBe(false);
+  });
+
+  it('starts out filling from the first table', () => {
+    setup();
+
+    expect(orderRadio('ASCENDING').checked).toBe(true);
+  });
+
+  it('reports the direction the host chose', () => {
+    const spies = setup();
+
+    fireEvent.click(orderRadio('DESCENDING'));
+
+    expect(spies.onTableAssignmentOrderChange).toHaveBeenCalledTimes(1);
+    expect(spies.onTableAssignmentOrderChange).toHaveBeenCalledWith('DESCENDING');
+  });
+
+  /* Mid-tournament is exactly when a host reconfigures a room, and this is one
+   * of the settings that is never locked (`@/domain/settings`). */
+  it('is offered whatever the naming threshold is doing', () => {
+    setup({ isNamingAtEditable: false });
+
+    expect(orderRadio('ASCENDING').disabled).toBe(false);
+    expect(orderRadio('DESCENDING').disabled).toBe(false);
+  });
+
+  /* The hint says what the setting does *not* do, which is the half a host
+   * needs before touching it during a live round. */
+  it('says that running matches are left alone', () => {
+    setup();
+
+    expect(screen.getByText(de.settings.tableAssignmentOrderHint)).not.toBeNull();
   });
 });

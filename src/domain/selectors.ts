@@ -18,14 +18,36 @@ export function activeGroups(tournament: Tournament): readonly Group[] {
 }
 
 /**
- * Tables a waiting match may be sent to, in the host's configured order.
+ * Tables a waiting match may be sent to, in the order the host wants them
+ * handed out (issue #101).
  *
  * `DISABLED` is deliberately not free: a table taken out of service — wobbly
  * leg, no light above it — must not be handed the next match
  * (docs/TOURNAMENT-RULES.md §0).
+ *
+ * **This is the one place the direction is applied**, and that is deliberate
+ * rather than tidy. Every automatic choice of a table in the app comes through
+ * here — the draw filling the qualifying round, the tree filling its first
+ * round, and the table each picker offers first — so one reversal governs all
+ * of them and none of them can be forgotten. The board the host reads is
+ * *not* reordered: `occupancyBoard` still draws the tables in list order,
+ * because the question there is "where is table 3" and the answer must not
+ * move when this setting changes.
+ *
+ * Reversed rather than sorted, so it stays an ordering of the host's own list.
+ * "Last" means the last row of the table panel, never the highest number
+ * parsed out of a label — tables get renamed and reordered (issue #13), and the
+ * list is the thing the host is looking at.
+ *
+ * `DESCENDING` skips a `gesperrt` table for exactly the same reason
+ * `ASCENDING` does: the filter runs first, so both directions walk the same
+ * pool from opposite ends.
  */
 export function freeTables(tournament: Tournament, track?: RoundTrack): readonly Table[] {
-  return tournament.tables.filter((table) => table.status === 'FREE' && servesTrack(table, track));
+  const free = tournament.tables.filter(
+    (table) => table.status === 'FREE' && servesTrack(table, track),
+  );
+  return tournament.settings.tableAssignmentOrder === 'DESCENDING' ? [...free].reverse() : free;
 }
 
 /**

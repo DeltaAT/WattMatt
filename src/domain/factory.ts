@@ -17,6 +17,9 @@ export const DEFAULT_SETTINGS: Settings = {
   participantLabel: 'GROUP',
   namingAt: 16,
   performanceMode: false,
+  // The first table first — what every build before issue #101 did, and the
+  // only default that cannot surprise a host who never opens the setting.
+  tableAssignmentOrder: 'ASCENDING',
 };
 
 export type CreateTournamentInput = {

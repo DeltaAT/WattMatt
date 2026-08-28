@@ -34,11 +34,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v5)
+## Schema (v8)
 
 ```jsonc
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -55,7 +55,13 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   "settings": {
     "participantLabel": "GROUP",    // GROUP | TEAM | PLAYER — UI copy only, host + headings
     "namingAt": 16,                 // field size at which names are required
-    "performanceMode": false
+    "performanceMode": false,
+    // ASCENDING | DESCENDING — which end of the `tables` list below a free
+    // table is taken from (rules §3, issue #101). It orders the list, never a
+    // number parsed out of a label: tables get renamed and reordered, so "the
+    // last table" is the last entry here. ASCENDING is the default and is what
+    // every file written before v8 did.
+    "tableAssignmentOrder": "ASCENDING"
   },
 
   "phase": "QUALIFYING",

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import { MINIMUM_NAMING_AT } from '@/domain/settings';
-import type { ParticipantLabel, Settings } from '@/domain/types';
+import type { ParticipantLabel, Settings, TableAssignmentOrder } from '@/domain/types';
 import { de } from '@/i18n';
 import { ParticipantChoice } from '@/ui';
 
@@ -28,6 +28,7 @@ export function SettingsPanel({
   onParticipantChange,
   onNamingAtChange,
   onPerformanceModeChange,
+  onTableAssignmentOrderChange,
 }: {
   name: string;
   settings: Settings;
@@ -39,6 +40,7 @@ export function SettingsPanel({
   onParticipantChange: (label: ParticipantLabel) => void;
   onNamingAtChange: (namingAt: number) => void;
   onPerformanceModeChange: (performanceMode: boolean) => void;
+  onTableAssignmentOrderChange: (order: TableAssignmentOrder) => void;
 }) {
   return (
     <section className="flex flex-col gap-3" aria-label={de.settings.sectionLabel}>
@@ -72,6 +74,11 @@ export function SettingsPanel({
           namingAt={settings.namingAt}
           editable={isNamingAtEditable}
           onChange={onNamingAtChange}
+        />
+
+        <TableAssignmentOrderField
+          order={settings.tableAssignmentOrder}
+          onChange={onTableAssignmentOrderChange}
         />
 
         <Field label={de.settings.performanceMode} hint={de.settings.performanceModeHint}>
@@ -204,6 +211,57 @@ function NamingAtField({
     </Field>
   );
 }
+
+/**
+ * Which end of the table list free tables come from (issue #101,
+ * docs/TOURNAMENT-RULES.md §3).
+ *
+ * Two radios rather than a checkbox: both directions are ordinary choices about
+ * a room, and neither is the "on" of the other. A checkbox labelled *Absteigend*
+ * would make the host's own hall the exception.
+ *
+ * Never disabled, at any phase. It decides only what happens next, so flipping
+ * it mid-round is a legitimate thing to do — the host has just carried two more
+ * tables in at the far end of the hall — and it moves nothing that is already
+ * running (`@/domain/settings`). With a single table it has no observable
+ * effect and is still offered: a host who adds a second table an hour later
+ * should not have to find the option then.
+ */
+function TableAssignmentOrderField({
+  order,
+  onChange,
+}: {
+  order: TableAssignmentOrder;
+  onChange: (order: TableAssignmentOrder) => void;
+}) {
+  return (
+    <Field label={de.settings.tableAssignmentOrder} hint={de.settings.tableAssignmentOrderHint}>
+      <div
+        className="flex h-8 items-center gap-4"
+        role="radiogroup"
+        aria-label={de.settings.tableAssignmentOrder}
+      >
+        {TABLE_ASSIGNMENT_ORDERS.map((option) => (
+          <label key={option} className="flex items-center gap-2 text-host-sm text-wm-text">
+            <input
+              type="radio"
+              className="h-4 w-4"
+              name="tableAssignmentOrder"
+              value={option}
+              checked={order === option}
+              onChange={() => onChange(option)}
+              data-settings-input={`tableAssignmentOrder:${option}`}
+            />
+            {de.settings.tableAssignmentOrderOption[option]}
+          </label>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
+/** Both directions, in the order they read: the current behaviour first. */
+const TABLE_ASSIGNMENT_ORDERS: readonly TableAssignmentOrder[] = ['ASCENDING', 'DESCENDING'];
 
 /**
  * The seed every draw is taken from, read-only (CLAUDE.md golden rule 7).

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v5)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v8)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -57,8 +57,17 @@ import { tournamentSchema } from '@/domain/types';
  * phases. All three are required rather than optional for the reason the track
  * was: a phase that may be absent is one every panel has to guess a default
  * for, and that guess decides what the host is offered next.
+ *
+ * v8 gave `settings` a `tableAssignmentOrder` (issue #101,
+ * docs/TOURNAMENT-RULES.md §3) — which end of the host's table list free tables
+ * are handed out from. A v7 file was written by a build that could only fill
+ * from the first table, so it comes back `ASCENDING`, which is what it did.
+ * Required rather than optional for the reason every other setting is: an
+ * absent direction is one the draw, the tree and every table picker would have
+ * to default separately, and four copies of a default are four places for them
+ * to disagree.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -68,7 +77,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v5)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v8)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *
