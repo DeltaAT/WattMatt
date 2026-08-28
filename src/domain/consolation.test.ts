@@ -369,7 +369,7 @@ describe('a Trostrunde played to its end', () => {
           next = advancePhase(next, 'CONSOLATION');
         } else if (state.pending !== null) {
           next = acceptCandidate(next, 'CONSOLATION');
-        } else if (state.pool.length > 0) {
+        } else if (state.remaining.length > 0) {
           next = drawCandidate(next, 'CONSOLATION');
         } else {
           next = useRepechageFallback(next, 'BYES', 'CONSOLATION');
@@ -426,7 +426,7 @@ describe('a Trostrunde played to its end', () => {
           next = advancePhase(next);
         } else if (state.pending !== null) {
           next = acceptCandidate(next);
-        } else if (state.pool.length > 0) {
+        } else if (state.remaining.length > 0) {
           next = drawCandidate(next);
         } else {
           next = useRepechageFallback(next, 'BYES');

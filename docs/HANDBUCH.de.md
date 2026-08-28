@@ -571,6 +571,14 @@ gebraucht, erscheint er nicht.
 
 Ist das Feld voll, steht dort **Das Feld ist vollständig.**
 
+> **Der Topf ist nach Nummern sortiert, die Ziehung nicht.** Auf der Leinwand stehen alle
+> Ausgeschiedenen aufsteigend nach Gruppennummer — so findet jede und jeder die eigene Nummer,
+> ohne suchen zu müssen. In welcher Reihenfolge gezogen wird, hat damit **nichts** zu tun: das
+> Licht springt quer über das Gitter, und niemand im Saal kann die nächste Nummer vorhersagen.
+> Die Karten bleiben dabei stehen, wo sie sind — eine gezogene Karte wird an ihrem Platz
+> markiert, nicht herausgenommen. Wenn Sie gefragt werden, warum das Licht so herumspringt:
+> genau deswegen.
+
 ### 8.3 Wenn der Topf leer wird
 
 Haben so viele verzichtet, dass niemand mehr im Topf steht und trotzdem Plätze frei sind,

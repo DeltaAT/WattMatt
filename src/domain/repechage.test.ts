@@ -11,6 +11,7 @@ import {
   isRepechageComplete,
   isRepechageNeeded,
   repechageBlockers,
+  repechageDisplayOrder,
   repechagePot,
   repechageState,
   startRepechage,
@@ -84,6 +85,45 @@ function state(document: Tournament): RepechageState {
   return current;
 }
 
+/**
+ * The draw order, read where it actually lives (issue #97).
+ *
+ * `tournament.repechage.pool` is the shuffle, and since #97 it is the only
+ * place the draw order exists: everything `repechageState` and `repechagePot`
+ * hand out is in display order, precisely so that nothing rendered can carry
+ * it. A test that wants to know who comes next therefore has to ask the file,
+ * exactly as `drawCandidate` does.
+ */
+function drawOrder(document: Tournament): readonly GroupId[] {
+  const pool = document.repechage?.pool;
+  if (pool === undefined) {
+    throw new Error('no repechage is running');
+  }
+  return pool;
+}
+
+/** The group the next `drawCandidate` will take — the front of the shuffle. */
+function nextUp(document: Tournament): GroupId {
+  const first = drawOrder(document)[0];
+  if (first === undefined) {
+    throw new Error('the pot is empty');
+  }
+  return first;
+}
+
+/** The number the room reads off a group's card. */
+function numberOf(document: Tournament, groupId: GroupId): number {
+  const found = document.groups.find((entry) => entry.id === groupId);
+  if (found === undefined) {
+    throw new Error('no such group');
+  }
+  return found.number;
+}
+
+function numbersOf(document: Tournament, groupIds: readonly GroupId[]): readonly number[] {
+  return groupIds.map((groupId) => numberOf(document, groupId));
+}
+
 /** Draws a candidate and answers it, which is the host's one-two in §4. */
 function answer(document: Tournament, accepted: boolean): Tournament {
   const drawn = drawCandidate(document);
@@ -131,7 +171,7 @@ describe('startRepechage', () => {
     const { losers } = roundOutcome(openRound(closed));
 
     // Six losers: the seventh group had a bye and beat nobody.
-    expect([...state(startRepechage(closed)).pool].sort()).toEqual([...losers].sort());
+    expect([...state(startRepechage(closed)).remaining].sort()).toEqual([...losers].sort());
   });
 
   it('moves the phase in the same object as the pot', () => {
@@ -158,7 +198,7 @@ describe('startRepechage', () => {
       roundOutcome(openRound(closed)).losers,
     );
 
-    expect(state(startRepechage(closed)).pool).toEqual(expected);
+    expect(drawOrder(startRepechage(closed))).toEqual(expected);
   });
 
   it('leaves everyone in the pot eliminated — being drawn is a chance, not a reprieve', () => {
@@ -213,12 +253,12 @@ describe('startRepechage', () => {
 describe('drawCandidate', () => {
   it('takes the front of the pot and leaves it waiting for an answer', () => {
     const started = inRepechage(13);
-    const first = state(started).pool[0];
+    const first = nextUp(started);
 
     const drawn = drawCandidate(started);
 
     expect(state(drawn).pending).toBe(first);
-    expect(state(drawn).pool).toEqual(state(started).pool.slice(1));
+    expect(drawOrder(drawn)).toEqual(drawOrder(started).slice(1));
     expect(drawn.repechage?.draws).toEqual([{ groupId: first, accepted: null }]);
   });
 
@@ -247,7 +287,7 @@ describe('drawCandidate', () => {
 describe('acceptCandidate and declineCandidate', () => {
   it('puts an accepted candidate back into the tournament', () => {
     const started = inRepechage(13);
-    const candidate = state(started).pool[0] as GroupId;
+    const candidate = nextUp(started);
 
     const accepted = acceptCandidate(drawCandidate(started));
 
@@ -258,13 +298,13 @@ describe('acceptCandidate and declineCandidate', () => {
 
   it('leaves a declined candidate out, and out of the pot', () => {
     const started = inRepechage(13);
-    const candidate = state(started).pool[0] as GroupId;
+    const candidate = nextUp(started);
 
     const declined = declineCandidate(drawCandidate(started));
     const current = state(declined);
 
     expect(current.through).not.toContain(candidate);
-    expect(current.pool).not.toContain(candidate);
+    expect(current.remaining).not.toContain(candidate);
     expect(current.declined).toEqual([candidate]);
     expect(activeGroups(declined).map((entry) => entry.id)).not.toContain(candidate);
   });
@@ -302,7 +342,7 @@ describe('the draw loop', () => {
     let document = inRepechage(10);
     expect(state(document).target).toBe(8);
     expect(state(document).need).toBe(3);
-    expect(state(document).pool).toHaveLength(5);
+    expect(state(document).remaining).toHaveLength(5);
 
     for (let index = 0; index < 3; index += 1) {
       document = answer(document, false);
@@ -314,7 +354,7 @@ describe('the draw loop', () => {
     expect(current.declined).toHaveLength(3);
     expect(current.need).toBe(2);
     // One candidate is still standing in the pot, so this is not the fallback.
-    expect(current.pool).toHaveLength(1);
+    expect(current.remaining).toHaveLength(1);
     expect(current.fallbackNeeded).toBe(false);
   });
 
@@ -351,7 +391,7 @@ describe('the draw loop', () => {
       expect(steps).toBeLessThan(100);
     }
 
-    expect(state(document).pool.length === 0 || isRepechageComplete(document)).toBe(true);
+    expect(state(document).remaining.length === 0 || isRepechageComplete(document)).toBe(true);
   });
 });
 
@@ -359,7 +399,7 @@ describe('the §4 fallback', () => {
   /** Every candidate is drawn and declines, which empties the pot. */
   function allDeclined(groups: number): Tournament {
     let document = inRepechage(groups);
-    while (state(document).pool.length > 0 && state(document).need > 0) {
+    while (state(document).remaining.length > 0 && state(document).need > 0) {
       document = answer(document, false);
     }
     return document;
@@ -369,7 +409,7 @@ describe('the §4 fallback', () => {
     const exhausted = allDeclined(10);
     const current = state(exhausted);
 
-    expect(current.pool).toHaveLength(0);
+    expect(current.remaining).toHaveLength(0);
     expect(current.need).toBe(3);
     expect(current.fallbackNeeded).toBe(true);
     expect(current.declined).toHaveLength(5);
@@ -388,13 +428,13 @@ describe('the §4 fallback', () => {
     for (let index = 0; index < 3; index += 1) {
       document = answer(document, false);
     }
-    expect(state(document).need).toBeGreaterThan(state(document).pool.length);
+    expect(state(document).need).toBeGreaterThan(state(document).remaining.length);
 
     document = answer(document, true);
     document = answer(document, true);
 
     const current = state(document);
-    expect(current.pool).toHaveLength(0);
+    expect(current.remaining).toHaveLength(0);
     expect(current.need).toBe(1);
     expect(current.fallbackNeeded).toBe(true);
   });
@@ -429,7 +469,7 @@ describe('the §4 fallback', () => {
     const current = state(reopened);
 
     expect(current.fallbackUsed).toBe('REOPEN_DECLINED');
-    expect([...current.pool].sort()).toEqual([...state(exhausted).declined].sort());
+    expect([...current.remaining].sort()).toEqual([...state(exhausted).declined].sort());
     expect(current.fallbackNeeded).toBe(false);
     expect(current.need).toBe(3);
     expect(current.byes).toBe(0);
@@ -450,11 +490,11 @@ describe('the §4 fallback', () => {
   it('does not readmit a group that has since come back through the pot', () => {
     let document = inRepechage(10);
     // Everyone declines, everyone is readmitted, and then one accepts.
-    while (state(document).pool.length > 0) {
+    while (state(document).remaining.length > 0) {
       document = answer(document, false);
     }
     document = useRepechageFallback(document, 'REOPEN_DECLINED');
-    const returning = state(document).pool[0] as GroupId;
+    const returning = nextUp(document);
     document = answer(document, true);
 
     expect(state(document).through).toContain(returning);
@@ -496,7 +536,7 @@ describe('the §4 fallback', () => {
   it('can be reopened more than once, and Freilose stay available every time', () => {
     let document = allDeclined(10);
     document = useRepechageFallback(document, 'REOPEN_DECLINED');
-    while (state(document).pool.length > 0) {
+    while (state(document).remaining.length > 0) {
       document = answer(document, false);
     }
 
@@ -583,7 +623,7 @@ describe('a repechage that has to survive the file', () => {
 
     expect(reopened).toEqual(mid);
     expect(repechageState(reopened)).toEqual(repechageState(mid));
-    expect(state(reopened).pool).toEqual(state(mid).pool);
+    expect(state(reopened).remaining).toEqual(state(mid).remaining);
   });
 
   it('carries the pot through the whole file wrapper as well', () => {
@@ -639,7 +679,7 @@ describe('repechagePot', () => {
   /** Draws and declines everybody, which is what empties the pot. */
   function declineEveryone(document: Tournament): Tournament {
     let current = document;
-    while (state(current).pool.length > 0 && state(current).need > 0) {
+    while (state(current).remaining.length > 0 && state(current).need > 0) {
       current = answer(current, false);
     }
     return current;
@@ -655,17 +695,101 @@ describe('repechagePot', () => {
 
     const pot = repechagePot(started);
 
-    // A set: the order is the shuffle's, and the test below is the one that
-    // pins it. What matters here is that nobody is missing and nobody is extra.
+    // A set: the order is display order, and the tests below are the ones that
+    // pin it. What matters here is that nobody is missing and nobody is extra.
     expect(new Set(pot.map((entry) => entry.groupId))).toEqual(new Set(losers));
     expect(pot).toHaveLength(losers.length);
     expect(pot.every((entry) => entry.status === 'POOL')).toBe(true);
   });
 
-  it('is in the shuffled order, which is the order the room was shown', () => {
+  /*
+   * Issue #97, and the whole of it. This used to assert the opposite — that the
+   * pot came back in the pool's order — and that assertion was the bug: the
+   * shuffle ran correctly and was then thrown away, because the thing it
+   * randomised became the thing on screen. A grid in draw order is a grid whose
+   * next name anyone watching can call.
+   */
+  it('is in display order, ascending by number, and never the pool’s', () => {
     const started = inRepechage(13);
 
-    expect(repechagePot(started).map((entry) => entry.groupId)).toEqual(started.repechage?.pool);
+    const shown = repechagePot(started).map((entry) => entry.groupId);
+    const numbers = numbersOf(started, shown);
+
+    expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
+    // And it really is a different order from the one the draw will use —
+    // otherwise this test would pass on a pool that happened to be sorted.
+    expect(shown).not.toEqual(drawOrder(started));
+  });
+
+  it('is exactly the losers of the qualifying round, sorted by number', () => {
+    const started = inRepechage(13);
+    const losers = roundOutcome(openRound(started)).losers;
+
+    expect(repechageDisplayOrder(started)).toEqual(
+      [...losers].sort((a, b) => numberOf(started, a) - numberOf(started, b)),
+    );
+  });
+
+  /*
+   * The crisp statement of the separation, and the one that catches any future
+   * regression that recouples them: change the seed and the draw order changes
+   * while the grid does not move at all.
+   */
+  it('renders identically under two seeds that draw in different orders', () => {
+    // One played qualifying round, so both have the same losers, and the seed
+    // is changed only for the shuffle that follows. Re-seeding the whole
+    // tournament would deal different pairings and therefore compare two
+    // different sets of losers, which would prove nothing about the ordering.
+    const closed = qualified(13);
+    const one = startRepechage({ ...closed, rngSeed: 'seed-one' });
+    const other = startRepechage({ ...closed, rngSeed: 'seed-two' });
+
+    expect(repechageDisplayOrder(one)).toEqual(repechageDisplayOrder(other));
+    expect(drawOrder(one)).not.toEqual(drawOrder(other));
+  });
+
+  /*
+   * The bug's observable symptom, stated as a distribution. Under the old
+   * behaviour the first candidate was always at display index 0; now the light
+   * has to be able to land anywhere, or the suspense is still theatre over a
+   * sequential pick.
+   */
+  it('lands its first candidate all over the grid across a thousand seeds', () => {
+    const counts = new Map<number, number>();
+
+    const closed = qualified(13);
+
+    for (let seed = 0; seed < 1000; seed += 1) {
+      const started = startRepechage({ ...closed, rngSeed: `seed-${String(seed)}` });
+      const shown = repechageDisplayOrder(started);
+      const index = shown.indexOf(nextUp(started));
+      counts.set(index, (counts.get(index) ?? 0) + 1);
+    }
+
+    // Six losers, so six positions, and every one of them has to be reachable.
+    expect(counts.size).toBe(6);
+    // Roughly uniform: no position takes more than twice its share, and in
+    // particular position 0 is not where the candidate always is. A loose bound
+    // on purpose — this is asserting "unrelated", not "perfectly flat".
+    for (const hits of counts.values()) {
+      expect(hits).toBeGreaterThan(1000 / 6 / 2);
+      expect(hits).toBeLessThan((1000 / 6) * 2);
+    }
+  });
+
+  /*
+   * The layout must not reflow. Removing or reordering a card shifts every
+   * position after it, which leaks structure and makes the screen jump — the
+   * same argument the pre-computed layout of issue #76 makes.
+   */
+  it('does not move any other card when a candidate is drawn', () => {
+    let document = inRepechage(13);
+    const before = repechageDisplayOrder(document);
+
+    for (let step = 0; step < 3; step += 1) {
+      document = answer(document, step === 0);
+      expect(repechageDisplayOrder(document)).toEqual(before);
+    }
   });
 
   it('marks the drawn candidate without taking them off the wall', () => {
@@ -695,10 +819,9 @@ describe('repechagePot', () => {
   });
 
   /*
-   * The order is the whole reason the drawn ones come first: `drawCandidate`
-   * takes from the front of the pool, so draw order followed by what is left
-   * reproduces the shuffle the audience has been looking at. A card must not
-   * jump sideways when the next candidate comes out.
+   * A card must not jump sideways when the next candidate comes out. Since
+   * issue #97 that falls out of the ordering rather than being arranged: a
+   * card's place is its number, so being drawn cannot change it.
    */
   it('never moves a card once it has been drawn', () => {
     let document = inRepechage(13);
@@ -724,7 +847,7 @@ describe('repechagePot', () => {
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(pot.filter((entry) => entry.status === 'POOL')).toHaveLength(
-      state(document).pool.length,
+      state(document).remaining.length,
     );
     expect(pot.some((entry) => entry.status === 'DECLINED')).toBe(false);
   });

@@ -51,6 +51,19 @@ import type {
  * open, §4's two fallbacks are offered and *Freilose vergeben* is available
  * every single time. There is no state in here the host can reach and not leave.
  *
+ * **The draw order is never an order anything renders** (issue #97, §4).
+ * `repechage.pool` is the shuffle, and it is the *only* place the draw order
+ * lives. Everything this module hands to a panel or a scene comes back in
+ * **display order** — the pot's groups ascending by number, fixed for the whole
+ * phase — because the two lists were once the same list, and a shuffle whose
+ * result becomes the thing on screen cancels itself out: the sequence is random
+ * against the original loser list and perfectly predictable against the grid
+ * the room is actually looking at. Anyone watching could call the next name.
+ *
+ * So `repechagePot` and `RepechageState.remaining` are display-ordered, and
+ * nothing named `pool` leaves this module. The beamer's snapshot carries the
+ * pot and no pool at all: if it cannot see the draw order, it cannot leak it.
+ *
  * Pure, like everything in `src/domain`, and the same `Tournament -> Tournament`
  * shape as `@/domain/draw` for the reason recorded in docs/OPEN-QUESTIONS.md
  * #47: accepting a candidate changes a draw record *and* a group's status, and
@@ -208,8 +221,19 @@ export interface RepechageState {
   target: number;
   /** Through: the qualifying winners plus every candidate who has accepted. */
   through: readonly GroupId[];
-  /** Not yet drawn, in the shuffled order. The next candidate is the front. */
-  pool: readonly GroupId[];
+  /**
+   * Not yet drawn, **in display order** — ascending by group number, never the
+   * shuffle's (issue #97, §4).
+   *
+   * Deliberately not called `pool` any more, and deliberately not in the pool's
+   * order. The draw order lives in `tournament.repechage.pool` and nowhere
+   * else; a projection that carried it would put it one render away from the
+   * screen, which is exactly how the whole sequence came to be readable off the
+   * grid in the first place. Nothing here needs it: what a panel asks of this
+   * list is who is still in and how many, and both are answers the order does
+   * not change.
+   */
+  remaining: readonly GroupId[];
   /** The candidate on the beamer, waiting for the host's answer. */
   pending: GroupId | null;
   /**
@@ -286,14 +310,21 @@ export function repechageState(
   if (pending !== null) {
     inPlay.add(pending);
   }
-  const declined = unique(
-    repechage.draws.filter((draw) => draw.accepted === false).map((draw) => draw.groupId),
-  ).filter((groupId) => !inPlay.has(groupId));
+  // Display order like `remaining`, and for the same reason: `REOPEN_DECLINED`
+  // reshuffles exactly this set back into the pool, so a list rendered in the
+  // order the draws happened to arrive would hand the room a head start on the
+  // second lottery (issue #97).
+  const declined = displayOrder(
+    tournament,
+    unique(
+      repechage.draws.filter((draw) => draw.accepted === false).map((draw) => draw.groupId),
+    ).filter((groupId) => !inPlay.has(groupId)),
+  );
 
   return {
     target: repechage.target,
     through,
-    pool: repechage.pool,
+    remaining: displayOrder(tournament, repechage.pool),
     pending,
     last: repechage.draws.at(-1) ?? null,
     declined,
@@ -378,10 +409,64 @@ export function repechagePot(
     answered.set(draw.groupId, { groupId: draw.groupId, status: answeredStatus(draw) });
   }
 
-  return [
-    ...answered.values(),
-    ...repechage.pool.map((groupId): PotEntry => ({ groupId, status: 'POOL' })),
-  ];
+  // Display order, and never the pool's (issue #97). `entries` is keyed by
+  // group, so a card's place in the grid is decided by its number alone — it is
+  // the same place before the draw, while the light is on it, and after the
+  // host has answered.
+  const entries = new Map<GroupId, PotEntry>(answered);
+  for (const groupId of repechage.pool) {
+    entries.set(groupId, { groupId, status: 'POOL' });
+  }
+
+  return displayOrder(tournament, entries.keys()).flatMap((groupId) => {
+    const entry = entries.get(groupId);
+    return entry === undefined ? [] : [entry];
+  });
+}
+
+/**
+ * The one order anything on screen may use: the pot's groups, ascending by
+ * number (issue #97, docs/TOURNAMENT-RULES.md §4).
+ *
+ * **Fixed for the whole phase.** Every group that starts in the pot stays in
+ * it — a drawn card is marked in place, never taken out — so this list has the
+ * same members and the same order from the first frame to the last. That is the
+ * property the fix rests on: a card never moves, so no card's movement can say
+ * anything about what is coming.
+ *
+ * **Identical for every seed**, which is the crisp way to state the separation:
+ * change the seed and the draw order changes while this does not. The highlight
+ * then lands wherever the drawn group happens to sit in a grid sorted by
+ * number, and that is unpredictable precisely because the two orderings are
+ * unrelated to each other.
+ *
+ * By number rather than by anything derived, because it is also the order the
+ * room can use: people look for their own number instead of scanning a
+ * scrambled grid.
+ */
+export function repechageDisplayOrder(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly GroupId[] {
+  return repechagePot(tournament, track).map((entry) => entry.groupId);
+}
+
+/**
+ * Group ids sorted by the number the room reads off the card.
+ *
+ * A group whose number cannot be found sorts last rather than throwing: a file
+ * repaired by hand is the host's problem to see on screen, not a reason for the
+ * projector to go blank mid-phase (the argument `repechageState` makes about a
+ * second pending draw).
+ */
+function displayOrder(tournament: Tournament, groupIds: Iterable<GroupId>): readonly GroupId[] {
+  const numbers = new Map<GroupId, number>(
+    tournament.groups.map((group) => [group.id, group.number]),
+  );
+  return [...groupIds].sort(
+    (a, b) =>
+      (numbers.get(a) ?? Number.MAX_SAFE_INTEGER) - (numbers.get(b) ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 function answeredStatus(draw: RepechageDraw): PotStatus {

@@ -176,6 +176,7 @@ export {
   potEntrySchema,
   potStatusSchema,
   repechageBlockers,
+  repechageDisplayOrder,
   repechagePot,
   repechageState,
   startRepechage,

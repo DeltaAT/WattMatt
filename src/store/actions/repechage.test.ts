@@ -287,7 +287,7 @@ describe('the fallback', () => {
   /** Draws and declines everybody, which is what empties the pot. */
   function exhausted(): TournamentStore {
     const store = ready(startInDomain(qualified(13)));
-    while ((repechageState(open(store))?.pool.length ?? 0) > 0) {
+    while ((repechageState(open(store))?.remaining.length ?? 0) > 0) {
       drawRepechageCandidate(store);
       declineRepechageCandidate(store);
     }

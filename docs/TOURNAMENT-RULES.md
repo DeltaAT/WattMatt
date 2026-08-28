@@ -143,6 +143,41 @@ while need > 0 and pool is not empty:
 **Beamer.** Before the draw starts, all losers are shown (`REPECHAGE` scene). Each drawn
 candidate is highlighted; the accept/decline outcome is shown immediately.
 
+**Two independent orderings.** This phase is the only one that reveals information
+*progressively* while withholding the rest, so the order the room is shown and the order the
+draw uses must be unrelated:
+
+| | Source | Property |
+| --- | --- | --- |
+| **Display order** | group number, ascending | Stable for the whole phase. Identical for every seed. Never reorders |
+| **Draw order** | the seeded shuffle (`pool`) | Never rendered as an order, ever |
+
+They were once the same list, and that was a bug (issue #97). `pool := shuffle(L)` is drawn
+from the front, so a scene that rendered the pool in its own order cancelled the shuffle out:
+the sequence was random against the original loser list and perfectly predictable against the
+grid the audience was actually looking at. Anyone watching could call the next name. The
+shuffle itself was never broken — it ran correctly and was then thrown away, because the thing
+it randomised became the thing on screen.
+
+With the two separated, the highlight lands wherever the drawn group happens to sit in a grid
+sorted by number, which is unpredictable precisely because the two orderings have nothing to do
+with each other. Sorting the display by number is also better for the room: people can find
+their own number instead of scanning a scrambled grid.
+
+Three consequences follow, and all three are part of the rule:
+
+- **A drawn card is marked in place, never removed.** Removing one reflows the grid and shifts
+  every position after it, which both leaks structure and makes the screen jump (§0, and the
+  same argument the pre-computed draw layout makes).
+- **No reveal may be staggered in draw order.** A stagger in pool order hands the whole
+  sequence to anyone paying attention on the very first frame. Stagger by display position or
+  not at all.
+- **Nothing rendered may be derived from pool position** — no index badge, no per-card
+  animation delay, no z-order.
+
+This constraint is specific to the `Hoffnungsrunde`. The pairing draw of §3 reveals everything
+eventually, so its reveal order carries no secret and needs no such separation.
+
 **Fallback — pool exhausted while `need > 0`.** The host is offered two options in German:
 
 1. *Freilose vergeben* — the `need` missing slots become byes in the next round (default).
@@ -151,7 +186,8 @@ candidate is highlighted; the accept/decline outcome is shown immediately.
    needs 8. The count is `target - |W|` and it is the next draw that hands them out (§5).
 2. *Ausgeschiedene erneut zulassen* — declined groups return to the pool and are drawn again.
    The pool is shuffled again when they go back in, so being readmitted does not also mean
-   being drawn first.
+   being drawn first. The displayed order does not change: they were on the wall all along,
+   marked as out, and they go back to `POOL` where they already stand.
 
 This situation is logged prominently. It can only occur when a large share of losers decline.
 

@@ -193,7 +193,7 @@ describe('the winners column', () => {
    */
   it('says how many Freilose the fallback owes the next round', () => {
     let document = started();
-    while ((repechageState(document)?.pool.length ?? 0) > 0) {
+    while ((repechageState(document)?.remaining.length ?? 0) > 0) {
       document = declineCandidate(drawCandidate(document));
     }
 
@@ -262,7 +262,7 @@ describe('the travelling highlight', () => {
   it('lights exactly one card', () => {
     const document = drawn();
     // Anybody still in the pool: a card the light may legitimately pass over.
-    const elsewhere = repechageState(document)?.pool[0] ?? null;
+    const elsewhere = repechageState(document)?.remaining[0] ?? null;
 
     const markup = scene(document, pendingOf(document), travelling(pendingOf(document), elsewhere));
 
@@ -280,7 +280,7 @@ describe('the travelling highlight', () => {
     const document = drawn();
     const candidate = pendingOf(document);
     // Anybody still in the pool: a card the light may legitimately pass over.
-    const elsewhere = repechageState(document)?.pool[0] ?? null;
+    const elsewhere = repechageState(document)?.remaining[0] ?? null;
 
     const markup = scene(document, candidate, travelling(candidate, elsewhere));
 
@@ -356,3 +356,83 @@ describe('a scene with nothing to show', () => {
 function greyscale(markup: string): string {
   return markup.replace(/class="[^"]*"/g, '');
 }
+
+/**
+ * The grid must not carry the draw order (issue #97,
+ * docs/TOURNAMENT-RULES.md §4).
+ *
+ * The pot used to be rendered in the pool's order — the shuffle — so the next
+ * name was always the first `POOL` card on the wall and anyone watching could
+ * call it before the light landed. The shuffle was not broken; it was thrown
+ * away, because the thing it randomised became the thing on screen.
+ *
+ * These are the assertions that stop that coming back. They are on the scene
+ * rather than only on the domain deliberately: this is the surface the audience
+ * actually reads, and the leak was one render away from a correct engine.
+ */
+describe('what the grid is allowed to say', () => {
+  /** The group numbers the cards carry, in the order they appear in the DOM. */
+  function shownNumbers(document: Tournament, markup: string): number[] {
+    const numbers = new Map(document.groups.map((entry) => [String(entry.id), entry.number]));
+    return cards(markup).map(([groupId]) => numbers.get(groupId) ?? -1);
+  }
+
+  it('draws the cards ascending by number, which is a stable order', () => {
+    const document = started();
+
+    const numbers = shownNumbers(document, scene(document));
+
+    expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
+  });
+
+  /*
+   * The crisp version of the whole issue: change the seed and the draw order
+   * changes while the picture does not move at all. One played qualifying round
+   * so both have the same losers — re-seeding the tournament would deal
+   * different pairings and compare two different grids.
+   */
+  it('renders the same grid under a seed that draws in a different order', () => {
+    const closed = qualified(13);
+    const one = startRepechage({ ...closed, rngSeed: 'seed-one' });
+    const other = startRepechage({ ...closed, rngSeed: 'seed-two' });
+
+    expect(cards(scene(one))).toEqual(cards(scene(other)));
+    expect(one.repechage?.pool).not.toEqual(other.repechage?.pool);
+  });
+
+  /*
+   * Nobody is taken off the wall and nobody moves: a drawn card is marked where
+   * it stands. Removing or reordering one reflows the grid, shifts every
+   * position after it and makes the screen jump — the same argument the
+   * pre-computed layout of issue #76 makes.
+   */
+  it('never moves a card as candidates are drawn and answered', () => {
+    let document = started();
+    const before = cards(scene(document)).map(([groupId]) => groupId);
+
+    document = acceptCandidate(drawCandidate(document));
+    expect(cards(scene(document)).map(([groupId]) => groupId)).toEqual(before);
+
+    document = declineCandidate(drawCandidate(document));
+    expect(cards(scene(document)).map(([groupId]) => groupId)).toEqual(before);
+  });
+
+  /*
+   * Nothing rendered may be derived from a card's position — no index badge, no
+   * per-card animation delay, no z-order. A stagger in pool order would hand
+   * the room the whole sequence on the very first frame; one in display order
+   * would be harmless, but the cheapest way to keep the distinction honest is
+   * to have no per-card position value on the pot at all.
+   */
+  it('gives no card a per-position style, delay or index', () => {
+    const markup = scene(started());
+    const pot = markup.slice(markup.indexOf('data-repechage-pot'));
+
+    expect(pot).not.toContain('--wm-reveal-index');
+    expect(pot).not.toContain('animation-delay');
+    expect(pot).not.toContain('z-index');
+    // The cards carry no inline style of any kind, which is what makes the
+    // three checks above hold for anything added later as well.
+    expect(pot).not.toMatch(/<li[^>]*\sstyle=/);
+  });
+});

@@ -140,7 +140,7 @@ describe('the repechage in a snapshot', () => {
    */
   it('carries the Freilose the fallback owes the next round', () => {
     let document = inRepechage();
-    while ((repechageState(document)?.pool.length ?? 0) > 0) {
+    while ((repechageState(document)?.remaining.length ?? 0) > 0) {
       document = answer(document, false);
     }
 
