@@ -72,6 +72,8 @@ Eine Seite. Ausdrucken, abhaken, dann anfangen. Das Handbuch steht in
       welche **Tische** dafür gedacht sind. WattMatt fragt danach, sobald die Hoffnungsrunde
       abgeschlossen ist. Die Tische tragen Sie dann unter *Tische* bei *Reserviert für* ein —
       einmal, nicht die ganze Zeit. Nie **alle** Tische auf dieselbe Runde.
+      Rechnen Sie mit **Zeit**: die Trostrunde ist ein vollständiges Turnier mit eigener
+      Hoffnungsrunde und eigenem Turnierbaum, nicht bloß ein paar Runden nebenher.
 - [ ] Sie wissen, dass **B** die Leinwand sofort schwarz macht.
 
 ---

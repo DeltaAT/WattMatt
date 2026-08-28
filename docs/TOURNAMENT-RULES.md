@@ -27,10 +27,21 @@ SETUP → QUALIFYING → REPECHAGE? → ELIMINATION* → NAMING → BRACKET → 
 
 `REPECHAGE` is skipped when it is not needed. `ELIMINATION` repeats.
 
-The phases above are the **main field**. From the close of the `REPECHAGE` onwards a second,
-parallel tournament may be running beside them — the `Trostrunde` of §10 — with rounds of its
-own, on the same tables, in the same room. It is not a phase and never appears in the line
-above: the main field's phase machine neither waits for it nor knows about it.
+The line above is a **track**, not a tournament. From the close of the `REPECHAGE` onwards a
+second, parallel tournament may be running beside the main field — the `Trostrunde` of §10 —
+and it runs **this same line** on its own field, on the same tables, in the same room. Every
+round, lottery and tree carries a `track` (`MAIN` or `CONSOLATION`), and "the current phase" is
+a question asked of one track at a time.
+
+The side event's copy of the line differs in exactly one place: it skips `NAMING`, and
+therefore ends at `BRACKET` rather than walking on to `CEREMONY`.
+
+```text
+CONSOLATION:  QUALIFYING → REPECHAGE? → ELIMINATION* → BRACKET
+```
+
+The two tracks are independent. The main field's phase machine neither waits for the side
+event nor knows about it, and the side event is routinely several rounds behind.
 
 ## 2. SETUP
 
@@ -231,6 +242,11 @@ fire automatically the instant the final is decided, because the host may still 
 | 17 | Group declines the `Hoffnungsrunde` | Out of the main field, into the `Trostrunde` (§4, §10) |
 | 18 | Both tracks live at once | No table carries two matches; each track has its own queue (§10) |
 | 19 | Undo during a live `Trostrunde` | Leaves the other track untouched (§10) |
+| 20 | `Trostrunde` field not a power of two | Its own `Hoffnungsrunde` tops it up, same maths as §4 (§10) |
+| 21 | `Trostrunde` field of exactly 2 | No round and no lottery: the single match **is** its `Finale` (§9 case 5, §10) |
+| 22 | Losers inside the `Trostrunde` | No further side event — one level only, and they are out (§10) |
+| 23 | `Trostrunde` reaches its bracket | Numbers, never names; the naming phase is skipped entirely (§6, §10) |
+| 24 | `Trostrunde` decided | Its winner is **not** on the `Siegerehrung` podium (§8, §10) |
 
 ## 10. `Trostrunde` (consolation round)
 
@@ -257,20 +273,49 @@ at all; neither may produce a round with nothing in it (docs/OPEN-QUESTIONS.md #
 
 ### Structure
 
-It feeds no bracket, so it needs no power-of-two field. It is §3 repeated:
+It runs the **same pipeline as the main tournament** on its own field (issue #91). Not a
+sequence of rounds: a whole tournament, with its own lottery and its own tree.
 
 ```text
-while more than one group is left:
-    shuffle; pair; odd count → Freilos; assign tables (§3); play; close
-the one group left is the Trostrunde winner
+Trostrunde R1                                     (§3, on the CONSOLATION track)
+  → Hoffnungsrunde among its own R1 losers, up to the next power of two   (§4)
+  → elimination rounds until the field is ≤ 16                            (§5)
+  → bracket: Achtelfinale → Finale, plus Spiel um Platz 3                 (§7)
+  → the Trostrunde winner
 ```
 
-No second lottery, no naming phase, no bracket, no third-place match. The no-rematch rule of §3
-applies to it out of the **same** history as the main field: two groups who met in the
-qualifying round are not drawn against each other again here.
+Every rule already stated applies to it unchanged, with the track set the other way: the
+power-of-two maths of §4, the `while |W| > 16` loop of §5, byes, table queueing, the
+third-place routing of §7, and undo. The no-rematch rule of §3 applies out of the **same**
+history as the main field: two groups who met in the qualifying round are not drawn against
+each other again here.
 
-It stays **numbers-only** throughout. §6 names the main field and nobody else; if the
-`Trostrunde` winner is to be named at the `Siegerehrung`, the host types that name there, once.
+**The one exception is §6.** The `Trostrunde` never enters the naming phase. It is
+numbers-only from its first round to its final, its bracket included. §6 names the main field
+and nobody else; if the `Trostrunde` winner is to be named at the `Siegerehrung`, the host
+types that name there, once.
+
+**Its bracket carries a `Spiel um Platz 3`**, exactly as the main bracket does — same node
+structure, same semi-final loser routing (issue #91).
+
+Two field sizes are worth naming, because they are the ends of the range:
+
+- **A field of 2** takes the route the main field takes at two participants (§9 case 5): no
+  qualifying round, because the single match there is to play *is* the `Finale`, and therefore
+  no lottery and no `Spiel um Platz 3` either. The match is modelled as a one-node tree rather
+  than as a round — the price of one pipeline instead of two.
+- **A field of 1 or 0** is no side event at all (§9 case 16).
+
+### No nesting
+
+The `Trostrunde`'s own first-round losers do **not** get a side event of their own. One level,
+and the structure stops there — otherwise it recurses forever. A group that loses inside the
+`Trostrunde` and is not drawn back up by its `Hoffnungsrunde` is out for the evening.
+
+The consequence is the opposite of the main field's and the host must be able to say it out
+loud: declining the **`Trostrunde`'s** `Hoffnungsrunde` really does mean going home, where
+declining the main field's only means dropping into the `Trostrunde` (§4). The side event's
+lottery panel says so on screen before anybody is drawn.
 
 ### Two rounds at once
 
@@ -306,6 +351,10 @@ question asked of one track at a time.
 
 ### Ceremony
 
-The `Trostrunde` winner is announced at the `Siegerehrung` (§8) — after the podium, as a
-separate moment, never mixed into the three places. It is a different tournament, and putting
-its winner on the same podium would tell the room it came fourth.
+**The `Trostrunde` winner does not appear on the `Siegerehrung`** (issue #91). The podium is
+the main tournament's 1/2/3 and nobody else's — putting a fourth participant beside them would
+tell the room they came fourth.
+
+The side event ends where its bracket ends. Its result stays visible in its own bracket scene,
+which is where the room reads it and where the host points the projector if they want to name
+the winner out loud.

@@ -39,10 +39,10 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Final | Finale |
 | Third-place match | Spiel um Platz 3 |
 | Award ceremony | Siegerehrung |
-| Consolation round | Trostrunde | The side event for the first-round losers (rules §10, issue #73) |
+| Consolation round | Trostrunde | The side event for the first-round losers; runs the same pipeline as the main field, minus the naming phase (rules §10, issues #73, #91) |
 | Track | Turnierstrang | Which of the two parallel tournaments a round belongs to (`MAIN` / `CONSOLATION`) |
 | Main field | Hauptfeld | The tournament the phases above describe — the one with the bracket |
-| Consolation winner | Sieger der Trostrunde | The last group standing in the side event; never rejoins the main field |
+| Consolation winner | Sieger der Trostrunde | The winner of the side event's own bracket; never rejoins the main field, and never appears on the `Siegerehrung` podium (rules §10, issue #91) |
 
 ## States and actions
 

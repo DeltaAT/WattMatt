@@ -17,6 +17,7 @@ import {
   type Group,
   type Match,
   type Round,
+  type RoundTrack,
   type Table,
   type Tournament,
 } from '@/domain/types';
@@ -178,6 +179,16 @@ export const tournamentSnapshotSchema = z.object({
    */
   repechage: repechageSnapshotSchema.nullable(),
   /**
+   * The `Trostrunde`'s own `Hoffnungsrunde`, or null (issue #91).
+   *
+   * A second field rather than a discriminated one, for the reason
+   * `consolationRound` is: the two tournaments run at the same time and can
+   * both have a lottery open, and every scene written before the side event had
+   * one keeps reading exactly the field it read. Which of the two is on the wall
+   * is the staged scene's `track`.
+   */
+  consolationRepechage: repechageSnapshotSchema.nullable(),
+  /**
    * Every round that is over, with its matches — the history (issue #22).
    *
    * The `ROUND_BOARD` scene names a round, and until now the only round the
@@ -193,6 +204,16 @@ export const tournamentSnapshotSchema = z.object({
    * was split to avoid.
    */
   history: z.array(roundSchema),
+  /**
+   * The `Trostrunde`'s own tree, or null until it is drawn (issue #91).
+   *
+   * Beside `bracket` for the same reason its lottery is beside the main one:
+   * both can exist at once, and the `BRACKET` scene is pointed at one of them
+   * by the staged descriptor's `track`. It is drawn in numbers rather than
+   * names, which is a property of the tree and not a second scene — the side
+   * event never enters the naming phase (§10).
+   */
+  consolationBracket: bracketSchema.nullable(),
   /**
    * The `Turnierbaum`, or null until it is drawn (issue #25).
    *
@@ -281,6 +302,8 @@ export const EMPTY_TOURNAMENT: TournamentSnapshot = {
   history: [],
   // The final phase has not been reached, which is true of most of an evening.
   bracket: null,
+  consolationBracket: null,
+  consolationRepechage: null,
 };
 
 /**
@@ -297,6 +320,7 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
   const round = currentRound(tournament);
   const consolationRound = currentRound(tournament, 'CONSOLATION');
   const repechage = repechageState(tournament);
+  const consolationRepechage = repechageState(tournament, 'CONSOLATION');
 
   return {
     name: tournament.name,
@@ -321,19 +345,8 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
     // Copied out of the readonly projection for the same reason `matches` is:
     // what crosses the channel is a value the sync layer serialises, and the
     // schema's inferred arrays are mutable ones.
-    repechage:
-      repechage === null
-        ? null
-        : {
-            target: repechage.target,
-            need: repechage.need,
-            byes: repechage.byes,
-            through: [...repechage.through],
-            pot: [...repechagePot(tournament)],
-            last: repechage.last,
-            fallbackUsed: repechage.fallbackUsed,
-            complete: repechage.complete,
-          },
+    repechage: potSnapshot(tournament, repechage, 'MAIN'),
+    consolationRepechage: potSnapshot(tournament, consolationRepechage, 'CONSOLATION'),
     // Copied for the same reason the two lists above are: what crosses the
     // channel is a value the sync layer serialises, and the schema's inferred
     // arrays are mutable ones.
@@ -343,6 +356,7 @@ export function toTournamentSnapshot(tournament: Tournament): TournamentSnapshot
     // two semi-finals has nothing of its own to draw the tree from (golden
     // rule 4).
     bracket: tournament.bracket,
+    consolationBracket: tournament.consolation?.bracket ?? null,
   };
 }
 
@@ -370,4 +384,35 @@ export const INITIAL_SNAPSHOT: Snapshot = {
  */
 export function supersedes(incoming: Snapshot, current: Snapshot): boolean {
   return incoming.revision >= current.revision;
+}
+
+/**
+ * One track's lottery, as the beamer reads it.
+ *
+ * Shared by both since issue #91: two copies of this projection would be two
+ * places for the pot to come to mean something different, and the side event's
+ * lottery is the *same* lottery — same target, same counter, same pot.
+ *
+ * Copied out of the readonly projections, because what crosses the channel is a
+ * value the sync layer serialises and the schema's inferred arrays are mutable
+ * ones.
+ */
+function potSnapshot(
+  tournament: Tournament,
+  state: ReturnType<typeof repechageState>,
+  track: RoundTrack,
+): TournamentSnapshot['repechage'] {
+  if (state === null) {
+    return null;
+  }
+  return {
+    target: state.target,
+    need: state.need,
+    byes: state.byes,
+    through: [...state.through],
+    pot: [...repechagePot(tournament, track)],
+    last: state.last,
+    fallbackUsed: state.fallbackUsed,
+    complete: state.complete,
+  };
 }

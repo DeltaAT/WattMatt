@@ -1,7 +1,8 @@
 import type { BeamerScene } from '@/domain/beamerScene';
 import * as phase from '@/domain/progression';
 import { sceneForPhase } from '@/domain/sceneCatalog';
-import type { Tournament } from '@/domain/types';
+import { trackState } from '@/domain/track';
+import type { RoundTrack, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
 
@@ -39,14 +40,14 @@ import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
  * press, so the pairings never appear on the wall before the host asks for them
  * (docs/OPEN-QUESTIONS.md #45).
  */
-export function advancePhase(store: TournamentStore): void {
+export function advancePhase(store: TournamentStore, track: RoundTrack = 'MAIN'): void {
   const before = store.getState().document;
   if (before === null) {
     return;
   }
 
-  const step = phase.phaseStep(before);
-  const after = phase.advancePhase(before);
+  const step = phase.phaseStep(before, track);
+  const after = phase.advancePhase(before, track);
   // Nothing to commit when the domain handed its argument back: a blocker is
   // standing, or there is no step from this phase at all. The button is
   // disabled in both cases; the guard is what makes a stale click during a live
@@ -56,20 +57,25 @@ export function advancePhase(store: TournamentStore): void {
   }
 
   store.commit(
-    (state) => ({ document: after, ...picture(after, state.autoFollow) }),
-    describe(step, after),
+    (state) => ({ document: after, ...picture(after, state.autoFollow, track) }),
+    describe(step, after, track),
   );
 }
 
-function describe(step: phase.PhaseStep, after: Tournament): CommitOptions {
+function describe(step: phase.PhaseStep, after: Tournament, track: RoundTrack): CommitOptions {
+  const state = trackState(after, track);
   return {
     urgent: true,
-    undoLabel: de.undo.action.phaseAdvanced({ phase: de.phase.name[after.phase] }),
+    undoLabel: de.undo.action.phaseAdvanced({ phase: de.phase.name[state.phase] }),
     log: {
       action: 'PHASE_ADVANCED',
       payload: {
+        // Which of the two tournaments moved. Both are in the file and both
+        // walk the same phases, so an entry that did not say would be
+        // ambiguous the moment the side event exists (issue #91).
+        track,
         from: step.from,
-        to: after.phase,
+        to: state.phase,
         // The field the step carried across. Half an hour later this is what
         // answers "why is the Turnierbaum this size?" without anybody having to
         // replay the evening (docs/FILE-FORMAT.md rule 6).
@@ -77,7 +83,7 @@ function describe(step: phase.PhaseStep, after: Tournament): CommitOptions {
         // Only ever set by a step into the `Hoffnungsrunde`, and the pair of
         // them is what makes that shuffle reproducible a week later
         // (CLAUDE.md golden rule 7).
-        pool: after.repechage?.pool ?? [],
+        pool: trackState(after, track).repechage?.pool ?? [],
         rngCursor: after.rngCursor,
       },
     },
@@ -107,12 +113,27 @@ function describe(step: phase.PhaseStep, after: Tournament): CommitOptions {
  * back with the phase rather than leaving the projector in a phase that no
  * longer exists (golden rule 4).
  */
-function picture(after: Tournament, autoFollow: boolean): { scene?: BeamerScene } {
-  if (after.phase === 'REPECHAGE') {
-    return { scene: { id: 'REPECHAGE' } };
+function picture(
+  after: Tournament,
+  autoFollow: boolean,
+  track: RoundTrack,
+): { scene?: BeamerScene } {
+  const phaseNow = trackState(after, track).phase;
+  if (phaseNow === 'REPECHAGE') {
+    return { scene: track === 'MAIN' ? { id: 'REPECHAGE' } : { id: 'REPECHAGE', track } };
   }
-  if (after.phase === 'NAMING') {
+  /*
+   * The `Trostrunde` never reaches `NAMING`, so this branch is the main
+   * field's alone — and the side event's step into its own `BRACKET` phase
+   * stages nothing at all, because the tree is not drawn yet. The host presses
+   * *Turnierbaum auslosen* next, and that is what puts it on the wall (issue
+   * #91, docs/OPEN-QUESTIONS.md, entry 100).
+   */
+  if (phaseNow === 'NAMING') {
     return { scene: { id: 'NAMING' } };
+  }
+  if (track !== 'MAIN') {
+    return {};
   }
   return autoFollow ? { scene: sceneForPhase(after) } : {};
 }

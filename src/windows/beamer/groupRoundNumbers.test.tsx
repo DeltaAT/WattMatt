@@ -108,7 +108,9 @@ function field(count: number): TournamentSnapshot {
       fallbackUsed: null,
       complete: false,
     },
+    consolationRepechage: null,
     history: [],
+    consolationBracket: null,
     bracket: null,
   };
 }

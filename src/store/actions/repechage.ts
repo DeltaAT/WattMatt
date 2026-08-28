@@ -1,7 +1,8 @@
 import type { BeamerScene } from '@/domain/beamerScene';
 import type { GroupId } from '@/domain/ids';
 import * as repechage from '@/domain/repechage';
-import type { RepechageFallback, Tournament } from '@/domain/types';
+import { trackState } from '@/domain/track';
+import type { RepechageFallback, RoundTrack, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
 
@@ -35,26 +36,27 @@ import type { CommitOptions, TournamentStore } from '@/store/tournamentStore';
  * left alone: the host pressed *Hoffnungsrunde starten*, which is as explicit
  * as an intention gets (golden rule 3).
  */
-export function startRepechage(store: TournamentStore): void {
+export function startRepechage(store: TournamentStore, track: RoundTrack = 'MAIN'): void {
   change(
     store,
-    (document) => repechage.startRepechage(document),
+    (document) => repechage.startRepechage(document, track),
     (_before, after) => ({
       urgent: true,
       undoLabel: de.undo.action.repechageStarted,
       log: {
         action: 'REPECHAGE_STARTED',
         payload: {
-          target: after.repechage?.target ?? null,
+          track,
+          target: trackState(after, track).repechage?.target ?? null,
           // The pot in the order it was shuffled into, and the cursor it came
           // out of: together they are what makes the draw reproducible a week
           // later, if a participant asks (CLAUDE.md golden rule 7).
-          pool: after.repechage?.pool ?? [],
+          pool: trackState(after, track).repechage?.pool ?? [],
           rngCursor: after.rngCursor,
         },
       },
     }),
-    () => ({ scene: { id: 'REPECHAGE' } }),
+    () => ({ scene: repechageScene(track) }),
   );
 }
 
@@ -65,22 +67,23 @@ export function startRepechage(store: TournamentStore): void {
  * can never accidentally draw two candidates at once" true below the button as
  * well as on it.
  */
-export function drawRepechageCandidate(store: TournamentStore): void {
+export function drawRepechageCandidate(store: TournamentStore, track: RoundTrack = 'MAIN'): void {
   change(
     store,
-    (document) => repechage.drawCandidate(document),
+    (document) => repechage.drawCandidate(document, track),
     (_before, after) => ({
       urgent: true,
       undoLabel: de.undo.action.repechageCandidateDrawn({
-        participant: participantOf(after, pendingOf(after)),
+        participant: participantOf(after, pendingOf(after, track)),
       }),
       log: {
         action: 'REPECHAGE_CANDIDATE_DRAWN',
         payload: {
-          groupId: pendingOf(after),
+          track,
+          groupId: pendingOf(after, track),
           // What was still in the pot behind them. Half an hour later this is
           // the only record of how close the phase came to running dry.
-          remaining: after.repechage?.pool.length ?? 0,
+          remaining: trackState(after, track).repechage?.pool.length ?? 0,
         },
       },
     }),
@@ -88,25 +91,30 @@ export function drawRepechageCandidate(store: TournamentStore): void {
 }
 
 /** The drawn candidate takes the place and is back in the tournament. */
-export function acceptRepechageCandidate(store: TournamentStore): void {
-  answer(store, true);
+export function acceptRepechageCandidate(store: TournamentStore, track: RoundTrack = 'MAIN'): void {
+  answer(store, true, track);
 }
 
 /** The drawn candidate says no, and is out for good (docs/OPEN-QUESTIONS.md #6). */
-export function declineRepechageCandidate(store: TournamentStore): void {
-  answer(store, false);
+export function declineRepechageCandidate(
+  store: TournamentStore,
+  track: RoundTrack = 'MAIN',
+): void {
+  answer(store, false, track);
 }
 
-function answer(store: TournamentStore, accepted: boolean): void {
+function answer(store: TournamentStore, accepted: boolean, track: RoundTrack): void {
   change(
     store,
     (document) =>
-      accepted ? repechage.acceptCandidate(document) : repechage.declineCandidate(document),
+      accepted
+        ? repechage.acceptCandidate(document, track)
+        : repechage.declineCandidate(document, track),
     (before) => {
       // Read off the tournament from *before*: afterwards nothing is pending,
       // and the participant this decision was about is the one the undo button
       // has to name.
-      const candidate = pendingOf(before);
+      const candidate = pendingOf(before, track);
       const participant = participantOf(before, candidate);
       return {
         urgent: true,
@@ -115,7 +123,7 @@ function answer(store: TournamentStore, accepted: boolean): void {
           : de.undo.action.repechageDeclined({ participant }),
         log: {
           action: 'REPECHAGE_ANSWERED',
-          payload: { groupId: candidate, accepted },
+          payload: { track, groupId: candidate, accepted },
         },
       };
     },
@@ -131,10 +139,14 @@ function answer(store: TournamentStore, accepted: boolean): void {
  * the field the bracket is built on will not be the field the qualifying round
  * produced and somebody will ask why.
  */
-export function useRepechageFallback(store: TournamentStore, choice: RepechageFallback): void {
+export function useRepechageFallback(
+  store: TournamentStore,
+  choice: RepechageFallback,
+  track: RoundTrack = 'MAIN',
+): void {
   change(
     store,
-    (document) => repechage.useRepechageFallback(document, choice),
+    (document) => repechage.useRepechageFallback(document, choice, track),
     (before, after) => ({
       urgent: true,
       undoLabel:
@@ -187,8 +199,8 @@ function change(
 }
 
 /** The candidate waiting for an answer, or null. */
-function pendingOf(document: Tournament): GroupId | null {
-  return repechage.repechageState(document)?.pending ?? null;
+function pendingOf(document: Tournament, track: RoundTrack = 'MAIN'): GroupId | null {
+  return repechage.repechageState(document, track)?.pending ?? null;
 }
 
 /** What this tournament calls the group, in the host's chosen wording. */
@@ -200,4 +212,16 @@ function participantOf(document: Tournament, groupId: GroupId | null): string {
   return (
     group.name ?? de.participant[document.settings.participantLabel].numbered({ n: group.number })
   );
+}
+
+/**
+ * The scene descriptor for one track's lottery.
+ *
+ * `MAIN` carries no `track` at all, so the picture the host has been staging
+ * since issue #21 is the identical object it always was — which is what makes
+ * "main-track behaviour is unchanged" true of the wire as well as of the rules
+ * (issue #91).
+ */
+function repechageScene(track: RoundTrack): BeamerScene {
+  return track === 'MAIN' ? { id: 'REPECHAGE' } : { id: 'REPECHAGE', track };
 }

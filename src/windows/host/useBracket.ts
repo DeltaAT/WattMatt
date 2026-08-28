@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
-import type { BeamerScene } from '@/domain/beamerScene';
+import { sceneTrack, type BeamerScene } from '@/domain/beamerScene';
 import {
   bracketBlockers,
   bracketColumns,
@@ -17,12 +17,14 @@ import {
 import { fieldSize, FINAL_PHASE_SIZE } from '@/domain/draw';
 import type { BracketNodeId, GroupId, TableId } from '@/domain/ids';
 import { freeTables } from '@/domain/selectors';
+import { trackState } from '@/domain/track';
 import type {
   Bracket,
   BracketNode,
   BracketRound,
   Group,
   ParticipantLabel,
+  RoundTrack,
   Table,
 } from '@/domain/types';
 import { systemClock } from '@/platform/clock';
@@ -125,12 +127,19 @@ const NO_BRACKET = {
   focus: null,
 } as const;
 
-export function useBracket(): BracketHandle {
+/**
+ * @param track Which tournament's tree this panel runs (issue #91).
+ *
+ * Both end in one, and it is the same tree — same nodes, same third-place
+ * routing, same corrections. The `Trostrunde`'s is drawn in numbers rather than
+ * names, and that is a property of what is *in* it rather than a second panel.
+ */
+export function useBracket(track: RoundTrack = 'MAIN'): BracketHandle {
   const state = useSyncExternalStore(tournamentStore.subscribe, () => tournamentStore.getState());
 
   const draw = useCallback(() => {
-    drawBracket(tournamentStore);
-  }, []);
+    drawBracket(tournamentStore, systemClock, track);
+  }, [track]);
   // Read at click time and thrown away: the preview runs the real draw against
   // a copy, so what the host is shown is what `draw()` then commits, and
   // declining it spends nothing (issue #72).
@@ -139,24 +148,36 @@ export function useBracket(): BracketHandle {
     if (open === null) {
       return null;
     }
-    return previewDrawBracket(open, { at: systemClock.now() })?.forced ?? null;
-  }, []);
-  const setWinner = useCallback((nodeId: BracketNodeId, winnerId: GroupId) => {
-    setBracketWinner(tournamentStore, nodeId, winnerId);
-  }, []);
-  const correctionFor = useCallback((nodeId: BracketNodeId, winnerId: GroupId) => {
-    const open = tournamentStore.getState().document;
-    return open === null ? null : bracketCorrection(open, nodeId, winnerId);
-  }, []);
-  const assign = useCallback((nodeId: BracketNodeId, tableId: TableId) => {
-    assignBracketMatch(tournamentStore, nodeId, tableId);
-  }, []);
+    return previewDrawBracket(open, { at: systemClock.now() }, track)?.forced ?? null;
+  }, [track]);
+  const setWinner = useCallback(
+    (nodeId: BracketNodeId, winnerId: GroupId) => {
+      setBracketWinner(tournamentStore, nodeId, winnerId, track);
+    },
+    [track],
+  );
+  const correctionFor = useCallback(
+    (nodeId: BracketNodeId, winnerId: GroupId) => {
+      const open = tournamentStore.getState().document;
+      return open === null ? null : bracketCorrection(open, nodeId, winnerId, track);
+    },
+    [track],
+  );
+  const assign = useCallback(
+    (nodeId: BracketNodeId, tableId: TableId) => {
+      assignBracketMatch(tournamentStore, nodeId, tableId, systemClock, track);
+    },
+    [track],
+  );
   const finish = useCallback(() => {
-    finishBracket(tournamentStore);
-  }, []);
-  const showOnBeamer = useCallback((focus: BracketRound | null) => {
-    showBracketOnBeamer(tournamentStore, focus);
-  }, []);
+    finishBracket(tournamentStore, track);
+  }, [track]);
+  const showOnBeamer = useCallback(
+    (focus: BracketRound | null) => {
+      showBracketOnBeamer(tournamentStore, focus, track);
+    },
+    [track],
+  );
 
   const showCeremony = useCallback((mode: 'AUTO' | 'STEP', step = 0) => {
     const scene: BeamerScene = { id: 'CEREMONY', reveal: { mode, step } };
@@ -207,11 +228,14 @@ export function useBracket(): BracketHandle {
     return { ...NO_BRACKET, ...actions };
   }
 
-  const bracket = document.bracket;
+  const bracket = trackState(document, track).bracket;
   const nodes = bracket?.nodes ?? [];
+  // The phase a track waits in with an empty tree: `NAMING` on the main field,
+  // and `BRACKET` in the side event, which has no names to collect (issue #91).
+  const waiting = track === 'MAIN' ? 'NAMING' : 'BRACKET';
 
   return {
-    isActive: bracket !== null || document.phase === 'NAMING',
+    isActive: bracket !== null || trackState(document, track).phase === waiting,
     bracket,
     // Recomputed on every commit rather than memoised, for the reason
     // `@/domain/lookup` gives: the store commits whole new states, so a cached
@@ -219,16 +243,21 @@ export function useBracket(): BracketHandle {
     columns: bracket === null ? [] : bracketColumns(bracket),
     groups: document.groups,
     participant: document.settings.participantLabel,
-    freeTables: freeTables(document),
+    freeTables: freeTables(document, track),
     playable: nodes.filter((node) => {
       const nodeState = bracketNodeState(node);
       return nodeState === 'QUEUED' || nodeState === 'RUNNING';
     }).length,
-    field: fieldSize(document),
-    drawBlockers: bracketBlockers(document),
-    canDraw: canDrawBracket(document),
-    canFinish: canFinishBracket(document),
-    focus: state.scene.id === 'BRACKET' ? (state.scene.focus ?? null) : null,
+    field: fieldSize(document, track),
+    drawBlockers: bracketBlockers(document, track),
+    canDraw: canDrawBracket(document, track),
+    canFinish: canFinishBracket(document, track),
+    // Only when the projector is on *this* track's tree: the host zooming the
+    // side event's bracket must not move the main field's picture.
+    focus:
+      state.scene.id === 'BRACKET' && sceneTrack(state.scene) === track
+        ? (state.scene.focus ?? null)
+        : null,
     ...actions,
   };
 }

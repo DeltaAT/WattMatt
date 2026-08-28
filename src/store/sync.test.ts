@@ -32,7 +32,9 @@ function groups(count: number): TournamentSnapshot {
     consolationRound: null,
     consolationMatches: [],
     repechage: null,
+    consolationRepechage: null,
     history: [],
+    consolationBracket: null,
     bracket: null,
   };
 }

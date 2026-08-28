@@ -94,6 +94,8 @@ function fullHouse(): TournamentSnapshot {
     // elimination round running with the qualifying round already behind it, so
     // the measured payload carries a full round of history as well as the live
     // one.
+    consolationRepechage: null,
+    consolationBracket: null,
     history: [
       {
         id: roundIdSchema.parse('round-0'),
@@ -139,6 +141,8 @@ describe('snapshot round-trip performance', () => {
         consolationMatches: [...tournament.consolationMatches],
         repechage: tournament.repechage,
         bracket: tournament.bracket,
+        consolationRepechage: null,
+        consolationBracket: null,
         history: [...tournament.history],
       };
 

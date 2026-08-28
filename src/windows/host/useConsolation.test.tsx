@@ -10,6 +10,7 @@ import type { Tournament } from '@/domain/types';
 import { closeDocument, setOpenedDocument } from '@/store/actions/document';
 import { tournamentStore } from '@/store/session';
 import { useConsolation, type ConsolationHandle } from '@/windows/host/useConsolation';
+import { usePhase, type PhaseHandle } from '@/windows/host/usePhase';
 
 /**
  * The wire between the `Trostrunde` panel and the store (issue #73,
@@ -55,6 +56,40 @@ afterEach(() => {
 
 function handle(): { result: { current: ConsolationHandle } } {
   return renderHook(() => useConsolation());
+}
+
+/**
+ * Both halves of the side event's panel at once (issue #91).
+ *
+ * The `Trostrunde` runs the whole pipeline, so its board and the step out of
+ * its phase are two hooks rather than one — the same pair the main field has,
+ * with the track set the other way. Rendered together because that is how the
+ * host reads them: the round is closed, and the step underneath it says what
+ * follows.
+ */
+function pair(): { result: { current: { consolation: ConsolationHandle; phase: PhaseHandle } } } {
+  return renderHook(() => ({
+    consolation: useConsolation(),
+    phase: usePhase('CONSOLATION'),
+  }));
+}
+
+/** Draws the open side-event round, decides every pairing, and closes it. */
+function playOneRound(result: { current: { consolation: ConsolationHandle } }): void {
+  act(() => {
+    result.current.consolation.draw();
+  });
+  for (const match of result.current.consolation.summary?.round?.matches ?? []) {
+    if (match.b !== null) {
+      const winner = match.a;
+      act(() => {
+        result.current.consolation.setWinner(match.id, winner);
+      });
+    }
+  }
+  act(() => {
+    result.current.consolation.close();
+  });
 }
 
 const documentOf = (): Tournament => {
@@ -164,37 +199,59 @@ describe('useConsolation', () => {
     expect(tournamentStore.getState().scene).toEqual({ id: 'ROUND_BOARD', roundId });
   });
 
-  it('runs the round through to a winner', () => {
+  /*
+   * What changed with issue #91: the side event no longer plays itself down to
+   * one group by repeating rounds. It runs the *same* pipeline as the main
+   * field, so a round that leaves a field small enough hands over to its own
+   * tree rather than dealing again — and the step out of the phase names that
+   * tree, never `NAMING`, because the `Trostrunde` is numbers from start to
+   * finish (§10).
+   */
+  it('hands its field to its own bracket instead of dealing another round', () => {
     opened(qualified());
-    const { result } = handle();
+    const { result } = pair();
 
     act(() => {
-      result.current.start();
+      result.current.consolation.start();
+    });
+    playOneRound(result);
+
+    // Eight went in, four came out, and four is already the tree.
+    expect(consolationGroups(documentOf())).toHaveLength(4);
+    expect(result.current.consolation.canDraw).toBe(false);
+    expect(result.current.phase.step?.to).toBe('BRACKET');
+    expect(result.current.phase.step?.canAdvance).toBe(true);
+
+    act(() => {
+      result.current.phase.advance();
     });
 
-    // 8 in it: 4, then 2, then 1.
-    for (let round = 0; round < 3; round += 1) {
-      act(() => {
-        result.current.draw();
-      });
-      for (const match of result.current.summary?.round?.matches ?? []) {
-        if (match.b !== null) {
-          const winner = match.a;
-          act(() => {
-            result.current.setWinner(match.id, winner);
-          });
-        }
-      }
-      act(() => {
-        result.current.close();
-      });
-    }
+    expect(result.current.phase.phase).toBe('BRACKET');
+    // Still running: the winner is one the tree decides, not the close.
+    expect(result.current.consolation.summary?.state).toBe('RUNNING');
+  });
 
-    expect(result.current.summary?.state).toBe('FINISHED');
-    expect(result.current.summary?.winner).not.toBeNull();
-    expect(result.current.canDraw).toBe(false);
+  /*
+   * The smallest side event there is: two groups, whose single match *is* the
+   * `Finale`. It takes the same route the main field takes at two participants
+   * — no qualifying round to draw, because there is nothing to qualify for —
+   * so the panel offers no draw at all and the step goes straight to the tree
+   * (§9 case 5, docs/OPEN-QUESTIONS.md entry 101).
+   */
+  it('offers no round at all for a field of two and goes straight to the tree', () => {
+    opened(qualified(4, 2));
+    const { result } = pair();
+
+    expect(result.current.consolation.fieldSize).toBe(2);
+    act(() => {
+      result.current.consolation.start();
+    });
+
     // The board says why, rather than offering a draw that would refuse.
-    expect(result.current.drawBlockers).toContain('TOO_FEW_GROUPS');
+    expect(result.current.consolation.canDraw).toBe(false);
+    expect(result.current.consolation.drawBlockers).toContain('FINAL_PHASE_REACHED');
+    expect(result.current.phase.step?.to).toBe('BRACKET');
+    expect(result.current.phase.step?.canAdvance).toBe(true);
   });
 
   it('previews without spending the RNG cursor', () => {

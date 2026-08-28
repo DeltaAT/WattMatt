@@ -3,7 +3,8 @@ import { useCallback, useSyncExternalStore } from 'react';
 import type { RoundId } from '@/domain/ids';
 import { phaseStep, type PhaseStep } from '@/domain/progression';
 import { roundHistory, type RoundRecord } from '@/domain/round';
-import type { Group, ParticipantLabel, Phase } from '@/domain/types';
+import { isTrackRunning, trackState } from '@/domain/track';
+import type { Group, ParticipantLabel, Phase, RoundTrack } from '@/domain/types';
 import { advancePhase } from '@/store/actions/progression';
 import { showScene } from '@/store/actions/scene';
 import { tournamentStore } from '@/store/session';
@@ -55,13 +56,21 @@ const NO_PHASE = {
   participant: 'GROUP',
 } as const;
 
-export function usePhase(): PhaseHandle {
+/**
+ * @param track Which of the two tournaments this panel steps (issue #91).
+ *
+ * The `Trostrunde` runs the same pipeline on its own field, so it has a phase
+ * of its own that moves independently of the main field's — which is routinely
+ * several rounds ahead of it. One hook for both, because a second copy would be
+ * the place the two came to disagree about what *weiter* does.
+ */
+export function usePhase(track: RoundTrack = 'MAIN'): PhaseHandle {
   const document = useSyncExternalStore(
     tournamentStore.subscribe,
     () => tournamentStore.getState().document,
   );
 
-  const advance = useCallback(() => advancePhase(tournamentStore), []);
+  const advance = useCallback(() => advancePhase(tournamentStore, track), [track]);
   const showRoundOnBeamer = useCallback(
     (roundId: RoundId) => showScene(tournamentStore, { id: 'ROUND_BOARD', roundId }),
     [],
@@ -73,13 +82,19 @@ export function usePhase(): PhaseHandle {
     return { ...NO_PHASE, ...actions };
   }
 
+  const phase = trackState(document, track).phase;
+
   return {
     // Recomputed on every commit rather than memoised, for the reason
     // `@/domain/lookup` gives: the store commits whole new states, so a cached
     // step would be stale exactly when the host needs it.
-    isActive: document.phase !== 'SETUP',
-    phase: document.phase,
-    step: phaseStep(document),
+    //
+    // A side event that was declined an hour ago or finished ten minutes ago is
+    // not a tournament with a phase to read, so it has no panel either — the
+    // same rule the round and bracket panels follow (issue #91).
+    isActive: isTrackRunning(document, track) && phase !== 'SETUP',
+    phase,
+    step: phaseStep(document, track),
     history: roundHistory(document),
     groups: document.groups,
     participant: document.settings.participantLabel,

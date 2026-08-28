@@ -26,7 +26,13 @@ function bothTracks(tables = 4): Tournament {
     nextGroupNumber: 7,
     tables: Array.from({ length: tables }, (_unused, index) => table(index + 1)),
     nextTableNumber: tables + 1,
-    consolation: { state: 'RUNNING', winnerId: null },
+    consolation: {
+      state: 'RUNNING',
+      phase: 'QUALIFYING',
+      repechage: null,
+      bracket: null,
+      winnerId: null,
+    },
   });
 }
 

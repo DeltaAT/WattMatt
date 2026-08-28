@@ -53,10 +53,12 @@ describe('the snapshot envelope', () => {
         consolationRound: null,
         consolationMatches: [],
         repechage: null,
+        consolationRepechage: null,
         history: [],
         // The `BRACKET` scene above draws this, and it is the one field with a
         // tree in it: a `nextNodeId` that came back as `undefined` would be a
         // final nobody advances into (issue #25).
+        consolationBracket: null,
         bracket: {
           size: 2,
           nodes: [
@@ -219,7 +221,9 @@ describe('toTournamentSnapshot', () => {
 
     expect(Object.keys(projected).sort()).toEqual([
       'bracket',
+      'consolationBracket',
       'consolationMatches',
+      'consolationRepechage',
       'consolationRound',
       'groups',
       'history',
@@ -246,7 +250,9 @@ describe('toTournamentSnapshot', () => {
       consolationRound: null,
       consolationMatches: [],
       repechage: null,
+      consolationRepechage: null,
       history: [],
+      consolationBracket: null,
       bracket: null,
     });
   });

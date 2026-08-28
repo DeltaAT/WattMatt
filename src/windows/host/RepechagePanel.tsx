@@ -1,6 +1,6 @@
 import type { GroupId } from '@/domain/ids';
 import type { RepechageBlocker, RepechageState } from '@/domain/repechage';
-import type { Group, ParticipantLabel, RepechageFallback } from '@/domain/types';
+import type { Group, ParticipantLabel, RepechageFallback, RoundTrack } from '@/domain/types';
 import { de } from '@/i18n';
 import { groupLabel } from '@/windows/groupLabel';
 import { RepechageFallbackDialog } from '@/windows/host/RepechageFallbackDialog';
@@ -30,6 +30,7 @@ export function RepechagePanel({
   canDraw,
   groups,
   participant,
+  track = 'MAIN',
   onStart,
   onDraw,
   onAccept,
@@ -47,6 +48,17 @@ export function RepechagePanel({
   groups: readonly Group[];
   /** The wording this tournament uses: `Gruppe`, `Team` or `Spieler`. */
   participant: ParticipantLabel;
+  /**
+   * Which of the two tournaments' places are being drawn (issue #91, §10).
+   *
+   * The same lottery — same target, same pot, same two answers — run for the
+   * `Trostrunde` on its own field. What differs is what *Nein* costs, and the
+   * panel says so out loud on the side event's copy: there is no second level,
+   * so declining here means going home.
+   *
+   * Defaulted, so the main field's panel is exactly what it was.
+   */
+  track?: RoundTrack;
   onStart: () => void;
   onDraw: () => void;
   onAccept: () => void;
@@ -59,9 +71,15 @@ export function RepechagePanel({
   const reason = blockers.map(blockerText)[0];
 
   return (
-    <section className="flex flex-col gap-3" aria-label={de.repechage.sectionLabel}>
+    <section
+      className="flex flex-col gap-3"
+      aria-label={track === 'MAIN' ? de.repechage.sectionLabel : de.consolation.repechageLabel}
+      data-repechage-track={track}
+    >
       <header className="flex flex-wrap items-center gap-3">
-        <h2 className="wm-display text-host-lg font-bold">{de.repechage.label}</h2>
+        <h2 className="wm-display text-host-lg font-bold">
+          {track === 'MAIN' ? de.repechage.label : de.consolation.repechageLabel}
+        </h2>
 
         {state === null ? null : (
           <>
@@ -135,6 +153,19 @@ export function RepechagePanel({
           )}
         </div>
       </header>
+
+      {/*
+        The one sentence that is only true of the side event's lottery
+        (issue #91): the `Trostrunde` has no `Trostrunde`, so a group that turns
+        this down is out for the evening. It sits above the candidate rather
+        than beside the buttons, so the host has read it before anybody is drawn
+        and can say it to the room without being asked.
+      */}
+      {track === 'MAIN' ? null : (
+        <p className="text-host-sm font-semibold text-wm-text" data-repechage-hint="">
+          {de.consolation.repechageHint}
+        </p>
+      )}
 
       {state === null ? (
         // Either there is a reason the phase cannot start, or there is not and

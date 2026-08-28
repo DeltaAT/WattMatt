@@ -294,6 +294,28 @@ export const repechageSchema = z.object({
 });
 export type Repechage = z.infer<typeof repechageSchema>;
 
+export const bracketNodeSchema = z.object({
+  id: bracketNodeIdSchema,
+  round: bracketRoundSchema,
+  /** Null until the feeding match has produced a winner. */
+  slotA: groupIdSchema.nullable(),
+  slotB: groupIdSchema.nullable(),
+  winnerId: groupIdSchema.nullable(),
+  /** Where this node's winner goes. Null for the final and for third place. */
+  nextNodeId: bracketNodeIdSchema.nullable(),
+  tableId: tableIdSchema.nullable(),
+});
+export type BracketNode = z.infer<typeof bracketNodeSchema>;
+
+export const bracketSchema = z.object({
+  /** 16, 8, 4 or 2 — a small tournament enters the final phase lower (§5). */
+  size: z.number().int().positive(),
+  nodes: z.array(bracketNodeSchema),
+  /** Null at size 2: two groups leave nobody to play for third (§9 case 10). */
+  thirdPlaceNodeId: bracketNodeIdSchema.nullable(),
+});
+export type Bracket = z.infer<typeof bracketSchema>;
+
 /**
  * How far the `Trostrunde` has got — the side event of
  * docs/TOURNAMENT-RULES.md §10 (issue #73).
@@ -316,6 +338,36 @@ export type ConsolationState = z.infer<typeof consolationStateSchema>;
 export const consolationSchema = z.object({
   state: consolationStateSchema,
   /**
+   * Where the side event has got to in §1 — its own copy of the main field's
+   * phase machine (issue #91).
+   *
+   * The `Trostrunde` runs the *same pipeline* as the main tournament, one level
+   * down: a qualifying round, its own `Hoffnungsrunde` when the field is not a
+   * power of two, elimination rounds down to sixteen, and then a bracket with a
+   * `Spiel um Platz 3`. Two of the seven phases are unreachable here and that is
+   * the whole of the difference: `NAMING` never happens, because the side event
+   * is numbers-only from start to finish, and `CEREMONY` never happens, because
+   * the podium is the main tournament's 1/2/3 (docs/TOURNAMENT-RULES.md §10).
+   *
+   * A phase of its own rather than a second meaning for `tournament.phase`: the
+   * two tracks run at the same time and are routinely in different phases —
+   * the main field in its `Achtelfinale` while the side event is still drawing
+   * its first round is the ordinary evening, not an edge case.
+   */
+  phase: phaseSchema,
+  /**
+   * The side event's own `Hoffnungsrunde`, or null when it has not needed one.
+   *
+   * Same lottery, same accept/decline, same fallbacks — and one consequence
+   * worth saying out loud to the room, because it is the opposite of the main
+   * one: declining *this* one means going home. The `Trostrunde`'s losers get
+   * no further side event, because one level is where the structure stops
+   * recursing (issue #91, §10 "no nesting").
+   */
+  repechage: repechageSchema.nullable(),
+  /** The side event's own tree, drawn in numbers and never in names (§10). */
+  bracket: bracketSchema.nullable(),
+  /**
    * The last group standing, once one is — set when the round that leaves it
    * alone is closed, and null before that and for a declined side event.
    *
@@ -327,28 +379,6 @@ export const consolationSchema = z.object({
   winnerId: groupIdSchema.nullable(),
 });
 export type Consolation = z.infer<typeof consolationSchema>;
-
-export const bracketNodeSchema = z.object({
-  id: bracketNodeIdSchema,
-  round: bracketRoundSchema,
-  /** Null until the feeding match has produced a winner. */
-  slotA: groupIdSchema.nullable(),
-  slotB: groupIdSchema.nullable(),
-  winnerId: groupIdSchema.nullable(),
-  /** Where this node's winner goes. Null for the final and for third place. */
-  nextNodeId: bracketNodeIdSchema.nullable(),
-  tableId: tableIdSchema.nullable(),
-});
-export type BracketNode = z.infer<typeof bracketNodeSchema>;
-
-export const bracketSchema = z.object({
-  /** 16, 8, 4 or 2 — a small tournament enters the final phase lower (§5). */
-  size: z.number().int().positive(),
-  nodes: z.array(bracketNodeSchema),
-  /** Null at size 2: two groups leave nobody to play for third (§9 case 10). */
-  thirdPlaceNodeId: bracketNodeIdSchema.nullable(),
-});
-export type Bracket = z.infer<typeof bracketSchema>;
 
 export const settingsSchema = z.object({
   participantLabel: participantLabelSchema,

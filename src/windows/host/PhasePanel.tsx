@@ -1,6 +1,6 @@
 import { FINAL_PHASE_SIZE } from '@/domain/draw';
 import type { PhaseBlocker, PhaseStep } from '@/domain/progression';
-import type { Phase } from '@/domain/types';
+import type { Phase, RoundTrack } from '@/domain/types';
 import { de } from '@/i18n';
 
 /**
@@ -25,22 +25,48 @@ import { de } from '@/i18n';
 export function PhasePanel({
   phase,
   step,
+  track = 'MAIN',
   onAdvance,
 }: {
   phase: Phase;
   /** Null once the phase moves on some other way — `SETUP`, and #23 onwards. */
   step: PhaseStep | null;
+  /**
+   * Which of the two tournaments this panel steps (issue #91, §10).
+   *
+   * Both run the same pipeline, so both put the same phase names and the same
+   * button in front of the host — routinely at the same time and several rounds
+   * apart. The panel therefore says which tournament it is stepping, because
+   * *Ausscheidungsrunden* on its own is true of both.
+   *
+   * Defaulted, so the main field's panel is exactly what it was.
+   */
+  track?: RoundTrack;
   onAdvance: () => void;
 }) {
   const reason = step?.blockers.map((blocker) => blockerText(blocker, step.field))[0];
   const label = step === null ? null : de.phase.advance({ phase: de.phase.name[step.to] });
 
   return (
-    <section className="flex flex-col gap-2" aria-label={de.phase.sectionLabel}>
+    <section
+      className="flex flex-col gap-2"
+      aria-label={track === 'MAIN' ? de.phase.sectionLabel : de.consolation.phaseLabel}
+      data-phase-track={track}
+    >
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="wm-display text-host-lg font-bold" data-phase={phase}>
           {de.phase.name[phase]}
         </h2>
+
+        {/*
+          Beside the phase rather than instead of it: the host reads the phase
+          they are in and the tournament it belongs to as one line.
+        */}
+        {track === 'MAIN' ? null : (
+          <span className="text-host-sm font-semibold text-wm-accent" data-phase-track-label="">
+            {de.consolation.label}
+          </span>
+        )}
 
         {step === null ? null : (
           <span className="wm-tnum text-host-sm text-wm-text" data-phase-field="">

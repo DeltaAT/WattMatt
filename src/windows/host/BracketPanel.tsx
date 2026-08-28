@@ -14,6 +14,7 @@ import type {
   BracketRound,
   Group,
   ParticipantLabel,
+  RoundTrack,
   Table,
   Timestamp,
 } from '@/domain/types';
@@ -68,6 +69,7 @@ export function BracketPanel({
   onAssign,
   onFinish,
   onFocus,
+  track = 'MAIN',
   phase,
   onShowCeremony,
   onShowCeremonyStep,
@@ -100,6 +102,17 @@ export function BracketPanel({
   onAssign: (nodeId: BracketNodeId, tableId: TableId) => void;
   onFinish: () => void;
   onFocus: (round: BracketRound | null) => void;
+  /**
+   * Which of the two tournaments' trees this panel runs (issue #91, §10).
+   *
+   * The same tree — same nodes, same third-place routing, same corrections —
+   * drawn for the `Trostrunde` in numbers rather than names. Both can be on
+   * screen at once, which is why the heading names the tournament rather than
+   * saying `Turnierbaum` twice.
+   *
+   * Defaulted, so the main field's panel is exactly what it was.
+   */
+  track?: RoundTrack;
   // New: phase and ceremony controls
   phase?: string;
   onShowCeremony?: (mode: 'AUTO' | 'STEP', step?: number) => void;
@@ -162,10 +175,20 @@ export function BracketPanel({
     setPending(correction);
   };
 
+  const sectionLabel = track === 'MAIN' ? de.bracket.sectionLabel : de.consolation.bracketLabel;
+  // The last press of the side event, and the door to the `Siegerehrung` on the
+  // main field. Two different things behind one word would be the press a host
+  // makes without meaning to (issue #91).
+  const finishLabel = track === 'MAIN' ? de.bracket.finish : de.consolation.bracketFinish;
+
   return (
-    <section className="relative flex flex-col gap-3" aria-label={de.bracket.sectionLabel}>
+    <section
+      className="relative flex flex-col gap-3"
+      aria-label={sectionLabel}
+      data-bracket-track={track}
+    >
       <header className="flex flex-wrap items-center gap-3">
-        <h2 className="wm-display text-host-lg font-bold">{de.bracket.sectionLabel}</h2>
+        <h2 className="wm-display text-host-lg font-bold">{sectionLabel}</h2>
 
         {bracket === null ? null : (
           <span className="wm-tnum text-host-sm text-wm-text" data-bracket-playable="">
@@ -220,10 +243,10 @@ export function BracketPanel({
               onClick={onFinish}
               disabled={!canFinish}
               title={canFinish ? undefined : de.bracket.finishBlocked}
-              aria-label={canFinish ? de.bracket.finish : de.bracket.finishBlocked}
+              aria-label={canFinish ? finishLabel : de.bracket.finishBlocked}
               data-bracket-action="finish"
             >
-              {de.bracket.finish}
+              {finishLabel}
             </button>
           )}
         </div>
@@ -411,7 +434,7 @@ function occupiedSince(tables: readonly Table[], nodeId: BracketNodeId): Timesta
 /** Why the tree cannot be drawn, in the host's words. */
 function blockerText(blocker: BracketBlocker, field: number): string {
   switch (blocker) {
-    case 'NOT_IN_NAMING':
+    case 'WRONG_PHASE':
       return de.bracket.blocker.notInNaming;
     case 'ALREADY_DRAWN':
       return de.bracket.blocker.alreadyDrawn;

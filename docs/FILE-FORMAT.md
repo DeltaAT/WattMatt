@@ -38,7 +38,7 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
 
 ```jsonc
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -139,8 +139,15 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   // state: DECLINED | RUNNING | FINISHED. There is no pool here, unlike the
   // repechage: the field is not drawn out of a pot, it is simply every group
   // whose status is CONSOLATION.
+  // Since v7 it runs the same pipeline as the main field, so it carries the same
+  // three pieces of state: where it has got to, its own lottery, its own tree
+  // (issue #91, §10). NAMING and CEREMONY never appear in its phase — it is
+  // numbers from start to finish, and the podium is the main tournament's.
   "consolation": {
     "state": "RUNNING",
+    "phase": "QUALIFYING",          // its own copy of §1, independent of the main field's
+    "repechage": null,              // same shape as the main repechage above
+    "bracket": null,                // same shape as the main bracket below; nodes are cbn_*
     "winnerId": null                // the last group standing, once there is one
   },
 
