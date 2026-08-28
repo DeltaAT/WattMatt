@@ -366,6 +366,7 @@ function exampleFile(): RawTournamentFile {
     ],
     repechage: null,
     consolation: null,
+    consolationField: null,
     bracket: null,
     log: [],
   };

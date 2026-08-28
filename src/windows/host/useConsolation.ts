@@ -57,8 +57,15 @@ export interface ConsolationHandle {
   isActive: boolean;
   /** True while the host still has the yes/no question in front of them. */
   isOffered: boolean;
-  /** How many would be in it, for the wording of the question. */
-  fieldSize: number;
+  /**
+   * Who would be in it — the stored field of issue #102, in qualifying-draw
+   * order, and empty until it is fixed.
+   *
+   * The panel words the question with its length and lists it underneath, so
+   * the host can check the list itself while the decision is still theirs to
+   * make (docs/TOURNAMENT-RULES.md §10).
+   */
+  field: readonly Group[];
   /** Why the question cannot be put yet — all of them, in a stable order. */
   blockers: readonly ConsolationBlocker[];
 
@@ -92,7 +99,7 @@ export interface ConsolationHandle {
 const NO_CONSOLATION = {
   isActive: false,
   isOffered: false,
-  fieldSize: 0,
+  field: [],
   blockers: [],
   summary: null,
   board: null,
@@ -177,7 +184,7 @@ export function useConsolation(): ConsolationHandle {
     // one is neither, which is what makes *Nein* worth committing.
     isActive: isOffered || summary !== null,
     isOffered,
-    fieldSize: consolationField(document).length,
+    field: consolationField(document),
     blockers: consolationBlockers(document),
     summary,
     // Recomputed on every commit rather than memoised, for the reason

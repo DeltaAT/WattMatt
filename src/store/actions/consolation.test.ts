@@ -2,13 +2,22 @@ import { describe, expect, it } from 'vitest';
 
 import { consolationField } from '@/domain/consolation';
 import { closeRound as closeRoundIn, drawRound as drawRoundIn, setWinner } from '@/domain/draw';
+import { fromTournamentFile, toTournamentFile } from '@/domain/factory';
+import { isRepechageComplete, repechageState } from '@/domain/repechage';
+import { tournamentFileSchema } from '@/domain/schema';
 import { consolationGroups, currentRound, roundsOfTrack } from '@/domain/selectors';
 import { FIXED_NOW, fixedClock, group, table, tournament } from '@/domain/testFixtures';
 import type { Round, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { drawBracket, finishBracket, setBracketWinner } from '@/store/actions/bracket';
 import { declineConsolation, startConsolation } from '@/store/actions/consolation';
+import { setOpenedDocument } from '@/store/actions/document';
 import { advancePhase } from '@/store/actions/progression';
+import {
+  acceptRepechageCandidate,
+  declineRepechageCandidate,
+  drawRepechageCandidate,
+} from '@/store/actions/repechage';
 import { closeRound, drawRound, setMatchWinner, startNextMatch } from '@/store/actions/round';
 import {
   createTournamentStore,
@@ -50,11 +59,31 @@ function afterQualifying(groups = 16, tables = 4): Tournament {
   return closeRoundIn(next);
 }
 
+/** The same qualifying round, drawn and **not** decided — nothing is fixed yet. */
+function afterQualifyingOpen(groups = 16, tables = 4): Tournament {
+  const ready = tournament({
+    phase: 'QUALIFYING',
+    groups: Array.from({ length: groups }, (_unused, index) => group(index + 1)),
+    nextGroupNumber: groups + 1,
+    tables: Array.from({ length: tables }, (_unused, index) => table(index + 1)),
+    nextTableNumber: tables + 1,
+  });
+  return drawRoundIn(ready, { at: FIXED_NOW, label: (index) => `Round ${index}` });
+}
+
+/**
+ * The store with the tournament **opened** rather than injected.
+ *
+ * Through `setOpenedDocument` and therefore through `commit`, which is where
+ * the `Trostrunde`'s field is settled (issue #102). A document dropped straight
+ * into the initial state would never have been committed, so its field would
+ * still be null and every test below would be running against a side event that
+ * cannot be started — which is a path no host ever walks.
+ */
 function setup(document: Tournament = afterQualifying()): TournamentStore {
-  return createTournamentStore(
-    { ...INITIAL_TOURNAMENT_STATE, document, file: { status: 'saved', path: 'C:\\T.wattmatt' } },
-    { clock: CLOCK },
-  );
+  const store = createTournamentStore({ ...INITIAL_TOURNAMENT_STATE }, { clock: CLOCK });
+  setOpenedDocument(store, document, 'C:\\T.wattmatt');
+  return store;
 }
 
 /** Marks a winner in every side-event bracket node that has two participants. */
@@ -267,6 +296,129 @@ describe('the round actions on the CONSOLATION track', () => {
 
     expect(documentOf(store).consolation?.state).toBe('RUNNING');
     expect(documentOf(store).consolation?.winnerId).toBeNull();
+  });
+});
+
+describe('the field, fixed once (issue #102)', () => {
+  /**
+   * The whole of issue #102 through the store: the `Trostrunde`'s field is
+   * written into the document by `commit` at the moment §10 fixes it, and
+   * nothing the main field does afterwards touches it.
+   *
+   * 16 groups leave 8 winners, which is already a power of two, so §4 is
+   * skipped and the moment is the close of the qualifying round itself
+   * (docs/TOURNAMENT-RULES.md §9 case 2).
+   */
+  it('is written by the commit that closes the qualifying round', () => {
+    const store = createTournamentStore({ ...INITIAL_TOURNAMENT_STATE }, { clock: CLOCK });
+    const open = afterQualifyingOpen();
+    setOpenedDocument(store, open, 'C:\\T.wattmatt');
+
+    // Nothing is fixed while the round is open.
+    expect(documentOf(store).consolationField).toBeNull();
+
+    for (const match of currentRound(documentOf(store))?.matches ?? []) {
+      if (match.b !== null) {
+        setMatchWinner(store, match.id, match.a);
+      }
+    }
+    expect(documentOf(store).consolationField).toBeNull();
+
+    closeRound(store, 'MAIN');
+
+    expect(documentOf(store).consolationField).toHaveLength(8);
+    expect(consolationField(documentOf(store))).toHaveLength(8);
+  });
+
+  /*
+   * The bug the issue reports, at the level the host meets it: the main field
+   * plays a further round before the side event is started, and its losers do
+   * not join a round that exists for the losers of round 1.
+   */
+  it('does not change when the main field plays another round', () => {
+    const store = setup(afterQualifying(64));
+    const field = documentOf(store).consolationField;
+    expect(field).toHaveLength(32);
+
+    const advanced: Tournament = { ...documentOf(store), phase: 'ELIMINATION' };
+    store.commit(() => ({ document: advanced }), { undoLabel: de.phase.eliminationRound });
+    drawRound(store, 'MAIN');
+    playOutOpen(store, 'MAIN');
+    closeRound(store, 'MAIN');
+
+    // Sixteen more groups are out, and the field is the list it always was.
+    expect(documentOf(store).consolationField).toEqual(field);
+    expect(consolationGroups(documentOf(store))).toHaveLength(0);
+
+    startConsolation(store);
+    expect(consolationGroups(documentOf(store))).toHaveLength(32);
+    for (const entry of consolationGroups(documentOf(store))) {
+      expect(field).toContain(entry.id);
+    }
+  });
+
+  /*
+   * The one thing that is allowed to change it (issue #102's fourth task).
+   *
+   * A decline is the answer that *keeps* a group in the side event, so taking
+   * one back has to take the group back out of the field — and it does, because
+   * the undo stack restores the whole document from before the answer and the
+   * next answer fixes it again.
+   */
+  it('follows an undo of a Hoffnungsrunde decline back and forward', () => {
+    // 12 groups: 6 winners, so §4 owes two places and the lottery really runs.
+    const store = setup(afterQualifying(12));
+    expect(documentOf(store).consolationField).toBeNull();
+
+    advancePhase(store);
+    expect(documentOf(store).phase).toBe('REPECHAGE');
+
+    drawRepechageCandidate(store);
+    const candidate = repechageState(documentOf(store))?.pending;
+    expect(candidate).toBeDefined();
+
+    declineRepechageCandidate(store);
+    drawRepechageCandidate(store);
+    acceptRepechageCandidate(store);
+    drawRepechageCandidate(store);
+    acceptRepechageCandidate(store);
+
+    // The lottery has filled its two places, so the field is fixed — and the
+    // group that said no is in it.
+    expect(isRepechageComplete(documentOf(store))).toBe(true);
+    expect(documentOf(store).consolationField).toContain(candidate);
+
+    // Back through every answer: the field is not fixed any more, because the
+    // lottery is not closed any more.
+    for (let step = 0; step < 5; step += 1) {
+      store.undo();
+    }
+    expect(isRepechageComplete(documentOf(store))).toBe(false);
+    expect(documentOf(store).consolationField).toBeNull();
+
+    // The host answers *Ja* this time, and the field that is fixed on the way
+    // out is a field without them in it.
+    acceptRepechageCandidate(store);
+    drawRepechageCandidate(store);
+    acceptRepechageCandidate(store);
+
+    expect(isRepechageComplete(documentOf(store))).toBe(true);
+    expect(documentOf(store).consolationField).not.toContain(candidate);
+  });
+
+  /* CLAUDE.md §7: the file the host reopens is the tournament they left. */
+  it('survives a write and a read unchanged', () => {
+    const store = setup(afterQualifying(64));
+    const field = documentOf(store).consolationField;
+    expect(field).toHaveLength(32);
+
+    const file = toTournamentFile(documentOf(store), '0.1.0');
+    const reread = fromTournamentFile(
+      tournamentFileSchema.parse(JSON.parse(JSON.stringify(file)) as unknown),
+    );
+
+    expect(reread.consolationField).toEqual(field);
+    expect(consolationField(reread)).toEqual(consolationField(documentOf(store)));
   });
 });
 

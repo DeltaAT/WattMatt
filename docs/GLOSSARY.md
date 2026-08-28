@@ -42,6 +42,7 @@ Extend this table whenever a new domain concept appears, in the same commit.
 | Consolation round | Trostrunde | The side event for the first-round losers; runs the same pipeline as the main field, minus the naming phase (rules §10, issues #73, #91) |
 | Track | Turnierstrang | Which of the two parallel tournaments a round belongs to (`MAIN` / `CONSOLATION`) |
 | Main field | Hauptfeld | The tournament the phases above describe — the one with the bracket |
+| Consolation field | Feld der Trostrunde | Who is in the side event: the first-round losers minus everyone the `Hoffnungsrunde` took. Fixed when that lottery closes and immutable afterwards (rules §10, issue #102) |
 | Consolation winner | Sieger der Trostrunde | The winner of the side event's own bracket; never rejoins the main field, and never appears on the `Siegerehrung` podium (rules §10, issue #91) |
 
 ## States and actions

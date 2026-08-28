@@ -105,6 +105,22 @@ Every message carries the store's `revision`. The beamer drops anything older th
 already holds, so an out-of-order delivery cannot walk the projector backwards into a round that
 has already finished.
 
+### What `commit` does that no action has to
+
+Four things hang off `commit` rather than off each action, and every one of them is there
+because an action added by a later issue would otherwise have to remember it: the audit entry
+and `updatedAt`, the beamer projection, the autosave, and — since issue #102 — settling the
+`Trostrunde`'s field.
+
+The last one is the odd-looking member of the list and belongs there for the same reason as the
+rest. The moment the side event's field is fixed is the close of the qualifying round *or* the
+last answer of the `Hoffnungsrunde` (rules §10, "Field"), and a rule spread over the two actions
+that can reach it is a rule the third one somebody writes next year will not know about. The
+*rule* stays in `src/domain` — `settleConsolationField` is pure and hands its argument straight
+back both before the field is due and ever after it is written — and `commit` is only what
+applies it. It also covers the one case no action reaches at all: a file from an older schema,
+opened at a point the field was already fixed.
+
 ### Taking a decision back
 
 The undo stack (`store/undo.ts`) hangs off `commit` for the same reason the broadcast and the
@@ -271,7 +287,7 @@ src/
     pairing.ts         the rematch-free pairing of a shuffled field, and its fallback
     draw.ts            pairing, byes, table assignment
     repechage.ts       power-of-two target, the shuffled pot, candidate draw, §4 fallback
-    consolation.ts     the Trostrunde: who is in it, when it may start, when it is decided
+    consolation.ts     the Trostrunde: its field (fixed once), when it may start, when it is decided
     progression.ts     the phase machine: what the field carries, where it goes next
     bracket.ts         bracket construction, third-place match
     sceneCatalog.ts    every scene the host can stage, and the one a phase implies

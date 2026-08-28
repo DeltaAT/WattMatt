@@ -129,7 +129,7 @@ describe('useConsolation', () => {
 
     expect(result.current.isActive).toBe(true);
     expect(result.current.isOffered).toBe(true);
-    expect(result.current.fieldSize).toBe(8);
+    expect(result.current.field).toHaveLength(8);
     expect(result.current.blockers).toEqual([]);
   });
 
@@ -242,7 +242,7 @@ describe('useConsolation', () => {
     opened(qualified(4, 2));
     const { result } = pair();
 
-    expect(result.current.consolation.fieldSize).toBe(2);
+    expect(result.current.consolation.field).toHaveLength(2);
     act(() => {
       result.current.consolation.start();
     });

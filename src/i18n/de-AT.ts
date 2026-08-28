@@ -1000,11 +1000,31 @@ export const deAT = {
     decline: 'Keine Trostrunde',
     declined: 'Es wird keine Trostrunde gespielt.',
 
+    /*
+     * Das Feld selbst, aufgelistet, sobald es feststeht und bevor die
+     * Trostrunde startet (issue #102, §10).
+     *
+     * Es steht mit dem Ende der Hoffnungsrunde fest und ändert sich danach
+     * nicht mehr. Genau deshalb steht es hier: Wer es erst auf dem Beamer sieht,
+     * sieht es zu spät — eine falsche Liste ist am Laptop eine Rückfrage und
+     * vor der Leinwand eine Richtigstellung.
+     */
+    fieldTitle: 'Feld der Trostrunde',
+    fieldHint:
+      'Steht seit dem Ende der Hoffnungsrunde fest. Wer später im Hauptfeld ausscheidet, kommt nicht mehr dazu.',
+
     /** Auf dem abgeblendeten Startknopf, mit dem Grund dort, wo geklickt wurde. */
     blocked: (params: { reason: string }) => `Nicht möglich: ${params.reason}`,
     blocker: {
       qualifyingOpen: 'Die Qualifikationsrunde ist noch nicht abgeschlossen.',
-      repechageOpen: 'Die Hoffnungsrunde läuft noch. Sie entscheidet erst, wer übrig bleibt.',
+      /*
+       * Auch dann, wenn die Hoffnungsrunde noch gar nicht gestartet wurde
+       * (issue #102) — deshalb „noch nicht abgeschlossen“ und nicht
+       * „läuft noch“: beides ist derselbe Grund, nämlich dass noch nicht
+       * feststeht, wer übrig bleibt.
+       */
+      repechageOpen:
+        'Die Hoffnungsrunde ist noch nicht abgeschlossen. Sie entscheidet erst, wer übrig bleibt.',
       alreadyAnswered: 'Über die Trostrunde ist bereits entschieden.',
       fieldTooSmall: 'Es sind zu wenige übrig für eine Trostrunde.',
     },

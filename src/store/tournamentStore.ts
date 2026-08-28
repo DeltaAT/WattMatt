@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
 import { IDLE_SCENE, type BeamerScene } from '@/domain/beamerScene';
+import { settleConsolationField } from '@/domain/consolation';
 import { NO_CARRIED_FIELDS, type CarriedFields } from '@/domain/schema';
 import {
   EMPTY_TOURNAMENT,
@@ -317,6 +318,22 @@ export function createTournamentStore(
 
     const replacedDocument = 'document' in patch;
     let touchedDocument = replacedDocument;
+
+    // The `Trostrunde`'s field, fixed the moment §10 fixes it and never again
+    // (issue #102, `@/domain/consolation`). Central for the same reason the
+    // broadcast and the autosave below are: the moment it is due is the close
+    // of the qualifying round *or* the last answer of the `Hoffnungsrunde`, and
+    // a rule spread over the two actions that can reach it is a rule the third
+    // one somebody adds next year will not know about. The cost is one
+    // comparison per commit — `settleConsolationField` hands its argument back
+    // unchanged both before the field is due and ever after it is written.
+    if (next.document !== null) {
+      const settled = settleConsolationField(next.document);
+      if (settled !== next.document) {
+        next.document = settled;
+        touchedDocument = true;
+      }
+    }
 
     // The audit trail, written centrally for the same reason as everything else
     // on this path (docs/FILE-FORMAT.md rule 6). `updatedAt` moves with it and

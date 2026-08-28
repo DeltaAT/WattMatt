@@ -16,9 +16,11 @@ import {
   consolationSummary,
   declineConsolation,
   drawConsolationRound,
+  isConsolationFieldFixed,
   isConsolationOffered,
   isConsolationRunning,
   settleConsolation,
+  settleConsolationField,
   startConsolation,
 } from '@/domain/consolation';
 import {
@@ -26,7 +28,9 @@ import {
   closeRound,
   drawRound,
   nextQueuedMatch,
+  qualifyingRoundOf,
   queuedMatches,
+  roundOutcome,
   setWinner,
 } from '@/domain/draw';
 import type { GroupId } from '@/domain/ids';
@@ -34,8 +38,9 @@ import { setGroupName } from '@/domain/naming';
 import { advancePhase, carriedField } from '@/domain/progression';
 import {
   acceptCandidate,
-  drawCandidate,
+  declineCandidate,
   isRepechageComplete,
+  drawCandidate,
   repechageState,
   useRepechageFallback,
 } from '@/domain/repechage';
@@ -73,6 +78,18 @@ function readyToPlay(n: number, tables = 2): Tournament {
   });
 }
 
+/**
+ * One host decision, as the store lands it (issue #102).
+ *
+ * `TournamentStore.commit` settles the `Trostrunde`'s field after every
+ * committed action, centrally, so an action never has to remember to. A domain
+ * test that walked the pipeline without it would be walking a path the app
+ * never takes, so every step below goes through this.
+ */
+function committed(document: Tournament): Tournament {
+  return settleConsolationField(document);
+}
+
 /** Marks every open match of a round, `a` winning, and closes it. */
 function playOut(start: Tournament, track: 'MAIN' | 'CONSOLATION' = 'MAIN'): Tournament {
   let next = start;
@@ -85,9 +102,9 @@ function playOut(start: Tournament, track: 'MAIN' | 'CONSOLATION' = 'MAIN'): Tou
     if (match.b === null || match.winnerId !== null) {
       continue;
     }
-    next = setWinner(next, match.id, match.a);
+    next = committed(setWinner(next, match.id, match.a));
   }
-  return track === 'CONSOLATION' ? closeConsolationRound(next) : closeRound(next, track);
+  return committed(track === 'CONSOLATION' ? closeConsolationRound(next) : closeRound(next, track));
 }
 
 /** The qualifying round played out, which is where every §10 test starts. */
@@ -99,6 +116,53 @@ function afterQualifying(n: number, tables = 2): Tournament {
   return playOut(drawn);
 }
 
+/**
+ * The main field's `Hoffnungsrunde`, closed.
+ *
+ * `accepted` are the losers it drew back up, `declined` the ones who said no;
+ * the pot then runs dry with places still open and the host takes §4's first
+ * fallback, which is what closes the phase in one step. That is a real shape
+ * the lottery reaches — *Freilose vergeben* is offered every time the pot
+ * empties — and it is the shortest one that leaves the phase `complete`.
+ *
+ * Written as a lottery **record** rather than as a hand-edited `group.status`,
+ * and that is the whole difference issue #102 makes: the field is read off the
+ * qualifying round's matches and these draws, so a fixture that only moved a
+ * status would leave a group the lottery took standing in the side event as
+ * well as in the main field.
+ */
+function afterLottery(
+  played: Tournament,
+  accepted: readonly GroupId[] = [],
+  declined: readonly GroupId[] = [],
+): Tournament {
+  const qualifying = qualifyingRoundOf(played, 'MAIN');
+  const back = new Set(accepted);
+
+  return committed({
+    ...played,
+    phase: 'REPECHAGE',
+    repechage: {
+      target: nextPowerOfTwo(qualifying?.matches.length ?? 0),
+      pool: [],
+      draws: [
+        ...accepted.map((groupId) => ({ groupId, accepted: true })),
+        ...declined.map((groupId) => ({ groupId, accepted: false })),
+      ],
+      fallbackUsed: 'BYES',
+    },
+    groups: played.groups.map((entry) =>
+      back.has(entry.id) ? { ...entry, status: 'ACTIVE' as const } : entry,
+    ),
+  });
+}
+
+/** The losers of the main field's round 1, in draw order. */
+function firstRoundLosers(document: Tournament): readonly GroupId[] {
+  const qualifying = qualifyingRoundOf(document, 'MAIN');
+  return qualifying === null ? [] : roundOutcome(qualifying).losers;
+}
+
 function ids(groups: readonly { id: GroupId }[]): readonly GroupId[] {
   return groups.map((entry) => entry.id).sort();
 }
@@ -106,10 +170,10 @@ function ids(groups: readonly { id: GroupId }[]): readonly GroupId[] {
 describe('consolationField', () => {
   it('is every first-round loser the Hoffnungsrunde did not take', () => {
     // 13 groups: 6 pairs plus a `Freilos`, so 7 through and 6 out (§3, §9 #1).
-    const played = afterQualifying(13);
+    const closed = afterLottery(afterQualifying(13));
 
-    expect(consolationField(played)).toHaveLength(6);
-    expect(activeGroups(played)).toHaveLength(7);
+    expect(consolationField(closed)).toHaveLength(6);
+    expect(activeGroups(closed)).toHaveLength(7);
   });
 
   it('is empty while the qualifying round is still open', () => {
@@ -120,37 +184,62 @@ describe('consolationField', () => {
 
     // Nobody has lost yet in the sense §10 means: the round can still be
     // corrected, and a field read now would go stale on the next click.
-    expect(consolationField(drawn)).toEqual([]);
+    expect(consolationField(committed(drawn))).toEqual([]);
+    expect(isConsolationFieldFixed(drawn)).toBe(false);
+  });
+
+  /*
+   * §4's ordering rule, as the field rather than as a blocker (issue #102). A
+   * lottery that is owed and has not been run yet is a loser pool that is still
+   * about to shrink, so there is nothing to write down.
+   */
+  it('is empty while a Hoffnungsrunde is still owed', () => {
+    // 7 winners, so §4 is needed. The host has closed the round and has not
+    // pressed *Hoffnungsrunde starten*.
+    const played = afterQualifying(13);
+
+    expect(played.repechage).toBeNull();
+    expect(isConsolationFieldFixed(played)).toBe(false);
+    expect(played.consolationField).toBeNull();
+    expect(consolationField(played)).toEqual([]);
+  });
+
+  /* §9 case 2: 8 winners is already a power of two, so there is no lottery to
+   * wait for and the field is fixed by the close of the round itself. */
+  it('is fixed by the close of the qualifying round when no lottery is needed', () => {
+    const played = afterQualifying(16);
+
+    expect(played.repechage).toBeNull();
+    expect(isConsolationFieldFixed(played)).toBe(true);
+    expect(played.consolationField).toHaveLength(8);
+    expect(consolationField(played)).toHaveLength(8);
   });
 
   it('leaves out a loser the Hoffnungsrunde drew back into the main field', () => {
     const played = afterQualifying(13);
-    const drawnUp = consolationField(played)[0];
+    const drawnUp = firstRoundLosers(played)[0];
     expect(drawnUp).toBeDefined();
 
-    // What `acceptCandidate` does, in one line: the group is `ACTIVE` again.
-    const promoted: Tournament = {
-      ...played,
-      groups: played.groups.map((entry) =>
-        entry.id === drawnUp?.id ? { ...entry, status: 'ACTIVE' } : entry,
-      ),
-    };
+    const closed = afterLottery(played, [drawnUp!]);
 
-    expect(consolationField(promoted)).toHaveLength(5);
-    expect(ids(consolationField(promoted))).not.toContain(drawnUp?.id);
+    expect(consolationField(closed)).toHaveLength(5);
+    expect(ids(consolationField(closed))).not.toContain(drawnUp);
   });
 
   /*
    * docs/OPEN-QUESTIONS.md #6 as §10 settles it: declining the lottery is
-   * declining the *main field*, not the evening. A decliner is `ELIMINATED`
-   * like any other loser, so it is in the side event's field for free — and
-   * this test is what says that is deliberate rather than accidental.
+   * declining the *main field*, not the evening. A decliner holds an
+   * `accepted: false` draw and is in the side event's field for free — and this
+   * test is what says that is deliberate rather than accidental.
    */
   it('includes a group that declined the Hoffnungsrunde', () => {
     const played = afterQualifying(13);
-    const decliner = consolationField(played)[0];
+    const decliner = firstRoundLosers(played)[0];
+    expect(decliner).toBeDefined();
 
-    expect(ids(consolationField(played))).toContain(decliner?.id);
+    const closed = afterLottery(played, [], [decliner!]);
+
+    expect(ids(consolationField(closed))).toContain(decliner);
   });
 
   it('does not include a group that never played the qualifying round', () => {
@@ -158,17 +247,136 @@ describe('consolationField', () => {
     // A latecomer added mid-tournament (§2) and then knocked out some other
     // way. The side event is for the *first-round* losers.
     const late = group(99, { status: 'ELIMINATED' });
-    const withLate: Tournament = { ...played, groups: [...played.groups, late] };
+    const closed = afterLottery({ ...played, groups: [...played.groups, late] });
 
-    expect(ids(consolationField(withLate))).not.toContain(late.id);
+    expect(ids(consolationField(closed))).not.toContain(late.id);
+  });
+
+  /**
+   * The main field's elimination rounds, drawn and played until §5 stops
+   * offering one — the host working on while the side event waits.
+   */
+  function playMainOn(from: Tournament): Tournament {
+    let next = committed({ ...from, phase: 'ELIMINATION' });
+    for (let step = 0; step < 10 && canDrawRound(next, 'MAIN'); step += 1) {
+      next = playOut(
+        committed(drawRound(next, { at: FIXED_NOW, label: (index) => `Round ${index}` })),
+      );
+    }
+    return next;
+  }
+
+  /** Every group the main field knocked out after its qualifying round. */
+  function eliminatedLater(document: Tournament): readonly GroupId[] {
+    return document.rounds
+      .filter((round) => round.track === 'MAIN' && round.kind !== 'QUALIFYING')
+      .flatMap((round) => roundOutcome(round).losers);
+  }
+
+  /*
+   * Issue #102's headline case. The host lets the main field play on before
+   * starting the side event, which is the ordinary evening rather than an edge
+   * case — and every round it plays produces more losers.
+   *
+   * A hundred groups rather than the issue's forty, because forty leaves the
+   * main field exactly *one* elimination round: 20 winners top up to 32, and 32
+   * halves straight into the sixteen the final phase holds. A hundred is the
+   * smallest round number at which the host really can play two full rounds
+   * before answering the question, which is what the case is about. The field
+   * of forty is the sibling test below.
+   */
+  it('is identical after two more main-field rounds as it was at the lottery', () => {
+    // 100 groups: 50 through, 50 out. The lottery tops the field up to 64,
+    // which leaves a side event of thirty-six.
+    const played = afterQualifying(100, 4);
+    const atTheLottery = afterLottery(played, firstRoundLosers(played).slice(0, 14));
+    const field = ids(consolationField(atTheLottery));
+    expect(field).toHaveLength(36);
+    expect(activeGroups(atTheLottery)).toHaveLength(64);
+
+    const next = playMainOn(atTheLottery);
+
+    // Two full main-field rounds, 64 → 32 → 16, and 48 more groups out.
+    expect(roundsOfTrack(next, 'MAIN')).toHaveLength(3);
+    expect(activeGroups(next)).toHaveLength(16);
+    expect(eliminatedLater(next)).toHaveLength(48);
+
+    // The field is the field it was when the lottery closed — the same list,
+    // and the same object rather than an equal one.
+    expect(next.consolationField).toBe(atTheLottery.consolationField);
+    expect(ids(consolationField(next))).toEqual(field);
+
+    // And starting the side event now takes exactly the thirty-six the host was
+    // shown when the lottery closed.
+    expect(ids(consolationGroups(startConsolation(next)))).toEqual(field);
+  });
+
+  /* The issue's own numbers: 40 groups, the lottery, and the one elimination
+   * round the main field has left before the final phase. */
+  it('is identical after a main-field round as it was at the lottery', () => {
+    const played = afterQualifying(40, 4);
+    const atTheLottery = afterLottery(played, firstRoundLosers(played).slice(0, 12));
+    const field = ids(consolationField(atTheLottery));
+    expect(field).toHaveLength(8);
+
+    const next = playMainOn(atTheLottery);
+
+    expect(activeGroups(next)).toHaveLength(16);
+    expect(ids(consolationField(next))).toEqual(field);
+  });
+
+  /* A group knocked out of main-field round 2 is out of the evening, not into a
+   * round that exists for the losers of round 1. */
+  it('never takes a group the main field eliminated in a later round', () => {
+    const played = afterQualifying(40, 4);
+    const atTheLottery = afterLottery(played, firstRoundLosers(played).slice(0, 12));
+    const field = new Set(ids(consolationField(atTheLottery)));
+
+    const next = playMainOn(atTheLottery);
+
+    const later = eliminatedLater(next);
+    expect(later).toHaveLength(16);
+    for (const loser of later) {
+      expect(field.has(loser)).toBe(false);
+    }
+  });
+
+  /* And nobody still playing in the main field is ever in it either — the two
+   * are disjoint at every point of the evening. */
+  it('never holds a group that is still active in the main field', () => {
+    const played = afterQualifying(40, 4);
+    const atTheLottery = afterLottery(played, firstRoundLosers(played).slice(0, 12));
+    const next = playMainOn(atTheLottery);
+
+    const field = new Set(ids(consolationField(next)));
+    for (const entry of activeGroups(next)) {
+      expect(field.has(entry.id)).toBe(false);
+    }
   });
 });
 
 describe('consolationBlockers', () => {
-  it('is empty once the qualifying round is closed and nobody has answered', () => {
-    expect(consolationBlockers(afterQualifying(13))).toEqual([]);
-    expect(canStartConsolation(afterQualifying(13))).toBe(true);
-    expect(isConsolationOffered(afterQualifying(13))).toBe(true);
+  it('is empty once the Hoffnungsrunde is closed and nobody has answered', () => {
+    const closed = afterLottery(afterQualifying(13));
+
+    expect(consolationBlockers(closed)).toEqual([]);
+    expect(canStartConsolation(closed)).toBe(true);
+    expect(isConsolationOffered(closed)).toBe(true);
+  });
+
+  /*
+   * §4's ordering rule as a refusal, for the lottery that has not been *started*
+   * (issue #102). Before this the check only looked at a lottery already under
+   * way, so a host who had closed round 1 and not yet pressed *Hoffnungsrunde
+   * starten* could start the side event and take its field out from under it.
+   */
+  it('waits for a Hoffnungsrunde that is owed but not yet started', () => {
+    const played = afterQualifying(13);
+
+    expect(played.repechage).toBeNull();
+    expect(consolationBlockers(played)).toContain('REPECHAGE_OPEN');
+    expect(canStartConsolation(played)).toBe(false);
+    expect(startConsolation(played)).toBe(played);
   });
 
   it('names the open qualifying round', () => {
@@ -198,7 +406,7 @@ describe('consolationBlockers', () => {
   });
 
   it('stops asking once the host has answered', () => {
-    const started = startConsolation(afterQualifying(13));
+    const started = startConsolation(afterLottery(afterQualifying(13)));
 
     expect(consolationBlockers(started)).toContain('ALREADY_ANSWERED');
     expect(isConsolationOffered(started)).toBe(false);
@@ -214,18 +422,8 @@ describe('consolationBlockers', () => {
     ['none', 0],
   ])('refuses a field of %s', (_name, remaining) => {
     const played = afterQualifying(13);
-    const field = consolationField(played);
-    const staying = new Set(field.slice(0, remaining).map((entry) => entry.id));
-
-    // Everyone else drawn back up by the lottery.
-    const promoted: Tournament = {
-      ...played,
-      groups: played.groups.map((entry) =>
-        entry.status === 'ELIMINATED' && !staying.has(entry.id)
-          ? { ...entry, status: 'ACTIVE' }
-          : entry,
-      ),
-    };
+    // Everyone but `remaining` drawn back up by the lottery.
+    const promoted = afterLottery(played, firstRoundLosers(played).slice(remaining));
 
     expect(consolationField(promoted)).toHaveLength(remaining);
     expect(consolationBlockers(promoted)).toContain('FIELD_TOO_SMALL');
@@ -239,7 +437,7 @@ describe('consolationBlockers', () => {
 
 describe('startConsolation', () => {
   it('moves the whole field from ELIMINATED into CONSOLATION', () => {
-    const played = afterQualifying(13);
+    const played = afterLottery(afterQualifying(13));
     const field = ids(consolationField(played));
 
     const started = startConsolation(played);
@@ -256,7 +454,7 @@ describe('startConsolation', () => {
   });
 
   it('leaves the main field exactly as it was', () => {
-    const played = afterQualifying(13);
+    const played = afterLottery(afterQualifying(13));
     const started = startConsolation(played);
 
     expect(ids(activeGroups(started))).toEqual(ids(activeGroups(played)));
@@ -277,7 +475,7 @@ describe('startConsolation', () => {
 
 describe('declineConsolation', () => {
   it('records the answer without touching anybody', () => {
-    const played = afterQualifying(13);
+    const played = afterLottery(afterQualifying(13));
     const declined = declineConsolation(played);
 
     expect(declined.consolation).toEqual({
@@ -305,14 +503,12 @@ describe('a Trostrunde played to its end', () => {
    */
   function sideEventOf(n: number, mainGroups = 13, tables = 2): Tournament {
     const played = afterQualifying(mainGroups, tables);
-    const surplus = consolationField(played).slice(n);
-    const promoted: Tournament = {
-      ...played,
-      groups: played.groups.map((entry) =>
-        surplus.some((loser) => loser.id === entry.id) ? { ...entry, status: 'ACTIVE' } : entry,
-      ),
-    };
-    return startConsolation(promoted);
+    const surplus = firstRoundLosers(played).slice(n);
+    // A field that is already a power of two skips §4 entirely (§9 case 2), and
+    // then there is no lottery to promote anybody through — which only ever
+    // happens here with nothing surplus to promote.
+    const closed = isConsolationFieldFixed(played) ? played : afterLottery(played, surplus);
+    return startConsolation(closed);
   }
 
   function drawSide(next: Tournament): Tournament {
@@ -685,11 +881,17 @@ describe('a Trostrunde played to its end', () => {
    * declining *its* lottery really does mean going home.
    */
   it('never starts a second side event out of its own losers', () => {
-    const played = playSideEvent(sideEventOf(5));
+    const started = sideEventOf(5);
+    const played = playSideEvent(started);
 
-    expect(consolationField(played).every((entry) => entry.status === 'ELIMINATED')).toBe(true);
+    // Its own losers are out of the evening: nothing offers them a second side
+    // event, and the one question §10 puts has been answered.
+    expect(played.consolation?.state).toBe('FINISHED');
     expect(isConsolationOffered(played)).toBe(false);
     expect(consolationBlockers(played)).toContain('ALREADY_ANSWERED');
+    // And the field it started with is still the field it started with — a
+    // whole side event played out has not rewritten it (issue #102).
+    expect(played.consolationField).toEqual(started.consolationField);
   });
 
   /*
@@ -707,13 +909,153 @@ describe('a Trostrunde played to its end', () => {
   });
 });
 
+describe('every group in exactly one place', () => {
+  /**
+   * The invariant issue #102 is really about, checked directly.
+   *
+   * A group is in the main field, in the `Trostrunde`, or out of the evening —
+   * **never zero of the three and never two**. The bug this issue fixes was a
+   * group in two at once: still `ACTIVE` in the main field, and standing in a
+   * side-event field that had been worked out from `group.status` a round too
+   * late.
+   *
+   * "In the `Trostrunde`" means the stored field before the event is started
+   * and `status === 'CONSOLATION'` once it is, and the two overlap rather than
+   * follow each other: `startConsolation` moves exactly the stored list across,
+   * so a group that is playing in the side event and not in the list would be a
+   * group nobody put there.
+   */
+  function inOnePlace(document: Tournament): void {
+    const field = new Set<GroupId>(document.consolationField ?? []);
+
+    for (const entry of document.groups) {
+      const places = [
+        entry.status === 'ACTIVE',
+        entry.status === 'CONSOLATION' || field.has(entry.id),
+        entry.status === 'ELIMINATED' && !field.has(entry.id),
+      ].filter(Boolean);
+
+      expect(places, `${entry.id} (${entry.status}) is in ${places.length} places`).toHaveLength(1);
+      // And nobody plays in a side event they were never drawn into.
+      if (entry.status === 'CONSOLATION') {
+        expect(field.has(entry.id), `${entry.id} plays outside the stored field`).toBe(true);
+      }
+    }
+  }
+
+  /** One host press, committed and then checked — which is the whole test. */
+  function step(document: Tournament, apply: (open: Tournament) => Tournament): Tournament {
+    const next = committed(apply(document));
+    inOnePlace(next);
+    return next;
+  }
+
+  it('holds after every action of a whole evening', () => {
+    // 40 groups: the issue's own field size.
+    let next = step(readyToPlay(40, 4), (open) => open);
+
+    // Round 1, one press at a time.
+    next = step(next, (open) =>
+      drawRound(open, { at: FIXED_NOW, label: (index) => `Runde ${index}` }),
+    );
+    for (const match of currentRound(next)?.matches ?? []) {
+      if (match.b !== null) {
+        next = step(next, (open) => setWinner(open, match.id, match.a));
+      }
+    }
+    next = step(next, (open) => closeRound(open));
+    // Nothing is fixed yet: the lottery is owed and has not been run.
+    expect(next.consolationField).toBeNull();
+
+    // The `Hoffnungsrunde`, drawn and answered candidate by candidate — yes and
+    // no alternating, so both outcomes are walked.
+    next = step(next, (open) => advancePhase(open));
+    expect(next.phase).toBe('REPECHAGE');
+
+    let accept = true;
+    for (let guard = 0; guard < 80 && !isRepechageComplete(next); guard += 1) {
+      const state = repechageState(next);
+      if (state === null) {
+        break;
+      }
+      if (state.pending !== null) {
+        const yes = accept;
+        accept = !accept;
+        next = step(next, (open) => (yes ? acceptCandidate(open) : declineCandidate(open)));
+      } else if (state.remaining.length > 0) {
+        next = step(next, (open) => drawCandidate(open));
+      } else {
+        next = step(next, (open) => useRepechageFallback(open, 'BYES'));
+      }
+    }
+    expect(isRepechageComplete(next)).toBe(true);
+
+    // Fixed the moment the lottery closed, and that is the moment it is written.
+    const field = next.consolationField;
+    expect(field).not.toBeNull();
+    expect(field?.length).toBeGreaterThan(1);
+
+    // The main field plays a whole further round before the host is asked.
+    next = step(next, (open) => advancePhase(open));
+    expect(next.phase).toBe('ELIMINATION');
+    next = step(next, (open) =>
+      drawRound(open, { at: FIXED_NOW, label: (index) => `Runde ${index}` }),
+    );
+    for (const match of currentRound(next)?.matches ?? []) {
+      if (match.b !== null) {
+        next = step(next, (open) => setWinner(open, match.id, match.a));
+      }
+    }
+    next = step(next, (open) => closeRound(open));
+    expect(next.consolationField).toEqual(field);
+
+    // Only now the side event, and it takes exactly that list.
+    next = step(next, (open) => startConsolation(open));
+    expect(ids(consolationGroups(next))).toEqual([...(field ?? [])].sort());
+
+    // Both tracks live: its own round drawn, played and closed.
+    next = step(next, (open) =>
+      drawConsolationRound(open, { at: FIXED_NOW, label: (index) => `Trost ${index}` }),
+    );
+    for (const match of currentRound(next, 'CONSOLATION')?.matches ?? []) {
+      if (match.b !== null) {
+        next = step(next, (open) => setWinner(open, match.id, match.a));
+      }
+    }
+    next = step(next, (open) => closeConsolationRound(open));
+
+    expect(next.consolationField).toEqual(field);
+  });
+
+  /*
+   * The same invariant against the shape that used to break it, stated as
+   * plainly as it can be: no group the main field is still playing is ever in
+   * the side event's field.
+   */
+  it('never lets a group stand in the main field and the Trostrunde at once', () => {
+    const played = afterQualifying(40, 4);
+    let next = afterLottery(played, firstRoundLosers(played).slice(0, 12));
+
+    for (let round = 0; round < 3 && canDrawRound(next, 'MAIN'); round += 1) {
+      next = playOut(
+        committed(drawRound(next, { at: FIXED_NOW, label: (index) => `Runde ${index}` })),
+      );
+      inOnePlace(next);
+    }
+
+    const started = committed(startConsolation(next));
+    inOnePlace(started);
+    expect(consolationGroups(started).length).toBeGreaterThan(1);
+  });
+});
+
 describe('consolationSummary', () => {
   it('is null while the host has not been asked', () => {
-    expect(consolationSummary(afterQualifying(13))).toBeNull();
+    expect(consolationSummary(afterLottery(afterQualifying(13)))).toBeNull();
   });
 
   it('carries the standing field, the rounds and the open one', () => {
-    const started = startConsolation(afterQualifying(13));
+    const started = startConsolation(afterLottery(afterQualifying(13)));
     const drawn = drawConsolationRound(started, {
       at: FIXED_NOW,
       label: (index) => `Trost ${index}`,
