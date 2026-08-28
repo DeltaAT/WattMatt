@@ -349,13 +349,21 @@ function Node({
  * node without one is simply a node, which is what the issue means by "looks
  * deliberate, not broken": there is nothing there to be broken.
  *
- * **And it keeps the bare number while the group rounds went back to the
- * word** (issue #100, docs/STYLEGUIDE.md §4). That divergence is chosen, not
+ * **It keeps the bare number while the group rounds went back to the word**
+ * (issue #100, docs/STYLEGUIDE.md §4). That divergence is chosen, not
  * inherited: `Tisch` came back to the round board because a bare number over
  * two bare numbers is a third number, and there is no numeral anywhere on a
  * bracket node for this one to be confused with. The node is also the one
  * place genuinely short of room — this badge sits in a corner it must not grow
  * out of, over a box reserved for another word.
+ *
+ * The *size* did follow the group rounds up a step (`TABLE_TYPE` below). The
+ * word and the size are two decisions, and only the first of them is about
+ * ambiguity: a number nobody can read is no more useful here than it was on
+ * the round board. It costs the names nothing, because out of the flow is
+ * still out of the flow — and the box it lands over is the reserved
+ * `AUSGESCHIEDEN` slot, which is far wider than two numerals at any step of
+ * this ladder.
  */
 function NodeTable({ node, chips }: { node: BracketNode; chips: ChipContext }) {
   const tableId = bracketNodeTableId(node);
@@ -578,22 +586,32 @@ const NAME_TYPE: Record<NameDensity, NameType> = {
 };
 
 /**
- * How big the table number is (issue #90).
+ * How big the table number is (issues #90, #100).
  *
- * One step under the names at every density, which is what "small and
- * subordinate — the names are the content, the table is a reference" comes to
- * in a ladder. It bottoms out at `beamer-caption`, the step the issue names and
- * the one docs/STYLEGUIDE.md §2 otherwise reserves for persistent chrome — 24 px
- * against 32 px names on a field of sixteen, which is as far apart as two things
- * can be at that density without one of them being unreadable.
+ * Issue #90 put it one step under the names at every density and let it bottom
+ * out at `beamer-caption`. Issue #100 raised the whole ladder a step and moved
+ * the floor to `beamer-body`, because 24 px is what docs/STYLEGUIDE.md §2
+ * reserves for **persistent chrome** — the clock, the tournament name — and a
+ * table number is not chrome. It is the one thing on this screen somebody acts
+ * on: it is how a pair finds out where to go and stand. Nothing the room has to
+ * read goes below the 32 px floor.
  *
- * The zoomed view gets the top of the ladder for free: the host zooms to the
- * `Finale`, the drawn field is 2, and a 32 px table sits under 64 px names.
+ * **Still subordinate, and at the densest step no longer by size.** The names
+ * are already on the floor at a field of sixteen, so there is no step left
+ * under them — the table sits at the same 32 px and is told apart by the three
+ * things that are not size: it is muted, it is alone in a corner rather than in
+ * the body of the card, and it is one or two numerals against a name of up to
+ * forty characters. That is the same argument the group-round scenes make for
+ * their much larger label (docs/STYLEGUIDE.md §4), and it is why the two scenes
+ * no longer disagree about how big a table is allowed to be.
+ *
+ * The zoomed view gets the top of the ladder: the host zooms to the `Finale`,
+ * the drawn field is 2, and a 48 px table sits under 64 px names.
  */
 const TABLE_TYPE: Record<NameDensity, string> = {
-  roomy: 'text-beamer-body',
-  normal: 'text-beamer-caption',
-  dense: 'text-beamer-caption',
+  roomy: 'text-beamer-h3',
+  normal: 'text-beamer-body',
+  dense: 'text-beamer-body',
 };
 
 /** How many rows of the drawn tree one node of a column spans. */

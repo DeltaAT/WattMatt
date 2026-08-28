@@ -123,9 +123,9 @@ The beamer root font size is resolution-relative so the same layout works on 720
 | `beamer-hero` | 10 | 160 px | Winner name, single-number reveals |
 | `beamer-h1` | 6 | 96 px | Scene title (`ACHTELFINALE`) |
 | `beamer-h2` | 4 | 64 px | Group name in a match card, table label where the field leaves room |
-| `beamer-h3` | 3 | 48 px | Table label on a crowded board, round label |
+| `beamer-h3` | 3 | 48 px | Table label on a crowded board, table number on a small tree, round label |
 | `beamer-body` | 2 | 32 px | **The floor a scene is designed to.** See the note below |
-| `beamer-caption` | 1.5 | 24 px | Persistent chrome (clock, tournament name), and the bracket's table reference |
+| `beamer-caption` | 1.5 | 24 px | Persistent chrome only (clock, tournament name) |
 
 **32 px is a design floor, not a hard limit.** Every scene is laid out so that the field sizes
 a host normally has land on it or above. Past that, the scene is scaled down until everything
@@ -210,18 +210,26 @@ long way right of it. `text-align: center` was true and the picture was still of
 on the numeral, never on the text box, and check it optically at 10 m.
 
 **Bracket node** (`BRACKET`, issue #90) — two name slots, and the number of the table the
-match is on in the top-right corner. The table is a *reference*, not content: one type step
-under the names at every density (`beamer-body` → `beamer-caption`), muted, and **absolutely
+match is on in the top-right corner. The table is a *reference*, not content: no larger than
+the names at any density (`beamer-h3` → `beamer-body`, issue #100), muted, and **absolutely
 positioned**, so the names keep every pixel they had and no node changes height when a match
 starts or ends. It lands over the box each slot reserves for `SIEGER` / `AUSGESCHIEDEN`, which
 can never collide with it — that word appears only once the match is decided, and a decided
 match has no table to name.
 
-It also keeps the **bare number** while the group rounds went back to the word (issue #100),
-and that divergence is a decision rather than a leftover. `Tisch` came back to the round board
+It keeps the **bare number** while the group rounds went back to the word (issue #100), and
+that divergence is a decision rather than a leftover. `Tisch` came back to the round board
 because a bare numeral above two other bare numerals reads as a third one; nothing on a bracket
 node is a numeral, so there is nothing here for it to be confused with — and the corner it sits
 in is the one place on the beamer genuinely short of room.
+
+The **size** did follow the group rounds up, and the two scenes now agree that a table number
+never goes below the 32 px floor. `beamer-caption` is what §2 reserves for persistent chrome —
+the clock, the tournament name — and the number a pair walks to a table on is not chrome; it is
+the one thing on the tree somebody acts on. At a field of sixteen the names are themselves on
+the floor, so there is no step left under them and the table sits at the same size: subordinate
+there by the three things that are not size — muted, alone in a corner rather than in the body
+of the card, and one or two numerals against a name of up to forty characters.
 
 Whether there is one to name is `bracketNodeTableId` in `@/domain/bracket`, shared with the
 host panel. A node keeps its `tableId` after it is played (docs/OPEN-QUESTIONS.md #37) but the
