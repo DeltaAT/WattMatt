@@ -1,7 +1,7 @@
-import type { BeamerScene } from '@/domain/beamerScene';
+import { sceneTrack, type BeamerScene } from '@/domain/beamerScene';
 import type { RoundId } from '@/domain/ids';
 import type { SnapshotDelivery, TournamentSnapshot } from '@/domain/snapshot';
-import type { BracketRound } from '@/domain/types';
+import type { BracketRound, RoundTrack } from '@/domain/types';
 import { de } from '@/i18n';
 import {
   BracketScene,
@@ -150,25 +150,45 @@ export function BeamerScenePlaceholder({
   if (scene.id === 'REPECHAGE') {
     /*
      * No guard against the snapshot, unlike the two scenes below: the
-     * descriptor names nothing to disagree with, and a tournament has exactly
-     * one repechage. When there is none the scene says so itself — which is a
-     * state the host can reach by staging the scene by hand before starting the
+     * descriptor names nothing to disagree with, and each track has exactly one
+     * repechage. When there is none the scene says so itself — which is a state
+     * the host can reach by staging the scene by hand before starting the
      * phase, and one the room must be able to read rather than stare at.
+     *
+     * Which of the two lotteries is on the wall is the descriptor's `track`,
+     * and the snapshot is staged to it rather than the scene taught to choose:
+     * the beat and the travel below are computed from `tournament.repechage`,
+     * and staging is what lets both tracks run them unchanged (issue #91).
      */
-    return <RepechageSceneHost tournament={tournament} delivery={delivery} skipToken={skipToken} />;
+    const track = sceneTrack(scene);
+    return (
+      <RepechageSceneHost
+        tournament={stageTrack(tournament, track)}
+        track={track}
+        delivery={delivery}
+        skipToken={skipToken}
+      />
+    );
   }
 
   if (scene.id === 'BRACKET') {
     /*
      * No guard against the snapshot, like the `Hoffnungsrunde` and unlike the
      * two scenes below: the descriptor names nothing that could disagree with
-     * it, and a tournament has exactly one bracket. Before it is drawn the
-     * scene says so itself — a state the host can reach by staging the tree
-     * before the final phase, and one the room must be able to read.
+     * it, and each track has exactly one bracket. Before it is drawn the scene
+     * says so itself — a state the host can reach by staging the tree before
+     * the final phase, and one the room must be able to read.
+     *
+     * Staged to the descriptor's track for the same reason the lottery is: both
+     * tournaments end in a tree, the `Trostrunde`'s is drawn in numbers rather
+     * than names, and that is a property of the tree rather than a second scene
+     * (issue #91).
      */
+    const track = sceneTrack(scene);
     return (
       <BracketSceneHost
-        tournament={tournament}
+        tournament={stageTrack(tournament, track)}
+        track={track}
         settled={settled}
         delivery={delivery}
         focus={scene.focus ?? null}
@@ -310,6 +330,34 @@ function stageRound(tournament: TournamentSnapshot, roundId: RoundId): Tournamen
 }
 
 /**
+ * The snapshot as one of the two tournaments sees it (issue #91).
+ *
+ * The `Trostrunde` runs the same pipeline as the main field, so it has a
+ * lottery and a tree of its own and both travel in the snapshot side by side.
+ * Rather than teach every scene, hook and helper below to ask which track it is
+ * on, the one field each of them reads is swapped here — exactly what
+ * `stageRound` does for the board.
+ *
+ * That is what keeps the beat, the travelling light and the advancing chips
+ * working on both tracks without a second copy of any of them: they read
+ * `tournament.repechage` and `tournament.bracket`, and this decides which
+ * lottery and which tree those two names refer to.
+ *
+ * `MAIN` hands the snapshot straight back, so every scene staged before the
+ * side event had a pipeline renders byte-identically to before.
+ */
+function stageTrack(tournament: TournamentSnapshot, track: RoundTrack): TournamentSnapshot {
+  if (track === 'MAIN') {
+    return tournament;
+  }
+  return {
+    ...tournament,
+    repechage: tournament.consolationRepechage,
+    bracket: tournament.consolationBracket,
+  };
+}
+
+/**
  * Binds the repechage scene to the beat this window is allowed to play.
  *
  * A component of its own for the same reason `DrawSceneHost` is: the hook must
@@ -319,10 +367,13 @@ function stageRound(tournament: TournamentSnapshot, roundId: RoundId): Tournamen
  */
 function RepechageSceneHost({
   tournament,
+  track,
   delivery,
   skipToken,
 }: {
   tournament: TournamentSnapshot;
+  /** Which tournament's lottery this is, for the heading (issue #91). */
+  track: RoundTrack;
   delivery: SnapshotDelivery;
   skipToken: number;
 }) {
@@ -359,7 +410,7 @@ function RepechageSceneHost({
   useSkipKey(travel.skip, travel.isTravelling);
   useSkipSignal(skipToken, travel.skip, travel.isTravelling);
 
-  return <RepechageScene tournament={tournament} beat={beat} travel={travel} />;
+  return <RepechageScene tournament={tournament} track={track} beat={beat} travel={travel} />;
 }
 
 /**
@@ -373,18 +424,29 @@ function RepechageSceneHost({
  */
 function BracketSceneHost({
   tournament,
+  track,
   settled,
   delivery,
   focus,
 }: {
   tournament: TournamentSnapshot;
+  /** Which tournament's tree this is, for the heading (issue #91). */
+  track: RoundTrack;
   settled: boolean;
   delivery: SnapshotDelivery;
   focus: BracketRound | null;
 }) {
   const advance = useBracketAdvance(tournament.bracket, delivery);
 
-  return <BracketScene tournament={tournament} settled={settled} focus={focus} advance={advance} />;
+  return (
+    <BracketScene
+      tournament={tournament}
+      track={track}
+      settled={settled}
+      focus={focus}
+      advance={advance}
+    />
+  );
 }
 
 /**

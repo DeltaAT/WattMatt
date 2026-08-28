@@ -6,7 +6,9 @@ import { consolationGroups, currentRound, roundsOfTrack } from '@/domain/selecto
 import { FIXED_NOW, fixedClock, group, table, tournament } from '@/domain/testFixtures';
 import type { Round, Tournament } from '@/domain/types';
 import { de } from '@/i18n';
+import { drawBracket, finishBracket, setBracketWinner } from '@/store/actions/bracket';
 import { declineConsolation, startConsolation } from '@/store/actions/consolation';
+import { advancePhase } from '@/store/actions/progression';
 import { closeRound, drawRound, setMatchWinner, startNextMatch } from '@/store/actions/round';
 import {
   createTournamentStore,
@@ -55,6 +57,22 @@ function setup(document: Tournament = afterQualifying()): TournamentStore {
   );
 }
 
+/** Marks a winner in every side-event bracket node that has two participants. */
+function playOutBracket(store: TournamentStore): void {
+  for (let pass = 0; pass < 6; pass += 1) {
+    const nodes = documentOf(store).consolation?.bracket?.nodes ?? [];
+    const open = nodes.filter(
+      (node) => node.slotA !== null && node.slotB !== null && node.winnerId === null,
+    );
+    if (open.length === 0) {
+      return;
+    }
+    for (const node of open) {
+      setBracketWinner(store, node.id, node.slotA!, 'CONSOLATION');
+    }
+  }
+}
+
 const documentOf = (store: TournamentStore): Tournament => {
   const document = store.getState().document;
   if (document === null) {
@@ -76,7 +94,13 @@ describe('startConsolation', () => {
     startConsolation(store);
 
     expect(consolationGroups(documentOf(store))).toHaveLength(field.length);
-    expect(documentOf(store).consolation).toEqual({ state: 'RUNNING', winnerId: null });
+    expect(documentOf(store).consolation).toEqual({
+      state: 'RUNNING',
+      phase: 'QUALIFYING',
+      repechage: null,
+      bracket: null,
+      winnerId: null,
+    });
     expect(nextUndo(store.getState().history)?.label).toBe(
       de.undo.action.consolationStarted({ n: field.length }),
     );
@@ -121,7 +145,13 @@ describe('declineConsolation', () => {
 
     declineConsolation(store);
 
-    expect(documentOf(store).consolation).toEqual({ state: 'DECLINED', winnerId: null });
+    expect(documentOf(store).consolation).toEqual({
+      state: 'DECLINED',
+      phase: 'SETUP',
+      repechage: null,
+      bracket: null,
+      winnerId: null,
+    });
     expect(nextUndo(store.getState().history)?.label).toBe(de.undo.action.consolationDeclined);
     expect(lastLog(store)).toMatchObject({ action: 'CONSOLATION_DECLINED' });
   });
@@ -149,7 +179,8 @@ describe('the round actions on the CONSOLATION track', () => {
     drawRound(store, 'CONSOLATION');
 
     const drawn = currentRound(documentOf(store), 'CONSOLATION');
-    expect(drawn?.kind).toBe('CONSOLATION');
+    // The kind is the stage; the track is which tournament (issue #91).
+    expect(drawn?.kind).toBe('QUALIFYING');
     expect(drawn?.track).toBe('CONSOLATION');
     expect(drawn?.label).toBe(de.consolation.title({ n: 1 }));
     expect(store.getState().scene).toEqual({ id: 'DRAW', roundId: drawn?.id });
@@ -192,19 +223,29 @@ describe('the round actions on the CONSOLATION track', () => {
     });
   });
 
-  it('records the winner the moment the last round leaves one group standing', () => {
+  /*
+   * Issue #91: the side event runs the whole pipeline, so its winner is the
+   * winner of *its bracket* and not of its last round. Eight in the pot means
+   * one round of four, then a tree of four — every step of it the same store
+   * action the main field uses, with the track set the other way.
+   */
+  it('runs the side event to a winner through its own bracket', () => {
     const store = running();
-    // 8 in the side event: 4, then 2, then 1.
-    for (let round = 0; round < 3; round += 1) {
-      drawRound(store, 'CONSOLATION');
-      playOutOpen(store, 'CONSOLATION');
-      closeRound(store, 'CONSOLATION');
-    }
+
+    drawRound(store, 'CONSOLATION');
+    playOutOpen(store, 'CONSOLATION');
+    closeRound(store, 'CONSOLATION');
+    advancePhase(store, 'CONSOLATION');
+
+    expect(documentOf(store).consolation?.phase).toBe('BRACKET');
+    drawBracket(store, CLOCK, 'CONSOLATION');
+    playOutBracket(store);
+    finishBracket(store, 'CONSOLATION');
 
     const document = documentOf(store);
     expect(document.consolation?.state).toBe('FINISHED');
     expect(document.consolation?.winnerId).toBe(consolationGroups(document)[0]?.id);
-    expect(trackOf(document, 'CONSOLATION')).toHaveLength(3);
+    expect(trackOf(document, 'CONSOLATION')).toHaveLength(1);
   });
 
   /*
@@ -212,19 +253,20 @@ describe('the round actions on the CONSOLATION track', () => {
    * close back but left the side event decided would offer the host a draw with
    * one group in the pot (CLAUDE.md golden rule 6).
    */
-  it('takes the winner back with the close it came from', () => {
+  it('takes the winner back with the press it came from', () => {
     const store = running();
-    for (let round = 0; round < 3; round += 1) {
-      drawRound(store, 'CONSOLATION');
-      playOutOpen(store, 'CONSOLATION');
-      closeRound(store, 'CONSOLATION');
-    }
+    drawRound(store, 'CONSOLATION');
+    playOutOpen(store, 'CONSOLATION');
+    closeRound(store, 'CONSOLATION');
+    advancePhase(store, 'CONSOLATION');
+    drawBracket(store, CLOCK, 'CONSOLATION');
+    playOutBracket(store);
+    finishBracket(store, 'CONSOLATION');
 
     store.undo();
 
     expect(documentOf(store).consolation?.state).toBe('RUNNING');
     expect(documentOf(store).consolation?.winnerId).toBeNull();
-    expect(currentRound(documentOf(store), 'CONSOLATION')).not.toBeNull();
   });
 });
 

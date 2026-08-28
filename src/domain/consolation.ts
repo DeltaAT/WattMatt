@@ -21,11 +21,24 @@ import type { Consolation, Group, Round, Tournament } from '@/domain/types';
  * qualifying round: the question can be *put* then, but it can only be
  * *answered into a field* afterwards.
  *
- * **It does not need a power of two.** It feeds no bracket, so it is the
- * ordinary draw of §3 repeated — shuffle, pair, `Freilos` on an odd count —
- * until one group is left. No second lottery, no naming phase, no bracket, no
- * third-place match, and the no-rematch rule of issue #72 applies to it exactly
- * as it does to the main field, out of the same derived history.
+ * **It runs the whole pipeline** (issue #91). This is what changed: it used to
+ * be a plain sequence of rounds with no power-of-two requirement and no tree at
+ * the end, and that is now wrong. The side event runs the *same* pipeline as
+ * the main field — a qualifying round, its own `Hoffnungsrunde` when the field
+ * is not a power of two, elimination rounds down to sixteen, then a bracket
+ * with a `Spiel um Platz 3` — with exactly one exception: it never enters the
+ * naming phase, so it is numbers from its first round to its final.
+ *
+ * That is why almost nothing lives here any more. The pipeline is one pipeline
+ * run twice, parameterised by `track` (`@/domain/track`), and what is left in
+ * this module is only what is true of the side event and of nothing else: who
+ * is in it, when the host may start it, and when it is over.
+ *
+ * **One level, and no further.** The `Trostrunde`'s own first-round losers do
+ * **not** get a side event of their own — one level is where the structure
+ * stops recursing (§10). The consequence is worth saying out loud to a room,
+ * because it is the opposite of the main field's: declining *this*
+ * `Hoffnungsrunde` really does mean going home.
  *
  * Pure, like everything in `src/domain`. Nothing here draws a round: the draw
  * engine does that, on the `CONSOLATION` track, over the field this module
@@ -170,7 +183,16 @@ export function startConsolation(tournament: Tournament): Tournament {
     groups: tournament.groups.map((group) =>
       field.has(group.id) ? { ...group, status: 'CONSOLATION' } : group,
     ),
-    consolation: { state: 'RUNNING', winnerId: null },
+    // At the start of its own pipeline, with nothing drawn (issue #91). The
+    // phase is the side event's own and moves independently of the main
+    // field's, which is routinely several rounds ahead of it.
+    consolation: {
+      state: 'RUNNING',
+      phase: 'QUALIFYING',
+      repechage: null,
+      bracket: null,
+      winnerId: null,
+    },
   };
 }
 
@@ -186,7 +208,19 @@ export function declineConsolation(tournament: Tournament): Tournament {
   if (!canStartConsolation(tournament)) {
     return tournament;
   }
-  return { ...tournament, consolation: { state: 'DECLINED', winnerId: null } };
+  return {
+    ...tournament,
+    consolation: {
+      state: 'DECLINED',
+      // `SETUP` rather than a phase it will never be in: nothing is offered for
+      // a declined event, and a phase that named a step would be a step nobody
+      // can take.
+      phase: 'SETUP',
+      repechage: null,
+      bracket: null,
+      winnerId: null,
+    },
+  };
 }
 
 /**
@@ -200,14 +234,20 @@ export function isConsolationRunning(tournament: Tournament): boolean {
 /**
  * The record after a `Trostrunde` round has been closed, or the argument back.
  *
- * Called by `closeRound` and by nothing else. The event ends when one group is
- * left standing, and that is a fact about the round that was just closed rather
- * than a decision the host makes: there is nobody left to draw against, so
- * there is nothing to press. What the host does decide is whether the winner
- * gets a moment on the projector, and that is a scene, not a state (#28).
+ * **A guard, not a route.** Since issue #91 the side event ends in its tree:
+ * `finishBracket` writes the winner under the final the host has just watched,
+ * and every field size reaches that — a field of two included, because two
+ * participants skip the qualifying round and their single match *is* the
+ * `Finale` (§9 case 5, docs/OPEN-QUESTIONS.md entry 101).
  *
- * A closed round that leaves two or more still in changes nothing — the host
- * draws again.
+ * What is left here is the invariant underneath that: a closed round that
+ * leaves exactly one group standing has decided the event, whatever the phase
+ * machine thinks happens next, and a record still saying `RUNNING` would offer
+ * the host a draw with a single group in the pot. Keeping it costs one
+ * comparison per close and removes a way for the two to disagree.
+ *
+ * A closed round that leaves two or more still in changes nothing — the phase
+ * moves on and the host draws again, or draws the tree.
  */
 export function settleConsolation(tournament: Tournament): Tournament {
   const consolation = tournament.consolation;
@@ -229,7 +269,7 @@ export function settleConsolation(tournament: Tournament): Tournament {
     return tournament;
   }
 
-  const finished: Consolation = { state: 'FINISHED', winnerId: winner.id };
+  const finished: Consolation = { ...consolation, state: 'FINISHED', winnerId: winner.id };
   return { ...tournament, consolation: finished };
 }
 
@@ -268,6 +308,8 @@ export function closeConsolationRound(tournament: Tournament): Tournament {
 /** What the host's `Trostrunde` panel reads (issue #73). */
 export interface ConsolationSummary {
   state: Consolation['state'];
+  /** Where the side event has got to in its own copy of §1 (issue #91). */
+  phase: Consolation['phase'];
   /** The groups still in it, in group order. */
   standing: readonly Group[];
   /** Its rounds, oldest first — `Trostrunde 1`, `Trostrunde 2`, … */
@@ -296,6 +338,7 @@ export function consolationSummary(tournament: Tournament): ConsolationSummary |
   const winnerId = consolation.winnerId;
   return {
     state: consolation.state,
+    phase: consolation.phase,
     standing: consolationGroups(tournament),
     rounds: roundsOfTrack(tournament, 'CONSOLATION'),
     round: currentRound(tournament, 'CONSOLATION'),

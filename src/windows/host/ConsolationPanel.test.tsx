@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { drawBracket, finishBracket, isBracketComplete, setBracketWinner } from '@/domain/bracket';
 import {
   closeConsolationRound,
   consolationSummary,
@@ -11,9 +12,11 @@ import {
   type ConsolationSummary,
 } from '@/domain/consolation';
 import { closeRound, drawRound, setWinner } from '@/domain/draw';
+import { advancePhase } from '@/domain/progression';
 import { roundBoard, roundSummary } from '@/domain/round';
 import { currentRound } from '@/domain/selectors';
 import { FIXED_NOW, group, table, tournament } from '@/domain/testFixtures';
+import { trackState } from '@/domain/track';
 import type { Tournament } from '@/domain/types';
 import { de } from '@/i18n';
 import { ConsolationPanel } from '@/windows/host/ConsolationPanel';
@@ -204,23 +207,47 @@ describe('the board', () => {
 });
 
 describe('the winner', () => {
-  /** The side event played all the way down to one group. */
+  /**
+   * The side event run to its end the way issue #91 says it ends: one round of
+   * eight, then its own tree.
+   *
+   * Not three rounds played down to a last group standing — that was the
+   * structure #91 superseded. Eight is already a power of two and already small
+   * enough for a bracket, so a single round leaves four, and the four are drawn
+   * into a tree with a `Spiel um Platz 3`. `finishBracket` is what writes the
+   * winner the panel then announces.
+   */
   function decided(): Tournament {
     let next = startConsolation(afterQualifying());
-    for (let round = 0; round < 3; round += 1) {
-      next = drawConsolationRound(next, {
-        at: FIXED_NOW,
-        label: (index) => de.consolation.title({ n: index }),
-      });
-      const open = currentRound(next, 'CONSOLATION');
-      for (const match of open?.matches ?? []) {
-        if (match.b !== null) {
-          next = setWinner(next, match.id, match.a);
-        }
+    next = drawConsolationRound(next, {
+      at: FIXED_NOW,
+      label: (index) => de.consolation.title({ n: index }),
+    });
+    for (const match of currentRound(next, 'CONSOLATION')?.matches ?? []) {
+      if (match.b !== null) {
+        next = setWinner(next, match.id, match.a);
       }
-      next = closeConsolationRound(next);
     }
-    return next;
+    next = closeConsolationRound(next);
+
+    next = advancePhase(next, 'CONSOLATION');
+    next = drawBracket(next, { at: FIXED_NOW }, 'CONSOLATION');
+
+    // Semi-finals first, then the two matches they feed — the third-place node
+    // included, because a tree with bronze still open is not complete (§8).
+    while (!isBracketComplete(next, 'CONSOLATION')) {
+      const playable = (trackState(next, 'CONSOLATION').bracket?.nodes ?? []).filter(
+        (node) => node.slotA !== null && node.slotB !== null && node.winnerId === null,
+      );
+      if (playable.length === 0) {
+        throw new Error('the side event’s tree did not finish');
+      }
+      for (const node of playable) {
+        next = setBracketWinner(next, node.id, node.slotA!, 'CONSOLATION');
+      }
+    }
+
+    return finishBracket(next, 'CONSOLATION');
   }
 
   it('names the winner and repeats that it is not a way back', () => {

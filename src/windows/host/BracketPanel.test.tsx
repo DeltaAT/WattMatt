@@ -71,6 +71,7 @@ function panel(
   document: Tournament,
   handlers: PanelHandlers = {},
   focus: BracketRound | null = null,
+  overrides: Partial<Parameters<typeof BracketPanel>[0]> = {},
 ) {
   const bracket = document.bracket;
 
@@ -101,6 +102,7 @@ function panel(
       onAssign={handlers.onAssign ?? NOTHING}
       onFinish={handlers.onFinish ?? NOTHING}
       onFocus={handlers.onFocus ?? NOTHING}
+      {...overrides}
     />,
   );
 }
@@ -361,3 +363,37 @@ function openCorrection(container: HTMLElement): void {
     )[1] as HTMLElement,
   );
 }
+
+/*
+ * The `Trostrunde` ends in the same tree — same nodes, same third-place
+ * routing, same corrections — drawn in numbers rather than names (issue #91,
+ * docs/TOURNAMENT-RULES.md §10). Both can be on screen at once, so the panel
+ * says which tournament it belongs to and what its last button actually does.
+ */
+describe('the side event’s own tree', () => {
+  it('names the tournament the tree belongs to', () => {
+    panel(readyToDraw(8), {}, null, { track: 'CONSOLATION' });
+
+    expect(screen.getByRole('region', { name: de.consolation.bracketLabel })).toBeTruthy();
+    expect(screen.getByText(de.consolation.bracketLabel)).toBeTruthy();
+  });
+
+  /*
+   * The same press means two different things: on the main field it opens the
+   * `Siegerehrung`, and here it is the last step the side event takes at all —
+   * the podium is the main tournament's 1/2/3 and nobody else's.
+   */
+  it('says that closing this tree ends the side event', () => {
+    panel(drawn(4), {}, null, { track: 'CONSOLATION', canFinish: true });
+
+    expect(screen.getByText(de.consolation.bracketFinish)).toBeTruthy();
+    expect(screen.queryByText(de.bracket.finish)).toBeNull();
+  });
+
+  it('leaves the main field’s panel exactly as it was', () => {
+    panel(drawn(4), {}, null, { canFinish: true });
+
+    expect(screen.getByRole('region', { name: de.bracket.sectionLabel })).toBeTruthy();
+    expect(screen.getByText(de.bracket.finish)).toBeTruthy();
+  });
+});

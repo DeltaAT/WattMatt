@@ -12,14 +12,23 @@ import { isNamingComplete } from '@/domain/naming';
 import { drawPairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
 import { nextPowerOfTwo } from '@/domain/round';
-import { activeGroups, freeTables, servesTrack } from '@/domain/selectors';
+import { freeTables, servesTrack } from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
+import {
+  hasNamingPhase,
+  isTrackRunning,
+  trackGroups,
+  trackState,
+  withTrackState,
+} from '@/domain/track';
 import type {
   Bracket,
   BracketNode,
   BracketRound,
   Group,
   GroupStatus,
+  Phase,
+  RoundTrack,
   Timestamp,
   Tournament,
 } from '@/domain/types';
@@ -68,6 +77,9 @@ import type {
 /** The prefix docs/FILE-FORMAT.md writes bracket node ids with. */
 const NODE_ID_PREFIX = 'bn_';
 
+/** The `Trostrunde`'s own namespace, so the two trees cannot share a table (#91). */
+const CONSOLATION_NODE_ID_PREFIX = 'cbn_';
+
 /**
  * The field size at which a `Spiel um Platz 3` exists at all.
  *
@@ -107,8 +119,15 @@ export function bracketRoundForSize(size: number): BracketRound | null {
 
 /** A reason the bracket cannot be drawn right now. Explained in German by #26. */
 export type BracketBlocker =
-  /** §1 puts `BRACKET` after `NAMING` and nowhere else. */
-  | 'NOT_IN_NAMING'
+  /**
+   * The track is not at the point where its tree is drawn.
+   *
+   * The main field waits in `NAMING`, because §1 puts the tree after the names
+   * (issue #23). The `Trostrunde` has no names to collect, so it waits in
+   * `BRACKET` with an empty tree — the same two presses, without the phase in
+   * between (issue #91, docs/OPEN-QUESTIONS.md, entry 100).
+   */
+  | 'WRONG_PHASE'
   /** It has been drawn. A second draw would re-deal a tree the room has seen. */
   | 'ALREADY_DRAWN'
   /** §6: the bracket waits until every remaining participant has a name. */
@@ -127,23 +146,30 @@ export type BracketBlocker =
  * host reading a panel of checks needs the same panel every time, and a check
  * that vanishes when it passes is one they cannot confirm they have satisfied.
  */
-export function bracketBlockers(tournament: Tournament): readonly BracketBlocker[] {
+export function bracketBlockers(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly BracketBlocker[] {
   const blockers: BracketBlocker[] = [];
+  const state = trackState(tournament, track);
 
-  if (tournament.phase !== 'NAMING') {
-    blockers.push('NOT_IN_NAMING');
+  if (!isTrackRunning(tournament, track) || state.phase !== beforeBracketPhase(track)) {
+    blockers.push('WRONG_PHASE');
   }
-  if (tournament.bracket !== null) {
+  if (state.bracket !== null) {
     blockers.push('ALREADY_DRAWN');
   }
-  if (!isNamingComplete(tournament)) {
+  // Only the main field has names to be missing. The side event is numbers from
+  // its first round to its final, which is the one difference between the two
+  // pipelines (issue #91, §10).
+  if (hasNamingPhase(track) && !isNamingComplete(tournament)) {
     blockers.push('NAMES_MISSING');
   }
 
   // One reason about the field, never three: "too large" and "not a power of
   // two" are both true of a field of 20, and a panel that said so twice would
   // send the host looking for two problems.
-  const field = fieldSize(tournament);
+  const field = fieldSize(tournament, track);
   if (field > FINAL_PHASE_SIZE) {
     blockers.push('FIELD_TOO_LARGE');
   } else if (field < MINIMUM_BRACKET_SIZE) {
@@ -156,8 +182,21 @@ export function bracketBlockers(tournament: Tournament): readonly BracketBlocker
 }
 
 /** Whether `drawBracket` would produce a bracket. */
-export function canDrawBracket(tournament: Tournament): boolean {
-  return bracketBlockers(tournament).length === 0;
+export function canDrawBracket(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return bracketBlockers(tournament, track).length === 0;
+}
+
+/**
+ * The phase a track sits in while its tree is waiting to be drawn.
+ *
+ * `NAMING` for the main field — §1 puts the tree after the names. `BRACKET` for
+ * the `Trostrunde`, which has no names to collect and therefore nothing to sit
+ * in between its last round and its tree; it enters the phase with an empty
+ * tree and the host draws it with the next press, which is the same two-press
+ * shape the main field has (issue #91, docs/OPEN-QUESTIONS.md, entry 100).
+ */
+function beforeBracketPhase(track: RoundTrack): Phase {
+  return hasNamingPhase(track) ? 'NAMING' : 'BRACKET';
 }
 
 export interface DrawBracketInput {
@@ -196,30 +235,36 @@ export interface DrawBracketInput {
 export function drawBracket(
   tournament: Tournament,
   { at, rng = createRng(tournament.rngSeed, tournament.rngCursor) }: DrawBracketInput,
+  track: RoundTrack = 'MAIN',
 ): Tournament {
-  if (!canDrawBracket(tournament)) {
+  if (!canDrawBracket(tournament, track)) {
     return tournament;
   }
 
-  const bracket = buildBracket(activeGroups(tournament), {
+  const bracket = buildBracket(trackGroups(tournament, track), {
     rng,
-    size: fieldSize(tournament),
+    size: fieldSize(tournament, track),
     // Derived from the rounds the evening has played, so the first bracket
     // round does not re-stage a match the room already watched (issue #72).
     history: playedAgainst(tournament),
+    track,
   });
 
   // The cursor moves on in the same object as the tree it produced. A draw that
   // recorded the bracket but left the cursor behind would hand the identical
-  // shuffle to the next thing that draws (docs/OPEN-QUESTIONS.md #23).
+  // shuffle to the next thing that draws (docs/OPEN-QUESTIONS.md #23). Both
+  // tracks draw from the one stream, which is what keeps the whole evening
+  // reproducible from a single seed (issue #91).
   const withBracket: Tournament = {
-    ...tournament,
-    phase: 'BRACKET',
+    ...withTrackState(tournament, track, {
+      ...trackState(tournament, track),
+      phase: 'BRACKET',
+      bracket,
+    }),
     rngCursor: rng.cursor,
-    bracket,
   };
 
-  return fillBracketTables(withBracket, at);
+  return fillBracketTables(withBracket, at, track);
 }
 
 /** What drawing the tree would produce, without producing it (issue #72). */
@@ -245,12 +290,14 @@ export interface BracketPreview {
 export function previewDrawBracket(
   tournament: Tournament,
   input: DrawBracketInput,
+  track: RoundTrack = 'MAIN',
 ): BracketPreview | null {
-  const drawn = drawBracket(tournament, input);
-  if (drawn === tournament || drawn.bracket === null) {
+  const drawn = drawBracket(tournament, input, track);
+  const bracket = trackState(drawn, track).bracket;
+  if (drawn === tournament || bracket === null) {
     return null;
   }
-  return { bracket: drawn.bracket, forced: forcedBracketRematches(drawn) };
+  return { bracket, forced: forcedBracketRematches(drawn, track) };
 }
 
 /**
@@ -261,9 +308,14 @@ export function previewDrawBracket(
  * room deserves the same badge on it (docs/TOURNAMENT-RULES.md §7, the
  * documented limitation of issue #72).
  */
-export function forcedBracketRematches(tournament: Tournament): readonly BracketNode[] {
+export function forcedBracketRematches(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly BracketNode[] {
   const ids: ReadonlySet<MatchId> = rematchIds(tournament);
-  return (tournament.bracket?.nodes ?? []).filter((node) => ids.has(matchIdSchema.parse(node.id)));
+  return (trackState(tournament, track).bracket?.nodes ?? []).filter((node) =>
+    ids.has(matchIdSchema.parse(node.id)),
+  );
 }
 
 export interface BuildBracketInput {
@@ -285,6 +337,16 @@ export interface BuildBracketInput {
    * which is what a tree drawn from a fresh field is.
    */
   history?: MatchHistory;
+  /**
+   * Which of the two tournaments the tree belongs to (issue #91).
+   *
+   * It decides the node ids and nothing else. Both brackets can be live at
+   * once, and a table carries the id of whatever is on it
+   * (docs/OPEN-QUESTIONS.md #68) — so two trees that both minted `bn_1` would
+   * put the main field's `Achtelfinale` and the side event's on the same table.
+   * `MAIN` keeps `bn_`, which is what every file ever written contains.
+   */
+  track?: RoundTrack;
 }
 
 /**
@@ -305,11 +367,11 @@ export interface BuildBracketInput {
  */
 export function buildBracket(
   groups: readonly Group[],
-  { rng, size, history = NO_HISTORY }: BuildBracketInput,
+  { rng, size, history = NO_HISTORY, track = 'MAIN' }: BuildBracketInput,
 ): Bracket {
   const field = groups.map((group) => group.id);
   const width = bracketWidth(field.length, size);
-  const { nodes, thirdPlaceNodeId } = layOut(width);
+  const { nodes, thirdPlaceNodeId } = layOut(width, track);
 
   // The first round's nodes are the shuffled order read off in twos, exactly as
   // a round's matches are — so the same engine keeps old opponents apart here,
@@ -350,8 +412,9 @@ export function setBracketWinner(
   tournament: Tournament,
   nodeId: BracketNodeId,
   winnerId: GroupId,
+  track: RoundTrack = 'MAIN',
 ): Tournament {
-  const bracket = tournament.bracket;
+  const bracket = trackState(tournament, track).bracket;
   if (bracket === null) {
     return tournament;
   }
@@ -391,15 +454,15 @@ export function setBracketWinner(
   // is the same walk that produces that list.
   const invalidated = invalidateAbove(routed, node.id, bracket.thirdPlaceNodeId);
 
-  const withBracket: Tournament = {
-    ...tournament,
+  const withBracket = withTrackState(tournament, track, {
+    ...trackState(tournament, track),
     bracket: {
       ...bracket,
       nodes: settleThirdPlace(invalidated, bracket.thirdPlaceNodeId),
     },
-  };
+  });
 
-  return freeTablesOfCleared(restatusBracket(withBracket), bracket, node.id);
+  return freeTablesOfCleared(restatusBracket(withBracket, track), bracket, node.id, track);
 }
 
 /** What correcting a decided result would cost (issue #26). */
@@ -436,14 +499,15 @@ export function bracketCorrection(
   tournament: Tournament,
   nodeId: BracketNodeId,
   winnerId: GroupId,
+  track: RoundTrack = 'MAIN',
 ): BracketCorrection | null {
-  const bracket = tournament.bracket;
+  const bracket = trackState(tournament, track).bracket;
   const node = bracket === null ? undefined : findNode(bracket, nodeId);
   if (bracket === null || node === undefined) {
     return null;
   }
 
-  const after = setBracketWinner(tournament, nodeId, winnerId).bracket;
+  const after = trackState(setBracketWinner(tournament, nodeId, winnerId, track), track).bracket;
   if (after === null || after === bracket) {
     return null;
   }
@@ -482,8 +546,11 @@ export function queuedBracketNodes(bracket: Bracket): readonly BracketNode[] {
  * confirming it (CLAUDE.md golden rule 3), so this is the question and
  * `assignNextBracketNode` is the answer.
  */
-export function nextQueuedBracketNode(tournament: Tournament): BracketNode | null {
-  const bracket = tournament.bracket;
+export function nextQueuedBracketNode(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): BracketNode | null {
+  const bracket = trackState(tournament, track).bracket;
   return bracket === null ? null : (queuedBracketNodes(bracket)[0] ?? null);
 }
 
@@ -505,8 +572,9 @@ export interface AssignBracketNodeInput {
 export function assignBracketNode(
   tournament: Tournament,
   { nodeId, tableId, at }: AssignBracketNodeInput,
+  track: RoundTrack = 'MAIN',
 ): Tournament {
-  const bracket = tournament.bracket;
+  const bracket = trackState(tournament, track).bracket;
   if (bracket === null) {
     return tournament;
   }
@@ -523,7 +591,7 @@ export function assignBracketNode(
   // (issue #79): the panel does not offer it, so this is the guard against a
   // stale click on a table the host set aside a moment ago.
   const table = tournament.tables.find((candidate) => candidate.id === tableId);
-  if (table === undefined || !servesTrack(table, 'MAIN')) {
+  if (table === undefined || !servesTrack(table, track)) {
     return tournament;
   }
 
@@ -544,12 +612,13 @@ export function assignBracketNode(
 export function assignNextBracketNode(
   tournament: Tournament,
   { tableId, at }: { tableId: TableId; at: Timestamp },
+  track: RoundTrack = 'MAIN',
 ): Tournament {
-  const node = nextQueuedBracketNode(tournament);
+  const node = nextQueuedBracketNode(tournament, track);
   if (node === null) {
     return tournament;
   }
-  return assignBracketNode(tournament, { nodeId: node.id, tableId, at });
+  return assignBracketNode(tournament, { nodeId: node.id, tableId, at }, track);
 }
 
 // ---------------------------------------------------------------------------
@@ -577,8 +646,12 @@ export interface FinalStandings {
  * Each place is null until its own match is decided, so the ceremony (#27) can
  * put a podium up while the third-place match is still being played.
  */
-export function finalStandings(tournament: Tournament): FinalStandings | null {
-  return tournament.bracket === null ? null : finalStandingsOf(tournament.bracket);
+export function finalStandings(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): FinalStandings | null {
+  const bracket = trackState(tournament, track).bracket;
+  return bracket === null ? null : finalStandingsOf(bracket);
 }
 
 /**
@@ -795,8 +868,12 @@ export function bracketNodeTableId(node: BracketNode): TableId | null {
  * set of reasons for it to be greyed out — the host presses this one where the
  * final is, under the match they have just decided.
  */
-export function canFinishBracket(tournament: Tournament): boolean {
-  return tournament.phase === 'BRACKET' && isBracketComplete(tournament);
+export function canFinishBracket(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return (
+    isTrackRunning(tournament, track) &&
+    trackState(tournament, track).phase === 'BRACKET' &&
+    isBracketComplete(tournament, track)
+  );
 }
 
 /**
@@ -808,11 +885,31 @@ export function canFinishBracket(tournament: Tournament): boolean {
  * because the host may still be talking" — so this does not stage a scene, and
  * the beamer keeps showing the finished tree until somebody says otherwise.
  */
-export function finishBracket(tournament: Tournament): Tournament {
-  if (!canFinishBracket(tournament)) {
+export function finishBracket(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  if (!canFinishBracket(tournament, track)) {
     return tournament;
   }
-  return { ...tournament, phase: 'CEREMONY' };
+  if (track === 'MAIN') {
+    return { ...tournament, phase: 'CEREMONY' };
+  }
+
+  /*
+   * The side event ends where its bracket ends (issue #91). There is no
+   * `Siegerehrung` to walk on to — the podium is the main tournament's 1/2/3 —
+   * so this is the last transition the `Trostrunde` makes, and it writes its
+   * winner into the record that has been carrying the answer since issue #73.
+   *
+   * The state and the winner move in one object, for the reason every other
+   * transition here does: a `FINISHED` side event with no winner is half a
+   * decision, and a host reading the panel between the two halves would be
+   * told the event is over and not told who won it.
+   */
+  const consolation = tournament.consolation;
+  const champion = finalStandings(tournament, track)?.first ?? null;
+  if (consolation === null || champion === null) {
+    return tournament;
+  }
+  return { ...tournament, consolation: { ...consolation, state: 'FINISHED', winnerId: champion } };
 }
 
 /**
@@ -822,9 +919,9 @@ export function finishBracket(tournament: Tournament): Tournament {
  * because a podium revealed bronze first cannot be revealed at all until
  * somebody has won bronze (§8).
  */
-export function isBracketComplete(tournament: Tournament): boolean {
-  const bracket = tournament.bracket;
-  const standings = finalStandings(tournament);
+export function isBracketComplete(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  const bracket = trackState(tournament, track).bracket;
+  const standings = finalStandings(tournament, track);
   if (bracket === null || standings === null) {
     return false;
   }
@@ -896,8 +993,18 @@ function feederOf(bracket: Bracket, target: BracketNode, side: Side): BracketNod
   return candidates.find((node) => sideOf(bracket.nodes, node.id) === side);
 }
 
-function nodeIdOf(number: number): BracketNodeId {
-  return bracketNodeIdSchema.parse(`${NODE_ID_PREFIX}${number}`);
+/**
+ * A node id, in its track's own namespace (issue #91).
+ *
+ * `bn_1` on the main field, which is what every file ever written contains, and
+ * `cbn_1` in the `Trostrunde`. Two trees can be live at the same moment and a
+ * table carries the id of whatever is on it (docs/OPEN-QUESTIONS.md #68), so
+ * one namespace would put the main field's `Achtelfinale` and the side event's
+ * on the same table.
+ */
+function nodeIdOf(number: number, track: RoundTrack): BracketNodeId {
+  const prefix = track === 'MAIN' ? NODE_ID_PREFIX : CONSOLATION_NODE_ID_PREFIX;
+  return bracketNodeIdSchema.parse(`${prefix}${number}`);
 }
 
 function findNode(bracket: Bracket, id: BracketNodeId): BracketNode | undefined {
@@ -932,7 +1039,10 @@ function bracketWidth(participants: number, requested: number | undefined): numb
  * and it is the order the ids are handed out along, so `bn_15` is the
  * third-place match of a field of 16 in every file this app writes.
  */
-function layOut(size: number): { nodes: BracketNode[]; thirdPlaceNodeId: BracketNodeId | null } {
+function layOut(
+  size: number,
+  track: RoundTrack,
+): { nodes: BracketNode[]; thirdPlaceNodeId: BracketNodeId | null } {
   const fields: number[] = [];
   for (let field = size; field >= MINIMUM_BRACKET_SIZE; field /= 2) {
     fields.push(field);
@@ -941,7 +1051,7 @@ function layOut(size: number): { nodes: BracketNode[]; thirdPlaceNodeId: Bracket
   let counter = 0;
   const mint = (): BracketNodeId => {
     counter += 1;
-    return nodeIdOf(counter);
+    return nodeIdOf(counter, track);
   };
 
   // Every round but the final first, so that the third-place node and the final
@@ -1234,8 +1344,8 @@ function invalidateNode(
  * Only participants the bracket names are touched. Somebody knocked out in the
  * qualifying round was never in this arithmetic and must stay knocked out.
  */
-function restatusBracket(tournament: Tournament): Tournament {
-  const bracket = tournament.bracket;
+function restatusBracket(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  const bracket = trackState(tournament, track).bracket;
   if (bracket === null) {
     return tournament;
   }
@@ -1260,7 +1370,15 @@ function restatusBracket(tournament: Tournament): Tournament {
     if (!drawn.has(group.id)) {
       return group;
     }
-    const status: GroupStatus = out.has(group.id) ? 'ELIMINATED' : 'ACTIVE';
+    // Back into *this* track's field. A `Trostrunde` participant who is still
+    // in is `CONSOLATION` and never `ACTIVE`: `ACTIVE` would put them in the
+    // main field's arithmetic, which is the one thing the side event must never
+    // do (issues #73, #91).
+    const status: GroupStatus = out.has(group.id)
+      ? 'ELIMINATED'
+      : track === 'MAIN'
+        ? 'ACTIVE'
+        : 'CONSOLATION';
     if (group.status === status) {
       return group;
     }
@@ -1283,6 +1401,7 @@ function freeTablesOfCleared(
   tournament: Tournament,
   before: Bracket,
   correctedId: BracketNodeId,
+  track: RoundTrack = 'MAIN',
 ): Tournament {
   let next = tournament;
 
@@ -1290,7 +1409,9 @@ function freeTablesOfCleared(
     if (node.tableId === null) {
       continue;
     }
-    const now = next.bracket?.nodes.find((candidate) => candidate.id === node.id);
+    const now = trackState(next, track).bracket?.nodes.find(
+      (candidate) => candidate.id === node.id,
+    );
     if (node.id === correctedId || now?.tableId === null) {
       next = releaseTableOf(next, node);
     }
@@ -1326,17 +1447,21 @@ function releaseTableOf(tournament: Tournament, node: BracketNode): Tournament {
  * table is not free and is never filled: that is the whole point of taking one
  * out of service.
  */
-function fillBracketTables(tournament: Tournament, at: Timestamp): Tournament {
-  const bracket = tournament.bracket;
+function fillBracketTables(
+  tournament: Tournament,
+  at: Timestamp,
+  track: RoundTrack = 'MAIN',
+): Tournament {
+  const bracket = trackState(tournament, track).bracket;
   if (bracket === null) {
     return tournament;
   }
 
-  // `MAIN`, always: the bracket is the main field's final phase and the side
-  // event feeds no bracket at all (docs/TOURNAMENT-RULES.md §10). A table the
-  // host reserved for the `Trostrunde` is therefore not one of these, the same
-  // way it is not one of the qualifying round's (issue #79).
-  const free = freeTables(tournament, 'MAIN');
+  // This track's tables, not every free one: since issue #91 the side event has
+  // a bracket of its own, so a table the host reserved for one track is not the
+  // other's tree to take, exactly as it is not the other's qualifying round's
+  // (issue #79).
+  const free = freeTables(tournament, track);
   let next = tournament;
   let slot = 0;
 

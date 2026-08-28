@@ -67,6 +67,20 @@ export function HostWindow() {
   const naming = useNaming();
   const bracket = useBracket();
   const phase = usePhase();
+  /*
+   * The side event's half of the same three panels (issue #91,
+   * docs/TOURNAMENT-RULES.md §10).
+   *
+   * The `Trostrunde` runs the *same* pipeline — its own `Hoffnungsrunde`, its
+   * own elimination rounds, its own tree with a `Spiel um Platz 3` — so it gets
+   * the same hooks with the track set the other way rather than panels of its
+   * own. Each of them goes quiet on its own (`isActive`) when the side event is
+   * not running or has not reached that step, so most of an evening this costs
+   * three false booleans and no pixels.
+   */
+  const consolationPhase = usePhase('CONSOLATION');
+  const consolationRepechage = useRepechage('CONSOLATION');
+  const consolationBracket = useBracket('CONSOLATION');
   const beamer = useBeamerControl();
   // Everything that failed and is not about a file (issue #30). File outcomes
   // have their own strip above, because they carry a way out.
@@ -243,6 +257,78 @@ export function HostWindow() {
                 onStartNext={consolation.startNext}
                 onClose={consolation.close}
                 onShowOnBeamer={consolation.showOnBeamer}
+              />
+            ) : null}
+
+            {/*
+              The rest of the side event's pipeline, in the order it reaches
+              them: the step out of the phase it is in, its own lottery, and its
+              own tree (issue #91, §10). Directly under its board, so the whole
+              `Trostrunde` is one contiguous block on the screen — the host is
+              running two tournaments at once and must never have to work out
+              which of two identical panels belongs to which.
+
+              Each panel is track-qualified in its own heading rather than by
+              where it sits, because the two blocks scroll past each other.
+            */}
+            {consolationPhase.isActive ? (
+              <PhasePanel
+                phase={consolationPhase.phase}
+                step={consolationPhase.step}
+                track="CONSOLATION"
+                onAdvance={consolationPhase.advance}
+              />
+            ) : null}
+
+            {consolationRepechage.isActive ? (
+              <RepechagePanel
+                state={consolationRepechage.state}
+                target={consolationRepechage.target}
+                blockers={consolationRepechage.blockers}
+                canStart={consolationRepechage.canStart}
+                canDraw={consolationRepechage.canDraw}
+                groups={consolationRepechage.groups}
+                participant={consolationRepechage.participant}
+                track="CONSOLATION"
+                onStart={consolationRepechage.start}
+                onDraw={consolationRepechage.drawCandidate}
+                onAccept={consolationRepechage.accept}
+                onDecline={consolationRepechage.decline}
+                onFallback={consolationRepechage.useFallback}
+                onShowOnBeamer={consolationRepechage.showOnBeamer}
+              />
+            ) : null}
+
+            {consolationBracket.isActive ? (
+              <BracketPanel
+                bracket={consolationBracket.bracket}
+                columns={consolationBracket.columns}
+                groups={consolationBracket.groups}
+                participant={consolationBracket.participant}
+                freeTables={consolationBracket.freeTables}
+                tables={document.state.tournament.tables}
+                playable={consolationBracket.playable}
+                field={consolationBracket.field}
+                now={now}
+                drawBlockers={consolationBracket.drawBlockers}
+                canDraw={consolationBracket.canDraw}
+                canFinish={consolationBracket.canFinish}
+                focus={consolationBracket.focus}
+                track="CONSOLATION"
+                onPreviewDraw={consolationBracket.previewDraw}
+                onDraw={consolationBracket.draw}
+                onSetWinner={consolationBracket.setWinner}
+                correctionFor={consolationBracket.correctionFor}
+                onAssign={consolationBracket.assign}
+                onFinish={consolationBracket.finish}
+                onFocus={consolationBracket.showOnBeamer}
+                /*
+                  The side event's own phase, which never reaches `CEREMONY`:
+                  the podium is the main tournament's 1/2/3, so the ceremony
+                  controls stay off this panel by the same expression that puts
+                  them on the other one (§10).
+                */
+                phase={consolationPhase.phase}
               />
             ) : null}
 

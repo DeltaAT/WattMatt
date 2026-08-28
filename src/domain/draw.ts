@@ -12,8 +12,6 @@ import { allMatches } from '@/domain/lookup';
 import { drawPairing, type Pairing } from '@/domain/pairing';
 import { createRng, type Rng } from '@/domain/rng';
 import {
-  activeGroups,
-  consolationGroups,
   currentRound,
   freeTables,
   roundsOfTrack,
@@ -21,6 +19,7 @@ import {
   undecidedMatches,
 } from '@/domain/selectors';
 import { occupyTable, releaseTable } from '@/domain/tables';
+import { trackGroups, trackState } from '@/domain/track';
 import type {
   Group,
   GroupStatus,
@@ -106,15 +105,19 @@ const ROUND_KIND_BY_PHASE: Partial<Record<Phase, RoundKind>> = {
  * What kind of round the next draw on a track would be, or undefined when that
  * track has nothing to deal.
  *
- * The main field asks the phase, because §1 is what decides whether a draw is a
- * qualifying round or an elimination round. The `Trostrunde` does not: it is
- * outside the phase machine entirely and runs the same kind of round over and
- * over until one group is left, whatever the main field happens to be doing at
- * the time (§10). That difference is the reason this is a function rather than
- * one wider table.
+ * **Both tracks ask their own phase** (issue #91). Until the `Trostrunde` ran
+ * the whole pipeline it was outside the phase machine and dealt one kind of
+ * round over and over; it now has a phase of its own, so the same question has
+ * the same answer on both tracks and `RoundKind` says what a round *is* rather
+ * than which half of the evening it belongs to. Which half is `round.track`,
+ * and that is the only thing that ever needed to say it.
+ *
+ * The `CONSOLATION` round kind is therefore legacy: nothing writes it any
+ * more, files that carry it are brought forward by `v6ToV7`, and it stays in
+ * the schema because a kind that vanished would make those files unreadable.
  */
 function roundKindFor(tournament: Tournament, track: RoundTrack): RoundKind | undefined {
-  return track === 'CONSOLATION' ? 'CONSOLATION' : ROUND_KIND_BY_PHASE[tournament.phase];
+  return ROUND_KIND_BY_PHASE[trackState(tournament, track).phase];
 }
 
 /**
@@ -126,7 +129,7 @@ function roundKindFor(tournament: Tournament, track: RoundTrack): RoundKind | un
  * rather than of a filter (issue #73).
  */
 function fieldOf(tournament: Tournament, track: RoundTrack): readonly Group[] {
-  return track === 'CONSOLATION' ? consolationGroups(tournament) : activeGroups(tournament);
+  return trackGroups(tournament, track);
 }
 
 /**
@@ -190,16 +193,17 @@ export function drawBlockers(
 ): readonly DrawBlocker[] {
   const blockers: DrawBlocker[] = [];
 
-  if (track === 'CONSOLATION') {
-    // The side event is outside the phase machine — it runs beside whatever the
-    // main field is doing — so what stands in for "is this a drawing phase?" is
-    // whether the host has started it and it is not yet decided (§10). Read off
-    // the record rather than through `@/domain/consolation`, which composes this
-    // module and must not be composed by it.
-    if (tournament.consolation?.state !== 'RUNNING') {
-      blockers.push('CONSOLATION_NOT_RUNNING');
-    }
-  } else if (ROUND_KIND_BY_PHASE[tournament.phase] === undefined) {
+  // The side event has one gate the main field does not: the host has to have
+  // started it, and it has to still be running (§10). Read off the record
+  // rather than through `@/domain/consolation`, which composes this module and
+  // must not be composed by it.
+  if (track === 'CONSOLATION' && tournament.consolation?.state !== 'RUNNING') {
+    blockers.push('CONSOLATION_NOT_RUNNING');
+  }
+  // Past that gate the question is the same one on both tracks, asked of that
+  // track's own phase (issue #91).
+  const phase = trackState(tournament, track).phase;
+  if (ROUND_KIND_BY_PHASE[phase] === undefined) {
     blockers.push('NOT_A_DRAWING_PHASE');
   }
   if (currentRound(tournament, track) !== null) {
@@ -212,11 +216,7 @@ export function drawBlockers(
   // rounds is a phase change and belongs to issue #22; without this guard a
   // second press of the draw button would deal a second qualifying round over
   // the top of the first one's winners.
-  if (
-    track === 'MAIN' &&
-    tournament.phase === 'QUALIFYING' &&
-    tournament.rounds.some((round) => round.kind === 'QUALIFYING')
-  ) {
+  if (phase === 'QUALIFYING' && qualifyingRoundOf(tournament, track) !== null) {
     blockers.push('QUALIFYING_ALREADY_DRAWN');
   }
   // The `while |W| > 16` of docs/TOURNAMENT-RULES.md §5, as a refusal rather
@@ -226,15 +226,11 @@ export function drawBlockers(
   // §3 plays it at every size — except at two, where the one match there is to
   // play is the `Finale` itself (§9 case 5).
   //
-  // The `Trostrunde` has no floor at all: it feeds no bracket, so it keeps
-  // halving until one group is left, and `TOO_FEW_GROUPS` above is what stops
-  // it there (§10).
-  const floor = tournament.phase === 'ELIMINATION' ? FINAL_PHASE_SIZE : MINIMUM_BRACKET_SIZE;
-  if (
-    track === 'MAIN' &&
-    ROUND_KIND_BY_PHASE[tournament.phase] !== undefined &&
-    fieldSize(tournament) <= floor
-  ) {
+  // The `Trostrunde` has the same floor, because since issue #91 it feeds a
+  // bracket too: a side event that kept halving to one group would never draw
+  // the tree §10 now gives it.
+  const floor = phase === 'ELIMINATION' ? FINAL_PHASE_SIZE : MINIMUM_BRACKET_SIZE;
+  if (ROUND_KIND_BY_PHASE[phase] !== undefined && fieldSize(tournament, track) <= floor) {
     blockers.push('FINAL_PHASE_REACHED');
   }
 
@@ -249,8 +245,25 @@ export function drawBlockers(
  * `Freilose` is a field of 32 as far as every count in the tournament is
  * concerned — that is the whole point of fallback 1.
  */
-export function fieldSize(tournament: Tournament): number {
-  return activeGroups(tournament).length + byesOwed(tournament);
+export function fieldSize(tournament: Tournament, track: RoundTrack = 'MAIN'): number {
+  return trackGroups(tournament, track).length + byesOwed(tournament, track);
+}
+
+/**
+ * A track's own qualifying round — its first — or null before it has one.
+ *
+ * Both tracks have one since issue #91, and both find it the same way: the
+ * round of kind `QUALIFYING` on that track. A file written before v7 has its
+ * side event's rounds as kind `CONSOLATION`; `v6ToV7` renames them, so nothing
+ * downstream needs to know that the shape ever differed.
+ */
+export function qualifyingRoundOf(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): Round | null {
+  return (
+    tournament.rounds.find((round) => round.track === track && round.kind === 'QUALIFYING') ?? null
+  );
 }
 
 /**
@@ -274,17 +287,17 @@ export function fieldSize(tournament: Tournament): number {
  * turned up late and was added mid-tournament (§2) is active without ever
  * having been in this arithmetic.
  */
-export function byesOwed(tournament: Tournament): number {
-  const repechage = tournament.repechage;
+export function byesOwed(tournament: Tournament, track: RoundTrack = 'MAIN'): number {
+  const repechage = trackState(tournament, track).repechage;
   if (repechage === null || repechage.fallbackUsed !== 'BYES') {
     return 0;
   }
-  if (tournament.rounds.some((round) => round.kind === 'ELIMINATION')) {
+  if (tournament.rounds.some((round) => round.track === track && round.kind === 'ELIMINATION')) {
     return 0;
   }
 
-  const qualifying = tournament.rounds.find((round) => round.kind === 'QUALIFYING');
-  const winners = qualifying === undefined ? 0 : roundOutcome(qualifying).winners.length;
+  const qualifying = qualifyingRoundOf(tournament, track);
+  const winners = qualifying === null ? 0 : roundOutcome(qualifying).winners.length;
   const accepted = repechage.draws.filter((draw) => draw.accepted === true).length;
   return Math.max(0, repechage.target - winners - accepted);
 }
@@ -391,10 +404,12 @@ export function drawRound(
       // is waiting for a field of 32 (docs/TOURNAMENT-RULES.md §4 fallback 1,
       // issue #22).
       //
-      // Never on the `CONSOLATION` track: the debt belongs to the bracket the
+      // Owed on either track since issue #91 — both have a lottery that can
+      // take the fallback. The old comment below is what changed: the debt
+      // belongs to the bracket the
       // side event does not feed, and paying it there would hand a `Freilos` to
       // a `Trostrunde` that owes nobody one (§10).
-      byes: track === 'CONSOLATION' ? 0 : byesOwed(tournament),
+      byes: byesOwed(tournament, track),
     },
   );
   const matches = pair(pairing, nextMatchNumber(tournament));

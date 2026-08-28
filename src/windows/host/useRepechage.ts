@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
+import { qualifyingRoundOf } from '@/domain/draw';
 import {
   canStartRepechage,
   repechageBlockers,
@@ -8,7 +9,13 @@ import {
   type RepechageState,
 } from '@/domain/repechage';
 import { repechageOutlook } from '@/domain/round';
-import type { Group, ParticipantLabel, RepechageFallback, Tournament } from '@/domain/types';
+import type {
+  Group,
+  ParticipantLabel,
+  RepechageFallback,
+  RoundTrack,
+  Tournament,
+} from '@/domain/types';
 import {
   acceptRepechageCandidate,
   declineRepechageCandidate,
@@ -79,21 +86,36 @@ const NO_REPECHAGE = {
   participant: 'GROUP',
 } as const;
 
-export function useRepechage(): RepechageHandle {
+/**
+ * @param track Which tournament's lottery this panel runs (issue #91).
+ *
+ * Both have one, and they are the same lottery — same target, same pot, same
+ * two answers, same two fallbacks. One panel and one hook for both, because a
+ * second copy would be the place the two came to disagree about what *Ja*
+ * means.
+ */
+export function useRepechage(track: RoundTrack = 'MAIN'): RepechageHandle {
   const document = useSyncExternalStore(
     tournamentStore.subscribe,
     () => tournamentStore.getState().document,
   );
 
-  const start = useCallback(() => startRepechage(tournamentStore), []);
-  const drawCandidate = useCallback(() => drawRepechageCandidate(tournamentStore), []);
-  const accept = useCallback(() => acceptRepechageCandidate(tournamentStore), []);
-  const decline = useCallback(() => declineRepechageCandidate(tournamentStore), []);
+  const start = useCallback(() => startRepechage(tournamentStore, track), [track]);
+  const drawCandidate = useCallback(() => drawRepechageCandidate(tournamentStore, track), [track]);
+  const accept = useCallback(() => acceptRepechageCandidate(tournamentStore, track), [track]);
+  const decline = useCallback(() => declineRepechageCandidate(tournamentStore, track), [track]);
   const useFallback = useCallback(
-    (choice: RepechageFallback) => commitFallback(tournamentStore, choice),
-    [],
+    (choice: RepechageFallback) => commitFallback(tournamentStore, choice, track),
+    [track],
   );
-  const showOnBeamer = useCallback(() => showScene(tournamentStore, { id: 'REPECHAGE' }), []);
+  const showOnBeamer = useCallback(
+    () =>
+      showScene(
+        tournamentStore,
+        track === 'MAIN' ? { id: 'REPECHAGE' } : { id: 'REPECHAGE', track },
+      ),
+    [track],
+  );
 
   const actions = { start, drawCandidate, accept, decline, useFallback, showOnBeamer };
 
@@ -101,8 +123,8 @@ export function useRepechage(): RepechageHandle {
     return { ...NO_REPECHAGE, ...actions };
   }
 
-  const state = repechageState(document);
-  const blockers = repechageBlockers(document);
+  const state = repechageState(document, track);
+  const blockers = repechageBlockers(document, track);
 
   return {
     // Either it is running, or it can be started right now. Anything else — a
@@ -110,9 +132,9 @@ export function useRepechage(): RepechageHandle {
     // not a panel the host has any use for.
     isActive: state !== null || blockers.length === 0,
     state,
-    target: state?.target ?? outlookTarget(document),
+    target: state?.target ?? outlookTarget(document, track),
     blockers,
-    canStart: canStartRepechage(document),
+    canStart: canStartRepechage(document, track),
     // The engine refuses both of these as well; the button being disabled is
     // what keeps the host from finding that out in front of the room.
     canDraw: state !== null && state.pending === null && state.pool.length > 0 && state.need > 0,
@@ -131,7 +153,7 @@ export function useRepechage(): RepechageHandle {
  * (`repechageOutlook`). The host therefore reads the same number before and
  * after they press the button.
  */
-function outlookTarget(document: Tournament): number | null {
-  const qualifying = document.rounds.find((round) => round.kind === 'QUALIFYING');
-  return qualifying === undefined ? null : (repechageOutlook(qualifying)?.target ?? null);
+function outlookTarget(document: Tournament, track: RoundTrack): number | null {
+  const qualifying = qualifyingRoundOf(document, track);
+  return qualifying === null ? null : (repechageOutlook(qualifying)?.target ?? null);
 }

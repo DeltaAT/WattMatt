@@ -8,7 +8,14 @@ import {
 } from '@/domain/bracket';
 import type { GroupId, TableId } from '@/domain/ids';
 import type { TournamentSnapshot } from '@/domain/snapshot';
-import type { BracketNode, BracketRound, Group, ParticipantLabel, Table } from '@/domain/types';
+import type {
+  BracketNode,
+  BracketRound,
+  Group,
+  ParticipantLabel,
+  RoundTrack,
+  Table,
+} from '@/domain/types';
 import { de } from '@/i18n';
 import { fitNameType, type NameType } from '@/ui/nameFit';
 import { chipKey, type BracketAdvance } from '@/windows/beamer/useBracketAdvance';
@@ -58,12 +65,25 @@ import type { CSSProperties } from 'react';
 export function BracketScene({
   tournament,
   settled,
+  track = 'MAIN',
   focus = null,
   advance,
 }: {
   tournament: TournamentSnapshot;
   /** False only while the scene is animating in — the first reveal of §4.4. */
   settled: boolean;
+  /**
+   * Which of the two tournaments this tree belongs to (issue #91, §10).
+   *
+   * Both end in one, and the `Trostrunde`'s is played out in numbers while the
+   * main field's is being played in names — possibly in the same half hour. The
+   * heading is the only thing on the wall that says which, so it says it: a
+   * room shown a `Halbfinale` with no tournament on it is a room that will
+   * applaud the wrong pair.
+   *
+   * Defaulted, so every existing render of the main field's tree is unchanged.
+   */
+  track?: RoundTrack;
   /**
    * The round the host has zoomed the projector to, or null for the whole tree
    * (issue #26).
@@ -88,6 +108,9 @@ export function BracketScene({
 }) {
   const { frame, content } = useFitToStage();
   const bracket = tournament.bracket;
+  // Named by the tournament it belongs to from the empty state onwards: the
+  // host stages the tree before drawing it, and the room reads that picture too.
+  const title = track === 'MAIN' ? de.beamer.bracket.title : de.beamer.bracket.consolationTitle;
 
   if (bracket === null || bracket.nodes.length === 0) {
     return (
@@ -95,8 +118,9 @@ export function BracketScene({
         className="beamer-safe-area flex h-full flex-col items-center justify-center gap-4"
         data-scene="BRACKET"
         data-settled={settled}
+        data-bracket-track={track}
       >
-        <h1 className="wm-display text-beamer-h1">{de.beamer.bracket.title}</h1>
+        <h1 className="wm-display text-beamer-h1">{title}</h1>
         <p className="text-beamer-body text-wm-text-muted">{de.beamer.bracket.empty}</p>
       </div>
     );
@@ -153,8 +177,21 @@ export function BracketScene({
       <header className="flex items-baseline justify-between gap-6">
         <div className="flex items-baseline gap-6">
           <h1 className="wm-display text-beamer-h1 font-extrabold" data-bracket-title="">
-            {heading === null ? de.beamer.bracket.title : de.bracket.round[heading]}
+            {heading === null ? title : de.bracket.round[heading]}
           </h1>
+          {/*
+            The round name stays the round name — `Halbfinale` is what the room
+            calls it in both tournaments — and the track is said beside it
+            rather than folded into it (issue #91).
+          */}
+          {track === 'MAIN' ? null : (
+            <p
+              className="text-beamer-body font-semibold text-wm-accent"
+              data-bracket-track="CONSOLATION"
+            >
+              {de.consolation.label}
+            </p>
+          )}
           {tournament.name === '' ? null : (
             <p className="text-beamer-body text-wm-text-muted" data-tournament-name="">
               {tournament.name}

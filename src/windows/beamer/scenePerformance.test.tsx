@@ -147,6 +147,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
       fallbackUsed: null,
       complete: false,
     },
+    consolationRepechage: null,
     history: [
       {
         id: roundIdSchema.parse('round-0'),
@@ -159,6 +160,7 @@ function fullHouse(overrides: Partial<TournamentSnapshot> = {}): TournamentSnaps
       },
     ],
     // 16 is the largest bracket the final phase can start at (`bracketRound`).
+    consolationBracket: null,
     bracket: buildBracket(groups.slice(0, 16), { rng: createRng(RNG_SEED) }),
     ...overrides,
   };

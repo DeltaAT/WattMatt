@@ -240,7 +240,13 @@ describe('the split round board', () => {
       nextGroupNumber: 5,
       tables: [table(1)],
       nextTableNumber: 2,
-      consolation: { state: 'RUNNING', winnerId: null },
+      consolation: {
+        state: 'RUNNING',
+        phase: 'QUALIFYING',
+        repechage: null,
+        bracket: null,
+        winnerId: null,
+      },
       rounds: [
         round(1, { state: 'RUNNING', matches: [match(1)] }),
         round(2, {

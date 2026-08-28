@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { roundIdSchema } from '@/domain/ids';
-import { bracketRoundSchema } from '@/domain/types';
+import { bracketRoundSchema, roundTrackSchema, type RoundTrack } from '@/domain/types';
 
 /**
  * What the beamer is showing, as defined in docs/ARCHITECTURE.md §3.
@@ -60,8 +60,13 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
    * round id would also be a promise the beamer could not keep — the qualifying
    * round is `CLOSED` by then, so the snapshot carries no round at all and the
    * guard the other two use could never match.
+   *
+   * It carries a `track` since issue #91: both tournaments have a lottery of
+   * their own, and they can be on the wall one after the other in the same
+   * evening. Optional and defaulting to `MAIN`, so every way of staging it that
+   * existed before still means what it meant.
    */
-  z.object({ id: z.literal('REPECHAGE') }),
+  z.object({ id: z.literal('REPECHAGE'), track: roundTrackSchema.optional() }),
   /*
    * The holding picture the room is shown while the host enters names
    * (issue #23, docs/TOURNAMENT-RULES.md §6).
@@ -85,8 +90,16 @@ export const beamerSceneSchema = z.discriminatedUnion('id', [
    * Optional rather than nullable, so every existing way of staging the scene
    * still says exactly what it means: `{ id: 'BRACKET' }` is the whole tree,
    * and nothing had to learn a new field to keep saying so.
+   *
+   * `track` is which of the two trees (issue #91). Both tournaments end in one,
+   * and the `Trostrunde`'s is drawn in numbers rather than names — which is a
+   * property of the tree it is showing, not a second scene.
    */
-  z.object({ id: z.literal('BRACKET'), focus: bracketRoundSchema.optional() }),
+  z.object({
+    id: z.literal('BRACKET'),
+    focus: bracketRoundSchema.optional(),
+    track: roundTrackSchema.optional(),
+  }),
   z.object({
     id: z.literal('CEREMONY'),
     reveal: z
@@ -130,7 +143,23 @@ export function isSameScene(a: BeamerScene, b: BeamerScene): boolean {
   // Zooming the tree to a round is a different picture, and the beamer reveals
   // it rather than cutting to it (issue #26, docs/MOTION.md §4.4).
   if (a.id === 'BRACKET' && b.id === 'BRACKET') {
-    return a.focus === b.focus;
+    return a.focus === b.focus && sceneTrack(a) === sceneTrack(b);
+  }
+  // The other tournament's lottery is a different picture, and the beamer
+  // reveals it rather than cutting to it (issue #91).
+  if (a.id === 'REPECHAGE' && b.id === 'REPECHAGE') {
+    return sceneTrack(a) === sceneTrack(b);
   }
   return true;
+}
+
+/**
+ * Which of the two tournaments a scene is about (issue #91).
+ *
+ * `MAIN` when the descriptor does not say, which is what every scene staged
+ * before the `Trostrunde` grew a pipeline of its own meant — and what the two
+ * scenes that carry a track still mean when they are staged the old way.
+ */
+export function sceneTrack(scene: BeamerScene): RoundTrack {
+  return 'track' in scene ? (scene.track ?? 'MAIN') : 'MAIN';
 }

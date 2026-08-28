@@ -1008,6 +1008,36 @@ export const deAT = {
     winnerHint: 'Der Sieger der Trostrunde kommt nicht ins Hauptfeld zurück.',
     /** Zwischen zwei Runden der Trostrunde. */
     none: 'Es ist keine Trostrunden-Partie offen. Losen Sie die nächste aus.',
+
+    /*
+     * Die Trostrunde läuft dieselbe Strecke wie das Hauptfeld (issue #91,
+     * §10): eigene Hoffnungsrunde, eigene Ausscheidungsrunden, eigener
+     * Turnierbaum mit Spiel um Platz 3. Nur benannt wird in ihr nie.
+     *
+     * Deshalb stehen dieselben drei Panels ein zweites Mal auf dem Schirm, und
+     * deshalb tragen sie hier eine eigene Überschrift: der Host führt zwei
+     * Turniere gleichzeitig, und eine Überschrift, die in beiden `Turnierbaum`
+     * heißt, ist die eine Stelle, an der er den falschen Sieger ansagt.
+     */
+    phaseLabel: 'Phase der Trostrunde',
+    repechageLabel: 'Hoffnungsrunde der Trostrunde',
+    bracketLabel: 'Turnierbaum der Trostrunde',
+    /**
+     * Derselbe Knopf, ein anderes Ende: im Hauptfeld führt er zur
+     * Siegerehrung, hier ist er der letzte Schritt der Trostrunde überhaupt.
+     */
+    bracketFinish: 'Trostrunde abschließen',
+    /**
+     * Der Satz, der die Trostrunde von der Hoffnungsrunde des Hauptfelds
+     * unterscheidet (issue #91).
+     *
+     * Im Hauptfeld heißt *Nein* zur Hoffnungsrunde: ab in die Trostrunde. Hier
+     * heißt es: nach Hause. Es gibt keine zweite Ebene — sonst hörte die
+     * Schachtelung nie auf. Der Host muss das laut sagen können, bevor jemand
+     * verzichtet.
+     */
+    repechageHint:
+      'Wer hier verzichtet, scheidet endgültig aus. Die Trostrunde hat keine eigene Trostrunde.',
   },
 
   draw: {
@@ -1287,6 +1317,15 @@ export const deAT = {
      */
     repechage: {
       title: 'Hoffnungsrunde',
+      /**
+       * Dieselbe Lotterie, das andere Turnier (issue #91).
+       *
+       * Beide Stränge haben eine, und sie können am selben Abend nacheinander
+       * an der Wand hängen. Der Saal muss ohne Nachfrage erkennen, um wessen
+       * Plätze gerade gelost wird — die Überschrift ist die einzige Stelle, an
+       * der das steht.
+       */
+      consolationTitle: 'Hoffnungsrunde der Trostrunde',
       /** Over the pot of losers. */
       potTitle: 'Im Topf',
       /** Over the column that fills up as places are taken. */
@@ -1355,6 +1394,15 @@ export const deAT = {
     bracket: {
       /** The heading before the first round is under way, and once it is over. */
       title: 'Turnierbaum',
+      /**
+       * Derselbe Baum, das andere Turnier (issue #91).
+       *
+       * Die Trostrunde endet in einem eigenen Turnierbaum samt Spiel um
+       * Platz 3, gespielt in Nummern statt in Namen. Zwei Bäume mit derselben
+       * Überschrift wären die eine Ansage, die der Host vor dem ganzen Saal
+       * zurücknehmen müsste.
+       */
+      consolationTitle: 'Turnierbaum der Trostrunde',
       /** The scene staged before the tree exists — the host can do that. */
       empty: 'Der Turnierbaum ist noch nicht ausgelost.',
       /** A slot nobody has reached yet: the match below is still being played. */

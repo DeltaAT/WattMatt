@@ -44,8 +44,21 @@ import { tournamentSchema } from '@/domain/types';
  * that may be absent is one every queue, board and undo has to guess a default
  * for, and a guess about which half of the evening a round belongs to is a
  * guess made in front of an audience.
+ *
+ * v6 gave a table a `reservedFor` track (issue #79) — the host's standing
+ * answer to which half of the evening a table serves, which they otherwise had
+ * to re-decide on every table.
+ *
+ * v7 gave the `Trostrunde` a `phase`, a `repechage` and a `bracket` of its own
+ * (issue #91, docs/TOURNAMENT-RULES.md §10). The side event now runs the same
+ * pipeline as the main field rather than a plain sequence of rounds, so it
+ * needs the same three pieces of state — and they cannot be the main field's,
+ * because the two tracks run at the same time and are routinely in different
+ * phases. All three are required rather than optional for the reason the track
+ * was: a phase that may be absent is one every panel has to guess a default
+ * for, and that guess decides what the host is offered next.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),

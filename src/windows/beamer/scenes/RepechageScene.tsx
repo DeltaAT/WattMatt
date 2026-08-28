@@ -1,7 +1,7 @@
 import type { GroupId } from '@/domain/ids';
 import type { PotStatus } from '@/domain/repechage';
 import type { RepechageSnapshot, TournamentSnapshot } from '@/domain/snapshot';
-import type { Group } from '@/domain/types';
+import type { Group, RoundTrack } from '@/domain/types';
 import { de } from '@/i18n';
 import { fitColumns, gridColumns } from '@/windows/beamer/fit';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
@@ -58,10 +58,24 @@ export function RepechageScene({
    * turned down ten minutes ago (CLAUDE.md golden rule 4).
    */
   beat,
+  track = 'MAIN',
   travel = NO_TRAVEL,
 }: {
   tournament: TournamentSnapshot;
   beat: GroupId | null;
+  /**
+   * Which of the two tournaments' places are being drawn (issue #91, §10).
+   *
+   * Both have a `Hoffnungsrunde`, and they can be on the wall one after the
+   * other in the same evening. What is at stake differs: a candidate who
+   * declines the main field's lottery drops into the `Trostrunde`, and one who
+   * declines the `Trostrunde`'s goes home. The room is entitled to know which
+   * of the two it is watching, so the heading says it.
+   *
+   * Defaulted, so every existing render of the main field's lottery is
+   * unchanged.
+   */
+  track?: RoundTrack;
   /**
    * The travelling highlight, or `NO_TRAVEL` when none is running
    * (`useRepechageTravel`, issue #89).
@@ -74,14 +88,19 @@ export function RepechageScene({
 }) {
   const repechage = tournament.repechage;
   const { frame, content } = useFitToStage();
+  // Named by the tournament it belongs to from the empty state onwards: the
+  // host can stage this scene before the lottery starts, and the room reads
+  // that picture too (issue #91).
+  const title = track === 'MAIN' ? de.beamer.repechage.title : de.beamer.repechage.consolationTitle;
 
   if (repechage === null || repechage.pot.length === 0) {
     return (
       <div
         className="beamer-safe-area flex h-full flex-col items-center justify-center gap-4"
         data-scene="REPECHAGE"
+        data-repechage-track={track}
       >
-        <h1 className="wm-display text-beamer-h1">{de.beamer.repechage.title}</h1>
+        <h1 className="wm-display text-beamer-h1">{title}</h1>
         <p className="text-beamer-body text-wm-text-muted">{de.beamer.repechage.empty}</p>
       </div>
     );
@@ -110,10 +129,11 @@ export function RepechageScene({
       data-scene="REPECHAGE"
       data-drawing={isDrawing}
       data-travelling={travel.isTravelling}
+      data-repechage-track={track}
     >
       <header className="flex items-baseline justify-between gap-6">
         <div className="flex items-baseline gap-6">
-          <h1 className="wm-display text-beamer-h1 font-extrabold">{de.beamer.repechage.title}</h1>
+          <h1 className="wm-display text-beamer-h1 font-extrabold">{title}</h1>
           <p className="wm-tnum text-beamer-body text-wm-text-muted" data-repechage-target="">
             {de.beamer.repechage.target({ n: repechage.target })}
           </p>

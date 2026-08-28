@@ -245,7 +245,7 @@ describe('bracketBlockers', () => {
   });
 
   it('refuses a phase that is not NAMING (docs/TOURNAMENT-RULES.md §1)', () => {
-    expect(bracketBlockers(readyToDraw(8, { phase: 'ELIMINATION' }))).toContain('NOT_IN_NAMING');
+    expect(bracketBlockers(readyToDraw(8, { phase: 'ELIMINATION' }))).toContain('WRONG_PHASE');
   });
 
   it('refuses a second draw', () => {

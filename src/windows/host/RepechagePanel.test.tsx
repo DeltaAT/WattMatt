@@ -298,3 +298,37 @@ describe('the fallback dialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+/*
+ * The `Trostrunde` runs the same lottery on its own field (issue #91,
+ * docs/TOURNAMENT-RULES.md §10). One panel for both, because a second copy is
+ * where the two would come to disagree about what *Ja* means — but the two are
+ * never allowed to look identical on screen, for two different reasons.
+ */
+describe('the side event’s own Hoffnungsrunde', () => {
+  it('says which tournament’s places are being drawn', () => {
+    panel(qualified(13), { track: 'CONSOLATION' });
+
+    expect(screen.getByRole('region', { name: de.consolation.repechageLabel })).toBeTruthy();
+    expect(screen.getByText(de.consolation.repechageLabel)).toBeTruthy();
+  });
+
+  /*
+   * The one sentence that is only true here. In the main field, declining drops
+   * a group into the `Trostrunde`; here it means going home, because there is
+   * no second level and the structure stops recursing at one. The host has to
+   * be able to say that out loud before anybody is drawn.
+   */
+  it('says out loud that declining this one means going home', () => {
+    panel(qualified(13), { track: 'CONSOLATION' });
+
+    expect(screen.getByText(de.consolation.repechageHint)).toBeTruthy();
+  });
+
+  it('leaves the main field’s panel exactly as it was', () => {
+    panel(qualified(13));
+
+    expect(screen.getByRole('region', { name: de.repechage.sectionLabel })).toBeTruthy();
+    expect(screen.queryByText(de.consolation.repechageHint)).toBeNull();
+  });
+});

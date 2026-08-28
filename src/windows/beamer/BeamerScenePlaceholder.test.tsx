@@ -431,6 +431,112 @@ describe('the beamer scene surface', () => {
     expect(markup.match(/data-bracket-node="/g)).toHaveLength(4);
   });
 
+  /*
+   * Both tournaments run the same pipeline and both end in a tree, so both can
+   * be staged (issue #91, docs/TOURNAMENT-RULES.md §10). Which one is on the
+   * wall is the descriptor's `track` — and the room is told which, because
+   * `Halbfinale` on its own is true of either of them.
+   */
+  describe('the two tournaments on one wall', () => {
+    /** The main field named, the side event still on numbers — as §10 has it. */
+    function bothTrees(): TournamentSnapshot {
+      const main = [
+        group(1, { name: 'Team 1' }),
+        group(2, { name: 'Team 2' }),
+        group(3, { name: 'Team 3' }),
+        group(4, { name: 'Team 4' }),
+      ];
+      const side = [
+        group(11, { status: 'CONSOLATION' }),
+        group(12, { status: 'CONSOLATION' }),
+        group(13, { status: 'CONSOLATION' }),
+        group(14, { status: 'CONSOLATION' }),
+      ];
+
+      return {
+        ...toTournamentSnapshot(
+          tournament({
+            phase: 'BRACKET',
+            groups: [...main, ...side],
+            nextGroupNumber: 15,
+            bracket: buildBracket(main, { rng: createRng('seed') }),
+          }),
+        ),
+        consolationBracket: buildBracket(side, { rng: createRng('other') }),
+      };
+    }
+
+    function staged(track: 'MAIN' | 'CONSOLATION'): string {
+      return renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'BRACKET', track }}
+          tournament={bothTrees()}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+    }
+
+    it('draws the side event’s tree when the scene names its track', () => {
+      const markup = staged('CONSOLATION');
+
+      expect(markup).toContain('data-bracket-track="CONSOLATION"');
+      // Its own four, by number — the side event never enters the naming
+      // phase, so there is nothing else it could be drawn in.
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 11 }));
+      expect(markup).toContain(de.participant.GROUP.numbered({ n: 14 }));
+      expect(markup).not.toContain('Team 1');
+      expect(markup).toContain(de.consolation.label);
+    });
+
+    it('draws the main field’s tree when the scene does not', () => {
+      const markup = staged('MAIN');
+
+      expect(markup).toContain('Team 1');
+      expect(markup).not.toContain('data-bracket-track="CONSOLATION"');
+    });
+
+    /*
+     * The default is what every scene staged before the side event had a
+     * pipeline meant, and it has to keep meaning it: a file saved then and
+     * reopened now must not point the projector at the wrong tournament.
+     */
+    it('reads a scene with no track as the main field', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'BRACKET' }}
+          tournament={bothTrees()}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('Team 1');
+      expect(markup).not.toContain('data-bracket-track="CONSOLATION"');
+    });
+
+    /*
+     * The same for the lottery: both tournaments have one, and what is at stake
+     * differs — declining the side event's really does mean going home.
+     */
+    it('names the side event’s Hoffnungsrunde when the scene names its track', () => {
+      const markup = renderToStaticMarkup(
+        <BeamerScenePlaceholder
+          scene={{ id: 'REPECHAGE', track: 'CONSOLATION' }}
+          tournament={EMPTY_TOURNAMENT}
+          settled
+          skipToken={0}
+          delivery="catchUp"
+        />,
+      );
+
+      expect(markup).toContain('data-scene="REPECHAGE"');
+      expect(markup).toContain(de.beamer.repechage.consolationTitle);
+    });
+  });
+
   it('marks a caught-up scene as settled so it is not animated in', () => {
     const settled = renderToStaticMarkup(
       <BeamerScenePlaceholder

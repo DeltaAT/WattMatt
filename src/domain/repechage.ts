@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
-import { roundOutcome } from '@/domain/draw';
+import { qualifyingRoundOf, roundOutcome } from '@/domain/draw';
 import { groupIdSchema, type GroupId } from '@/domain/ids';
 import { createRng, type Rng } from '@/domain/rng';
 import { nextPowerOfTwo, repechageOutlook } from '@/domain/round';
+import { isTrackRunning, trackState, withTrackState } from '@/domain/track';
 import type {
   Group,
+  GroupStatus,
   Repechage,
   RepechageDraw,
   RepechageFallback,
-  Round,
+  RoundTrack,
   Tournament,
 } from '@/domain/types';
 
@@ -79,32 +81,37 @@ export type RepechageBlocker =
  * host reading a panel of checks needs the same panel every time, and a check
  * that vanishes when it passes is one they cannot confirm they have satisfied.
  */
-export function repechageBlockers(tournament: Tournament): readonly RepechageBlocker[] {
+export function repechageBlockers(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly RepechageBlocker[] {
   const blockers: RepechageBlocker[] = [];
+  const state = trackState(tournament, track);
 
-  if (tournament.phase !== 'QUALIFYING') {
+  // A side event that was never started, or is over, has no phase to be after.
+  if (!isTrackRunning(tournament, track) || state.phase !== 'QUALIFYING') {
     blockers.push('NOT_AFTER_QUALIFYING');
   }
 
-  const round = qualifyingRound(tournament);
+  const round = qualifyingRoundOf(tournament, track);
   if (round === null || round.state !== 'CLOSED') {
     blockers.push('QUALIFYING_NOT_CLOSED');
   }
-  if (tournament.repechage !== null) {
+  if (state.repechage !== null) {
     blockers.push('ALREADY_STARTED');
   }
   // Only asked once there is a round to ask it of. Without one the check above
   // has already fired, and "not needed" would be a second, misleading reason
   // for the same missing thing.
-  if (round !== null && !isRepechageNeeded(tournament)) {
+  if (round !== null && !isRepechageNeeded(tournament, track)) {
     blockers.push('NOT_NEEDED');
   }
 
   return blockers;
 }
 
-export function canStartRepechage(tournament: Tournament): boolean {
-  return repechageBlockers(tournament).length === 0;
+export function canStartRepechage(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return repechageBlockers(tournament, track).length === 0;
 }
 
 /**
@@ -117,8 +124,8 @@ export function canStartRepechage(tournament: Tournament): boolean {
  * docs/OPEN-QUESTIONS.md #52 — it is then the same answer the host has been
  * reading on the round panel since the moment the round was drawn.
  */
-export function isRepechageNeeded(tournament: Tournament): boolean {
-  const round = qualifyingRound(tournament);
+export function isRepechageNeeded(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  const round = qualifyingRoundOf(tournament, track);
   if (round === null) {
     return false;
   }
@@ -153,10 +160,11 @@ export interface RepechageRngInput {
  */
 export function startRepechage(
   tournament: Tournament,
+  track: RoundTrack = 'MAIN',
   { rng = createRng(tournament.rngSeed, tournament.rngCursor) }: RepechageRngInput = {},
 ): Tournament {
-  const round = qualifyingRound(tournament);
-  if (round === null || !canStartRepechage(tournament)) {
+  const round = qualifyingRoundOf(tournament, track);
+  if (round === null || !canStartRepechage(tournament, track)) {
     return tournament;
   }
 
@@ -168,15 +176,18 @@ export function startRepechage(
     fallbackUsed: null,
   };
 
-  return {
-    ...tournament,
+  const started = withTrackState(tournament, track, {
+    ...trackState(tournament, track),
     phase: 'REPECHAGE',
-    // The cursor moves on in the same object as the order it produced. A start
-    // that recorded the pot but left the cursor behind would hand the identical
-    // shuffle to the next thing that draws (docs/OPEN-QUESTIONS.md #23).
-    rngCursor: rng.cursor,
     repechage,
-  };
+  });
+
+  // The cursor moves on in the same object as the order it produced. A start
+  // that recorded the pot but left the cursor behind would hand the identical
+  // shuffle to the next thing that draws (docs/OPEN-QUESTIONS.md #23). Both
+  // tracks share the one stream, which is what keeps the whole evening
+  // reproducible from a single seed (issue #91).
+  return { ...started, rngCursor: rng.cursor };
 }
 
 // ---------------------------------------------------------------------------
@@ -243,13 +254,16 @@ export interface RepechageState {
  * whenever it was skipped — and it is what tells a caller to show nothing at
  * all rather than an empty pot (§9 case 2).
  */
-export function repechageState(tournament: Tournament): RepechageState | null {
-  const repechage = tournament.repechage;
+export function repechageState(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): RepechageState | null {
+  const repechage = trackState(tournament, track).repechage;
   if (repechage === null) {
     return null;
   }
 
-  const round = qualifyingRound(tournament);
+  const round = qualifyingRoundOf(tournament, track);
   const winners = round === null ? [] : roundOutcome(round).winners;
   const accepted = repechage.draws.filter((draw) => draw.accepted === true);
   const through = [...winners, ...accepted.map((draw) => draw.groupId)];
@@ -301,8 +315,8 @@ export function repechageState(tournament: Tournament): RepechageState | null {
  * a repechage — `isRepechageNeeded` is the question for that case, and the two
  * are kept apart so a skipped phase cannot be mistaken for a finished one.
  */
-export function isRepechageComplete(tournament: Tournament): boolean {
-  return repechageState(tournament)?.complete ?? false;
+export function isRepechageComplete(tournament: Tournament, track: RoundTrack = 'MAIN'): boolean {
+  return repechageState(tournament, track)?.complete ?? false;
 }
 
 /**
@@ -343,8 +357,11 @@ export type PotStatus = z.infer<typeof potStatusSchema>;
 export const potEntrySchema = z.object({ groupId: groupIdSchema, status: potStatusSchema });
 export type PotEntry = z.infer<typeof potEntrySchema>;
 
-export function repechagePot(tournament: Tournament): readonly PotEntry[] {
-  const repechage = tournament.repechage;
+export function repechagePot(
+  tournament: Tournament,
+  track: RoundTrack = 'MAIN',
+): readonly PotEntry[] {
+  const repechage = trackState(tournament, track).repechage;
   if (repechage === null) {
     return [];
   }
@@ -392,9 +409,9 @@ function answeredStatus(draw: RepechageDraw): PotStatus {
  * field is full: the room has seen the last place taken, and there is nothing
  * left to offer anybody.
  */
-export function drawCandidate(tournament: Tournament): Tournament {
-  const state = repechageState(tournament);
-  const repechage = tournament.repechage;
+export function drawCandidate(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  const state = repechageState(tournament, track);
+  const repechage = trackState(tournament, track).repechage;
   if (state === null || repechage === null || state.pending !== null || state.need === 0) {
     return tournament;
   }
@@ -404,7 +421,7 @@ export function drawCandidate(tournament: Tournament): Tournament {
     return tournament;
   }
 
-  return withRepechage(tournament, {
+  return withRepechage(tournament, track, {
     ...repechage,
     pool: rest,
     draws: [...repechage.draws, { groupId: candidate, accepted: null }],
@@ -419,8 +436,8 @@ export function drawCandidate(tournament: Tournament): Tournament {
  * `ELIMINATED` would be a group the room watched come back and the next round
  * never pairs.
  */
-export function acceptCandidate(tournament: Tournament): Tournament {
-  return answerCandidate(tournament, true);
+export function acceptCandidate(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  return answerCandidate(tournament, track, true);
 }
 
 /**
@@ -430,12 +447,12 @@ export function acceptCandidate(tournament: Tournament): Tournament {
  * (docs/OPEN-QUESTIONS.md #6). The one way back is the host taking §4's
  * `REOPEN_DECLINED` fallback after the pot has run dry.
  */
-export function declineCandidate(tournament: Tournament): Tournament {
-  return answerCandidate(tournament, false);
+export function declineCandidate(tournament: Tournament, track: RoundTrack = 'MAIN'): Tournament {
+  return answerCandidate(tournament, track, false);
 }
 
-function answerCandidate(tournament: Tournament, accepted: boolean): Tournament {
-  const repechage = tournament.repechage;
+function answerCandidate(tournament: Tournament, track: RoundTrack, accepted: boolean): Tournament {
+  const repechage = trackState(tournament, track).repechage;
   if (repechage === null) {
     return tournament;
   }
@@ -446,19 +463,29 @@ function answerCandidate(tournament: Tournament, accepted: boolean): Tournament 
     return tournament;
   }
 
-  const answered = withRepechage(tournament, {
+  const answered = withRepechage(tournament, track, {
     ...repechage,
     draws: repechage.draws.map((draw, index) =>
       index === pendingIndex ? { ...draw, accepted } : draw,
     ),
   });
 
+  // Back into *this* track's field, which is what every later draw on it reads.
+  // A candidate the `Trostrunde` takes back is `CONSOLATION` and not `ACTIVE`:
+  // `ACTIVE` would put them in the main field's next draw, which is the one
+  // thing the side event must never do (issue #73, #91).
+  const through: GroupStatus = track === 'MAIN' ? 'ACTIVE' : 'CONSOLATION';
+
   return mapGroup(answered, pending.groupId, (group) => ({
     ...group,
     // Written for both answers rather than only for an acceptance. A decline
     // leaves an already-eliminated group exactly as it was, and a file where
     // the two records disagree is repaired rather than carried forward.
-    status: accepted ? 'ACTIVE' : 'ELIMINATED',
+    //
+    // And a decline on the side event really is the end of the evening: its
+    // losers get no further side event, because one level is where the
+    // structure stops recursing (issue #91, §10 "no nesting").
+    status: accepted ? through : 'ELIMINATED',
   }));
 }
 
@@ -492,23 +519,24 @@ function answerCandidate(tournament: Tournament, accepted: boolean): Tournament 
 export function useRepechageFallback(
   tournament: Tournament,
   choice: RepechageFallback,
+  track: RoundTrack = 'MAIN',
   { rng = createRng(tournament.rngSeed, tournament.rngCursor) }: RepechageRngInput = {},
 ): Tournament {
-  const state = repechageState(tournament);
-  const repechage = tournament.repechage;
+  const state = repechageState(tournament, track);
+  const repechage = trackState(tournament, track).repechage;
   if (state === null || repechage === null || !state.fallbackNeeded) {
     return tournament;
   }
 
   if (choice === 'BYES') {
-    return withRepechage(tournament, { ...repechage, fallbackUsed: 'BYES' });
+    return withRepechage(tournament, track, { ...repechage, fallbackUsed: 'BYES' });
   }
 
   if (state.declined.length === 0) {
     return tournament;
   }
 
-  const reopened = withRepechage(tournament, {
+  const reopened = withRepechage(tournament, track, {
     ...repechage,
     pool: rng.shuffle(state.declined),
     fallbackUsed: 'REOPEN_DECLINED',
@@ -520,19 +548,12 @@ export function useRepechageFallback(
 // Internals
 // ---------------------------------------------------------------------------
 
-/**
- * The qualifying round, whose `W` and `L` this phase works from.
- *
- * There is exactly one — docs/TOURNAMENT-RULES.md §3 calls it round 1, and
- * `drawBlockers` refuses a second (docs/OPEN-QUESTIONS.md #49) — so the first
- * match is the answer rather than the last.
- */
-function qualifyingRound(tournament: Tournament): Round | null {
-  return tournament.rounds.find((round) => round.kind === 'QUALIFYING') ?? null;
-}
-
-function withRepechage(tournament: Tournament, repechage: Repechage): Tournament {
-  return { ...tournament, repechage };
+function withRepechage(
+  tournament: Tournament,
+  track: RoundTrack,
+  repechage: Repechage,
+): Tournament {
+  return withTrackState(tournament, track, { ...trackState(tournament, track), repechage });
 }
 
 function mapGroup(

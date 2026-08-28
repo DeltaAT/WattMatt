@@ -619,8 +619,9 @@ die Entscheidung mit *Rückgängig* wieder auf (Abschnitt 14).
 ### 9.1 Der Satz für das Publikum
 
 > „Wer in Runde 1 ausgeschieden ist und nicht nachgerückt ist, spielt jetzt die Trostrunde —
-> ein eigenes kleines Turnier. Der Sieger der Trostrunde kommt **nicht** mehr ins Hauptfeld,
-> aber er nimmt einen Titel mit nach Hause."
+> ein eigenes vollständiges Turnier, mit eigener Hoffnungsrunde und eigenem Turnierbaum. Der
+> Sieger der Trostrunde kommt **nicht** mehr ins Hauptfeld, aber er nimmt einen Titel mit nach
+> Hause."
 
 Sagen Sie den zweiten Halbsatz wirklich. Er ist die einzige Stelle, an der es Missverständnisse
 gibt.
@@ -637,16 +638,45 @@ fragt WattMatt gar nicht erst. Eine Trostrunde mit einer einzigen Gruppe gibt es
 
 ### 9.3 Ablauf
 
-Genau wie eine gewöhnliche Runde (Abschnitt 7): auslosen, Partien an die Tische, Sieger
+Die Trostrunde läuft **denselben Weg wie das Hauptfeld**, nur auf ihrem eigenen Feld:
+
+```text
+Trostrunde 1  →  Hoffnungsrunde der Trostrunde  →  Ausscheidungsrunden  →  Turnierbaum
+```
+
+Sie bedienen sie mit genau denselben Karten und denselben Knöpfen wie das Hauptfeld — nur
+stehen sie ein zweites Mal untereinander, und jede trägt die Trostrunde in der Überschrift:
+*Phase der Trostrunde*, *Hoffnungsrunde der Trostrunde*, *Turnierbaum der Trostrunde*.
+
+Eine Runde läuft ab wie jede andere (Abschnitt 7): auslosen, Partien an die Tische, Sieger
 festlegen, Runde abschließen. Bei ungerader Anzahl gibt es ein Freilos. Zwei Gruppen, die schon
 einmal gegeneinander gespielt haben, werden auch hier nicht noch einmal gegeneinander gelost.
 
-Das wiederholt sich, bis **eine** Gruppe übrig ist. Die ist der Sieger der Trostrunde, und
-WattMatt schreibt das oben in die Trostrunden-Karte.
+**Auch die Trostrunde hat eine Hoffnungsrunde.** Geht die Zahl nach der ersten Runde nicht
+sauber auf, füllt sie das Feld genauso auf wie im Hauptfeld — auslosen, gefragt werden, *Ja*
+oder *Nein*.
 
-Es gibt hier keine zweite Hoffnungsrunde, keinen Turnierbaum, kein Spiel um Platz 3 — und
-**keine Namenserfassung**: die Trostrunde bleibt bis zum Schluss bei Nummern. Wenn der Sieger
-bei der Siegerehrung mit Namen genannt werden soll, sagen Sie den Namen einfach an.
+> ⚠️ **Ein Verzicht heißt hier wirklich: nach Hause.** Im Hauptfeld bedeutet *Nein* zur
+> Hoffnungsrunde nur, dass die Gruppe in die Trostrunde rutscht. Hier gibt es nichts mehr
+> darunter — eine Trostrunde der Trostrunde gibt es nicht. Der Satz steht auch auf der Karte,
+> damit Sie ihn ansagen können, bevor jemand gezogen wird.
+
+Am Ende steht ein **eigener Turnierbaum** mit **Spiel um Platz 3**, genau wie im Hauptfeld.
+Wer ihn gewinnt, ist der Sieger der Trostrunde; WattMatt schreibt das oben in die
+Trostrunden-Karte. Der letzte Knopf heißt hier *Trostrunde abschließen* — damit ist das
+Nebenturnier zu Ende.
+
+Sind es von Anfang an nur **zwei** Gruppen, gibt es gar keine Runde: die eine Partie *ist* das
+Finale, und WattMatt geht direkt in den Turnierbaum.
+
+Was es hier nicht gibt, ist die **Namenserfassung**: die Trostrunde bleibt von der ersten Runde
+bis zum Finale bei Nummern. Wenn der Sieger mit Namen genannt werden soll, sagen Sie den Namen
+einfach an.
+
+**Die Siegerehrung ist die Siegerehrung des Hauptfelds.** Auf dem Podest stehen Platz 1, 2 und 3
+des Hauptturniers — der Sieger der Trostrunde steht dort **nicht**, sonst liest der Saal es als
+vierten Platz. Sein Ergebnis bleibt im Turnierbaum der Trostrunde stehen; legen Sie den auf die
+Leinwand, wenn Sie ihn ansagen möchten.
 
 ### 9.4 Zwei Turniere gleichzeitig
 
@@ -684,6 +714,11 @@ im Hauptfeld zurückzunehmen rührt die Trostrunde nicht an, und umgekehrt.
 Beide Karten haben ihren eigenen Knopf *auf den Beamer*. Normalerweise zeigt die Leinwand
 **eine** Runde — die, die Sie zuletzt hingelegt haben. Wechseln Sie ruhig hin und her; das
 Publikum sieht an der Überschrift, was es gerade anschaut (*Runde 3* oder *Trostrunde 2*).
+
+Das gilt auch für die beiden anderen Ansichten: Hoffnungsrunde und Turnierbaum gibt es zweimal,
+und die Leinwand sagt jedes Mal dazu, um welches Turnier es geht — *Hoffnungsrunde der
+Trostrunde*, und über dem Baum steht neben *Halbfinale* das Wort *Trostrunde*. Der Saal muss nie
+raten, welches der beiden Turniere er gerade sieht.
 
 Solange in **beiden** Strängen eine Runde läuft, steht in der Beamer-Spalte zusätzlich
 **Beide Runden zeigen**. Damit wird die Leinwand geteilt: links das Hauptfeld, rechts die
