@@ -616,6 +616,12 @@ Sobald die Hoffnungsrunde abgeschlossen ist, fragt WattMatt einmal:
 │ spielen. Der Sieger der Trostrunde kommt nicht ins           │
 │ Hauptfeld zurück.                                            │
 │                                                             │
+│ Feld der Trostrunde  8                                      │
+│ [Gruppe 3] [Gruppe 5] [Gruppe 6] [Gruppe 9] [Gruppe 11]     │
+│ [Gruppe 12] [Gruppe 14] [Gruppe 16]                         │
+│ Steht seit dem Ende der Hoffnungsrunde fest. Wer später im  │
+│ Hauptfeld ausscheidet, kommt nicht mehr dazu.               │
+│                                                             │
 │ [ Trostrunde starten ]  [ Keine Trostrunde ]                │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -636,13 +642,27 @@ gibt.
 
 ### 9.2 Wer dabei ist
 
-Alle, die in Runde 1 verloren haben — **auch die, die in der Hoffnungsrunde verzichtet haben**.
-Ein Verzicht bedeutet: nicht ins Hauptfeld. Er bedeutet nicht: nach Hause.
+Alle, die in **Runde 1** verloren haben — **auch die, die in der Hoffnungsrunde verzichtet
+haben**. Ein Verzicht bedeutet: nicht ins Hauptfeld. Er bedeutet nicht: nach Hause.
 
 Nicht dabei ist, wer in der Hoffnungsrunde nachgerückt ist. Der spielt im Hauptfeld weiter.
 
 Sind am Ende **weniger als zwei** übrig — weil die Hoffnungsrunde fast alle zurückgeholt hat —,
 fragt WattMatt gar nicht erst. Eine Trostrunde mit einer einzigen Gruppe gibt es nicht.
+
+**Das Feld steht mit dem Ende der Hoffnungsrunde fest — und ändert sich danach nicht mehr.**
+Sie müssen die Trostrunde nicht sofort starten. Lassen Sie das Hauptfeld ruhig noch eine oder
+zwei Runden spielen und fragen Sie den Saal in der Pause: Wer dann im Hauptfeld ausscheidet,
+kommt **nicht** mehr in die Trostrunde dazu. Die Trostrunde ist die Runde der Verlierer der
+**ersten** Runde, nicht ein Sammelbecken für alle, die irgendwann verloren haben.
+
+Damit Sie das prüfen können, bevor es auf der Leinwand steht, listet die Karte das Feld
+namentlich auf — nicht nur die Anzahl. Stimmt etwas nicht, ist das am Laptop eine Rückfrage;
+auf der Leinwand wäre es eine Richtigstellung vor fünfzig Leuten.
+
+**Die Hoffnungsrunde kommt zuerst.** Solange sie noch aussteht — auch wenn Sie sie noch gar
+nicht gestartet haben —, bleibt *Trostrunde starten* gesperrt und WattMatt sagt warum. Die
+Hoffnungsrunde entscheidet ja gerade, wer übrig bleibt.
 
 ### 9.3 Ablauf
 

@@ -6,6 +6,7 @@ import { v4ToV5 } from '@/domain/migrations/v4_to_v5';
 import { v5ToV6 } from '@/domain/migrations/v5_to_v6';
 import { v6ToV7 } from '@/domain/migrations/v6_to_v7';
 import { v7ToV8 } from '@/domain/migrations/v7_to_v8';
+import { v8ToV9 } from '@/domain/migrations/v8_to_v9';
 
 /**
  * Every migration this build knows, in no particular order — the runner picks
@@ -37,4 +38,5 @@ export const MIGRATIONS: readonly Migration[] = [
   v5ToV6,
   v6ToV7,
   v7ToV8,
+  v8ToV9,
 ];

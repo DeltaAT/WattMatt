@@ -34,11 +34,11 @@ identifier; see #24.
 UTF-8 JSON, pretty-printed with 2 spaces. Human-readable and diff-friendly on purpose: if
 something goes badly wrong at an event, the file can be repaired in Notepad.
 
-## Schema (v8)
+## Schema (v9)
 
 ```jsonc
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "app": { "name": "WattMatt", "version": "0.1.0" },
   "id": "tnm_01HX…",
   "name": "Vereinsturnier 2026",
@@ -148,8 +148,9 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
   // been asked, which is the whole of every tournament up to the close of the
   // Hoffnungsrunde — and stays null for a file written before v5.
   // state: DECLINED | RUNNING | FINISHED. There is no pool here, unlike the
-  // repechage: the field is not drawn out of a pot, it is simply every group
-  // whose status is CONSOLATION.
+  // repechage: the field is not drawn out of a pot. It is the list in
+  // consolationField below, which is fixed before the host answers this
+  // question and therefore lives beside this record rather than inside it.
   // Since v7 it runs the same pipeline as the main field, so it carries the same
   // three pieces of state: where it has got to, its own lottery, its own tree
   // (issue #91, §10). NAMING and CEREMONY never appear in its phase — it is
@@ -161,6 +162,15 @@ something goes badly wrong at an event, the file can be repaired in Notepad.
     "bracket": null,                // same shape as the main bracket below; nodes are cbn_*
     "winnerId": null                // the last group standing, once there is one
   },
+
+  // The Trostrunde's field, fixed once and never recomputed (rules §10,
+  // issue #102): the losers of round 1, minus everyone the Hoffnungsrunde drew
+  // back up. Written at the moment that lottery closes — or at the close of the
+  // qualifying round when no lottery is needed — and immutable from then on, so
+  // a group knocked out of main-field round 2 can never fall into it. null means
+  // "not fixed yet", which is every tournament up to that moment and what a file
+  // written before v9 comes back as.
+  "consolationField": ["grp_3"],
 
   "bracket": {
     "size": 16,

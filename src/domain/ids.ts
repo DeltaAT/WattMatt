@@ -5,7 +5,7 @@ import { z } from 'zod';
  * cannot be passed where a `GroupId` belongs. The brand exists only in the type
  * system — at runtime every ID is the plain string the file format stores.
  *
- * The prefixes below are the ones docs/FILE-FORMAT.md §"Schema (v8)" writes
+ * The prefixes below are the ones docs/FILE-FORMAT.md §"Schema (v9)" writes
  * (`grp_1`, `tbl_1`, `mt_3`, …). They are not validated: a file written by an
  * older build, or repaired by hand in Notepad as FILE-FORMAT invites, must
  * still open. Uniqueness is what matters, and that is checked where entities

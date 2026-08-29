@@ -1,6 +1,12 @@
-import { closeRound, drawRound, roundOutcome, type DrawRoundInput } from '@/domain/draw';
+import {
+  closeRound,
+  drawRound,
+  qualifyingRoundOf,
+  roundOutcome,
+  type DrawRoundInput,
+} from '@/domain/draw';
 import type { GroupId } from '@/domain/ids';
-import { isRepechageComplete } from '@/domain/repechage';
+import { isRepechageComplete, isRepechageNeeded } from '@/domain/repechage';
 import { consolationGroups, currentRound, roundsOfTrack } from '@/domain/selectors';
 import type { Consolation, Group, Round, Tournament } from '@/domain/types';
 
@@ -20,6 +26,15 @@ import type { Consolation, Group, Round, Tournament } from '@/domain/types';
  * That ordering is why the host is asked here rather than at the close of the
  * qualifying round: the question can be *put* then, but it can only be
  * *answered into a field* afterwards.
+ *
+ * **The field is written down, not worked out** (issue #102). The moment the
+ * lottery closes — or the qualifying round does, when no lottery is needed —
+ * the field is materialised into `tournament.consolationField` and is never
+ * recomputed. The main field carries on playing and its later rounds knock more
+ * groups out; none of them belong here, because this is the losers' round of
+ * the **first** round and not a bucket for everyone who ever lost. A field read
+ * live off `group.status` said otherwise the moment the host let the main field
+ * play on before starting the side event, which is the bug the snapshot ends.
  *
  * **It runs the whole pipeline** (issue #91). This is what changed: it used to
  * be a plain sequence of rounds with no power-of-two requirement and no tree at
@@ -50,8 +65,15 @@ export type ConsolationBlocker =
   /** The qualifying round has not been closed, so nobody has lost yet (§3). */
   | 'QUALIFYING_OPEN'
   /**
-   * The `Hoffnungsrunde` is still drawing. Its lottery removes groups from the
+   * The `Hoffnungsrunde` has not closed. Its lottery removes groups from the
    * loser pool, so the field of the side event is not yet known (§4, §10).
+   *
+   * Raised for a lottery that is **needed and not yet started** as well as for
+   * one that is under way, which is what §4's ordering rule actually says: the
+   * question may be *put* the moment the qualifying round closes, but it cannot
+   * be *answered into a field* until the pot is closed. Before issue #102 only
+   * a started lottery blocked, so a host who had not pressed *Hoffnungsrunde
+   * starten* yet could take the side event's field out from under it.
    */
   | 'REPECHAGE_OPEN'
   /** The host has already answered — it is running, finished, or declined. */
@@ -69,45 +91,144 @@ export type ConsolationBlocker =
 /** Two groups, the same floor every draw has: one group has nobody to play. */
 export const MINIMUM_CONSOLATION_FIELD = 2;
 
+// ---------------------------------------------------------------------------
+// The field, fixed once (issue #102)
+// ---------------------------------------------------------------------------
+
 /**
- * Everyone the main tournament has finished with, in qualifying-draw order.
+ * Whether the side event's field can be decided yet
+ * (docs/TOURNAMENT-RULES.md §4 "Ordering", §10 "Field").
  *
- * Read off the qualifying round and then filtered by status. That is what makes
- * the two `Hoffnungsrunde` outcomes fall out without a special case: a
- * candidate who accepted is `ACTIVE` and therefore not here, and one who
- * declined is `ELIMINATED` and therefore is — which is the decline semantics
- * §10 settles (docs/OPEN-QUESTIONS.md #6). A loser the lottery never reached is
- * `ELIMINATED` too, and is likewise in.
+ * Two conditions, and they are the two halves of §10's definition. The
+ * qualifying round has to be **closed**, or there is no `L` to take the field
+ * out of. And the `Hoffnungsrunde` has to be **over** — either because the
+ * field was already a power of two and §4 was skipped, or because its lottery
+ * has filled the last place — because until then the pot is still shrinking the
+ * loser pool.
  *
- * Groups eliminated anywhere other than the qualifying round cannot appear: the
- * side event is for the **first-round** losers, and by the time an elimination
- * round has produced any, the `Trostrunde` has long since been started or
- * declined.
+ * "Needed and not started" counts as open, which is stricter than the check
+ * this replaced. A host who closed round 1 and had not yet pressed
+ * *Hoffnungsrunde starten* used to be allowed to start the side event, and
+ * every candidate the lottery drew afterwards would have been in two places at
+ * once.
+ */
+export function isConsolationFieldFixed(tournament: Tournament): boolean {
+  const qualifying = qualifyingRoundOf(tournament, 'MAIN');
+  if (qualifying === null || qualifying.state !== 'CLOSED') {
+    return false;
+  }
+  return !isRepechageNeeded(tournament, 'MAIN') || isRepechageComplete(tournament, 'MAIN');
+}
+
+/**
+ * The field as §10 defines it, computed from the records rather than from where
+ * the groups stand now.
  *
- * Answers about the field the event would *start* with, so it is empty once the
- * event is under way — from then on the field is written on the groups
- * themselves and `consolationGroups` is what reads it.
+ * ```text
+ * field := losers(round 1) minus everyone the Hoffnungsrunde drew back up
+ * ```
+ *
+ * Straight off the qualifying round's matches and the lottery's draw records,
+ * and **never** off `group.status`. That is the correction issue #102 makes: a
+ * status-based reading is right only in the instant the lottery closes, and by
+ * the time the main field has played another round it has swept that round's
+ * losers in as well — putting a group that is `ELIMINATED` from round 2 into a
+ * round that exists for the losers of round 1.
+ *
+ * Read this way the answer does not depend on *when* it is asked, which is what
+ * makes the stored snapshot below safe to write at the first commit after an
+ * old file is opened as well as at the moment the lottery closes.
+ *
+ * Both `Hoffnungsrunde` outcomes still fall out without a special case: a
+ * candidate who accepted has an `accepted: true` draw and is out of the list, a
+ * decliner has `accepted: false` and stays in it (docs/OPEN-QUESTIONS.md #6),
+ * and a loser the lottery never reached was never drawn at all. A group that
+ * declined, was readmitted by the `REOPEN_DECLINED` fallback and then accepted
+ * holds both records; the acceptance wins, because it is the one that put them
+ * back in the main field.
+ *
+ * Internal on purpose. Everything outside this module reads the stored list —
+ * that is the whole point of storing it.
+ */
+function fieldNow(tournament: Tournament): readonly GroupId[] {
+  const qualifying = qualifyingRoundOf(tournament, 'MAIN');
+  if (qualifying === null) {
+    return [];
+  }
+
+  const accepted = new Set<GroupId>(
+    (tournament.repechage?.draws ?? [])
+      .filter((draw) => draw.accepted === true)
+      .map((draw) => draw.groupId),
+  );
+
+  const seen = new Set<GroupId>();
+  const field: GroupId[] = [];
+  for (const groupId of roundOutcome(qualifying).losers) {
+    if (accepted.has(groupId) || seen.has(groupId)) {
+      continue;
+    }
+    seen.add(groupId);
+    field.push(groupId);
+  }
+  return field;
+}
+
+/**
+ * Writes the field down, once, at the moment §10 fixes it.
+ *
+ * The fix for issue #102 in one function. Called after **every** committed
+ * action rather than at the two call sites that can trigger it
+ * (`@/store/tournamentStore`), for the reason the central broadcast and the
+ * central autosave are: a rule that each future action has to remember is a
+ * rule that a future action forgets, and the one it would forget here writes a
+ * group into a round it is not in.
+ *
+ * Idempotent, and deliberately so. It hands its argument straight back when the
+ * field is not fixed yet and when it has already been written, so the hundreds
+ * of commits an evening makes cost one comparison each — and the list the host
+ * read off the panel at half past eight is still the list at half past ten.
+ *
+ * **Already written wins.** Nothing that happens in the main field afterwards
+ * may change the field, and that is enforced here rather than trusted: a group
+ * knocked out of round 2 or 3 is simply eliminated. The single exception is an
+ * undo back through the lottery, and it does not go through this function at
+ * all — the stack restores the tournament from before the answer, snapshot
+ * included, and the next answer fixes it again (`@/store/undo`).
+ */
+export function settleConsolationField(tournament: Tournament): Tournament {
+  if (tournament.consolationField !== null || !isConsolationFieldFixed(tournament)) {
+    return tournament;
+  }
+  return { ...tournament, consolationField: [...fieldNow(tournament)] };
+}
+
+/**
+ * The `Trostrunde`'s field, in qualifying-draw order — the stored list and
+ * nothing else (issue #102).
+ *
+ * Empty while the list is not fixed yet, which is every tournament up to the
+ * close of the `Hoffnungsrunde`. An id that names no group is dropped rather
+ * than thrown on: a file repaired by hand is the host's problem to see on the
+ * panel, not a reason for the side event to fail to open.
+ *
+ * Unlike the reading this replaced it does **not** empty out once the event is
+ * under way. It is the record of who the event started with, and it stays that
+ * whatever the groups in it have done since — which is what makes it worth
+ * showing the host before they press the button. The groups still *playing* are
+ * `consolationGroups`, and the two are deliberately different questions.
  */
 export function consolationField(tournament: Tournament): readonly Group[] {
-  const qualifying = tournament.rounds.find((round) => round.kind === 'QUALIFYING');
-  if (qualifying === undefined || qualifying.state !== 'CLOSED') {
+  const stored = tournament.consolationField;
+  if (stored === null) {
     return [];
   }
 
   const byId = new Map(tournament.groups.map((group) => [group.id, group]));
-  const seen = new Set<GroupId>();
-  const field: Group[] = [];
-
-  for (const groupId of roundOutcome(qualifying).losers) {
+  return stored.flatMap((groupId) => {
     const group = byId.get(groupId);
-    if (group === undefined || group.status !== 'ELIMINATED' || seen.has(groupId)) {
-      continue;
-    }
-    seen.add(groupId);
-    field.push(group);
-  }
-
-  return field;
+    return group === undefined ? [] : [group];
+  });
 }
 
 /**
@@ -121,13 +242,19 @@ export function consolationField(tournament: Tournament): readonly Group[] {
 export function consolationBlockers(tournament: Tournament): readonly ConsolationBlocker[] {
   const blockers: ConsolationBlocker[] = [];
 
-  const qualifying = tournament.rounds.find((round) => round.kind === 'QUALIFYING');
-  if (qualifying === undefined || qualifying.state !== 'CLOSED') {
+  const qualifying = qualifyingRoundOf(tournament, 'MAIN');
+  if (qualifying === null || qualifying.state !== 'CLOSED') {
     blockers.push('QUALIFYING_OPEN');
   }
   // The lottery first, always. Asked before it closes, the question would be
   // answered into a field that is still shrinking (§10, order of operations).
-  if (tournament.repechage !== null && !isRepechageComplete(tournament)) {
+  // Only asked once the round is closed, so a tournament that has not played
+  // round 1 yet gives one reason rather than two for the same missing thing.
+  if (
+    qualifying !== null &&
+    qualifying.state === 'CLOSED' &&
+    !isConsolationFieldFixed(tournament)
+  ) {
     blockers.push('REPECHAGE_OPEN');
   }
   if (tournament.consolation !== null) {
@@ -159,11 +286,17 @@ export function isConsolationOffered(tournament: Tournament): boolean {
 }
 
 /**
- * Starts the side event: everyone left in the loser pool joins it.
+ * Starts the side event: the stored field joins it.
  *
  * The field is moved from `ELIMINATED` to `CONSOLATION` in one commit with the
  * record that says the event is running, so an undo takes both back and cannot
  * leave a tournament in which groups are in a side event that does not exist.
+ *
+ * Out of `tournament.consolationField` and out of nothing else (issue #102).
+ * That list was written down when the `Hoffnungsrunde` closed, so however long
+ * the host waits — and however many main-field rounds are played in between —
+ * the groups that walk into the side event are the ones the host read off the
+ * panel when the question was put.
  *
  * No round is drawn here, exactly as `advancePhase` draws none: the host starts
  * the event, reads the room, and presses *auslosen* when it is ready

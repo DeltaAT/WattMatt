@@ -97,8 +97,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detail. Non-negotiables:
   no file access. Clock and RNG are injected. Every function is deterministic and unit-tested.
 - All state mutations happen through **actions** in `src/store/actions/**`. Components never
   mutate the store directly.
-- After every committed action the store (a) broadcasts a snapshot to the beamer window and
-  (b) schedules a debounced autosave. Both are handled centrally — do not do it per action.
+- After every committed action the store (a) broadcasts a snapshot to the beamer window,
+  (b) schedules a debounced autosave and (c) settles the `Trostrunde` field (issue #102).
+  All three are handled centrally — do not do any of them per action.
 - Rust (`src-tauri`) owns only: file read/write, window and monitor management, logging.
   No tournament logic in Rust.
 - Data crossing a boundary (disk, IPC) is parsed with Zod. Never trust a `JSON.parse` result.

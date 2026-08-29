@@ -219,7 +219,10 @@ sections touch, and the direction is one-way — nothing in §10 puts anybody ba
 **Ordering.** This phase runs **before** the `Trostrunde` is started, always. The lottery is
 what decides who is left in `L`, so the side event's field is not known until the pot is
 closed. The host may be *asked* about the side event as soon as the qualifying round closes,
-but the question cannot be *answered into a field* before this phase is over.
+but the question cannot be *answered into a field* before this phase is over — and the app
+refuses it until then, whether the pot is mid-draw or has not been drawn at all (issue #102).
+Closing this phase is what writes the side event's field down (§10 "Field"); when the phase is
+skipped, the close of the qualifying round does.
 
 ## 5. ELIMINATION rounds
 
@@ -317,11 +320,37 @@ field  := L minus everyone the Hoffnungsrunde drew back up (§4)
 ```
 
 Decliners are in the field, not out of it (§4 "Declining"). A loser the lottery never reached
-is in it too. Nobody else ever is: the side event is for the **first-round** losers, and by the
-time an elimination round has produced any, this section has long since been answered.
+is in it too. Nobody else ever is: the side event is for the **first-round** losers, and a
+group knocked out of main-field round 2 or 3 is simply eliminated.
 
 If `|field| < 2` there is **no `Trostrunde`**. One group has nobody to play and none has nobody
 at all; neither may produce a round with nothing in it (docs/OPEN-QUESTIONS.md #86).
+
+**The field is fixed once, and is then immutable** (issue #102). It is written down —
+`tournament.consolationField` in the file — at the moment the `Hoffnungsrunde` closes, or at the
+close of the qualifying round when no `Hoffnungsrunde` is needed (§9 case 2). Nothing that
+happens in the main field afterwards may change it, and nothing recomputes it.
+
+That is not an optimisation, it is the rule. The host does not have to start the side event
+straight away — they read the room, and the main field plays on meanwhile — and every round it
+plays produces more losers. A field worked out at the moment the side event *starts*, from who
+happens to be eliminated by then, sweeps those losers in and turns the losers' round of the
+first round into a bucket for everyone who ever lost.
+
+Three consequences follow, and all three are part of the rule:
+
+- **It is never derived from `group.status`**, from elimination state, or from main-field
+  membership. It is the qualifying round's matches minus the lottery's accepted draws, which is
+  a reading that does not depend on *when* it is taken.
+- **The host sees it before they answer.** The `Trostrunde` panel lists the field by number from
+  the moment it is fixed, so a wrong list is a question at the laptop rather than a correction
+  in front of the room.
+- **The only thing that may change it is an undo back through the lottery**, because that is the
+  only moment the field was decided at. The undo restores the tournament from before the answer,
+  the field with it, and the next answer fixes it again.
+
+The invariant underneath: **every group is in exactly one place** — the main field, the
+`Trostrunde` field, or eliminated. Never zero, never two.
 
 ### Structure
 

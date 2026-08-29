@@ -65,6 +65,11 @@ export function createTournament(input: CreateTournamentInput): Tournament {
     // that already said no would take the question away before it was put
     // (docs/TOURNAMENT-RULES.md §10, issue #73).
     consolation: null,
+    // Not fixed yet, which is what null means: the `Trostrunde`'s field is
+    // written down when the `Hoffnungsrunde` closes, and a tournament in
+    // `SETUP` has not played the round whose losers it is made of (issue #102,
+    // docs/TOURNAMENT-RULES.md §10).
+    consolationField: null,
     bracket: null,
 
     log: [],

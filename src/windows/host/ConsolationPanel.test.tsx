@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { drawBracket, finishBracket, isBracketComplete, setBracketWinner } from '@/domain/bracket';
 import {
   closeConsolationRound,
+  consolationField,
   consolationSummary,
   drawConsolationRound,
+  settleConsolationField,
   startConsolation,
   type ConsolationSummary,
 } from '@/domain/consolation';
@@ -51,7 +53,10 @@ function afterQualifying(tables = 4): Tournament {
       decided = setWinner(decided, match.id, match.a);
     }
   }
-  return closeRound(decided);
+  // Settled the way `TournamentStore.commit` settles it after every action
+  // (issue #102): eight winners is already a power of two, so §4 is skipped and
+  // the field is fixed by the close of the round itself.
+  return settleConsolationField(closeRound(decided));
 }
 
 /** The panel with every callback stubbed, over the tournament as it stands. */
@@ -73,7 +78,7 @@ function renderPanel(document: Tournament, isOffered: boolean, overrides = {}) {
   render(
     <ConsolationPanel
       isOffered={isOffered}
-      fieldSize={8}
+      field={consolationField(document)}
       blockers={[]}
       summary={summary}
       board={round === null ? null : roundBoard(document, round)}
@@ -114,6 +119,33 @@ describe('the question', () => {
     expect(screen.getByText(de.consolation.offer({ n: 8 }))).toBeTruthy();
   });
 
+  /*
+   * Issue #102's third task. The field is fixed when the `Hoffnungsrunde`
+   * closes and cannot be corrected afterwards, so the host has to be able to
+   * *read* it — by number, not as a count — while the decision is still theirs.
+   * A wrong list spotted here is a question at the laptop; spotted on the wall
+   * it is a correction in front of the room.
+   */
+  it('lists the field itself, before anything is started', () => {
+    const document = afterQualifying();
+    const field = consolationField(document);
+    expect(field).toHaveLength(8);
+
+    renderPanel(document, true);
+
+    const listed = screen.getByText(de.consolation.fieldTitle).closest('section');
+    expect(listed).not.toBeNull();
+    for (const entry of field) {
+      expect(listed?.querySelector(`[data-group-id="${entry.id}"]`)).toBeTruthy();
+      expect(screen.getByText(de.participant.GROUP.numbered({ n: entry.number }))).toBeTruthy();
+    }
+    // And nobody the main field is still playing is in it.
+    for (const entry of document.groups.filter((group) => group.status === 'ACTIVE')) {
+      expect(listed?.querySelector(`[data-group-id="${entry.id}"]`)).toBeNull();
+    }
+    expect(screen.getByText(de.consolation.fieldHint)).toBeTruthy();
+  });
+
   it('starts the side event when the host says yes', () => {
     const handlers = renderPanel(afterQualifying(), true);
 
@@ -135,7 +167,7 @@ describe('the question', () => {
     const { container } = render(
       <ConsolationPanel
         isOffered={false}
-        fieldSize={0}
+        field={[]}
         blockers={['REPECHAGE_OPEN']}
         summary={null}
         board={null}

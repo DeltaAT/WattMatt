@@ -10,7 +10,7 @@ import {
 } from '@/domain/ids';
 
 /**
- * The shape of everything — docs/FILE-FORMAT.md §"Schema (v8)".
+ * The shape of everything — docs/FILE-FORMAT.md §"Schema (v9)".
  *
  * Schema first, type second: every entity is a Zod schema and its TypeScript
  * type is inferred from it. One definition, so a schema and its type cannot
@@ -343,10 +343,11 @@ export type Bracket = z.infer<typeof bracketSchema>;
  * already made.
  *
  * There is no `pool` here, unlike `Repechage`. The field is not drawn out of a
- * pot at one position of the RNG stream — it is simply everyone the
- * `Hoffnungsrunde` left behind, which is written on the groups themselves as
- * `status === 'CONSOLATION'` and survives a reload without anything having to
- * remember a shuffle (docs/FILE-FORMAT.md §"Schema (v8)").
+ * pot at one position of the RNG stream — it is everyone the `Hoffnungsrunde`
+ * left behind, and it is written down once, in `tournament.consolationField`
+ * beside this record, at the moment that lottery closes (issue #102). Beside
+ * rather than inside, because it is fixed before the host has answered the
+ * question this record *is* the answer to (docs/FILE-FORMAT.md §"Schema (v9)").
  */
 export const consolationStateSchema = z.enum(['DECLINED', 'RUNNING', 'FINISHED']);
 export type ConsolationState = z.infer<typeof consolationStateSchema>;
@@ -474,6 +475,34 @@ export const tournamentSchema = z.object({
    * and what the v4 → v5 migration writes.
    */
   consolation: consolationSchema.nullable(),
+  /**
+   * The `Trostrunde`'s field, fixed once and never recomputed (issue #102,
+   * docs/TOURNAMENT-RULES.md §10).
+   *
+   * The losers of the **first** round, minus everyone the `Hoffnungsrunde` drew
+   * back up — written down at the moment that lottery closes, or at the close
+   * of the qualifying round when no lottery is needed. Null before that moment,
+   * which is what "not fixed yet" means and what every tournament carries until
+   * the main field's round 1 is decided.
+   *
+   * Stored rather than queried, and that is the whole of issue #102. The field
+   * used to be read live off `group.status`, which is correct only if nothing
+   * else has happened yet: let the main field play one more round before the
+   * side event is started and that round's losers were swept in with it, so a
+   * group knocked out of round 2 turned up in a round that is by definition for
+   * the losers of round 1. A stored list cannot drift, because nothing after
+   * the lottery is allowed to touch it.
+   *
+   * It is the one place a group can be waiting for the side event, so the three
+   * places a group can be — the main field, this list, out — stay disjoint: a
+   * group in here is `ELIMINATED` until the host starts the event and moves it
+   * to `CONSOLATION`, and one that is `ACTIVE` is never in here at all.
+   *
+   * The one thing that may change it is an undo back through the lottery, and
+   * that changes it by restoring the tournament from before the answer rather
+   * than by rewriting the list (`@/store/undo`).
+   */
+  consolationField: z.array(groupIdSchema).nullable(),
   /** Null until the final phase is reached. */
   bracket: bracketSchema.nullable(),
 

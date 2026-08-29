@@ -235,7 +235,7 @@ export function HostWindow() {
             {consolation.isActive ? (
               <ConsolationPanel
                 isOffered={consolation.isOffered}
-                fieldSize={consolation.fieldSize}
+                field={consolation.field}
                 blockers={consolation.blockers}
                 summary={consolation.summary}
                 board={consolation.board}

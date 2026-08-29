@@ -19,6 +19,14 @@ import { CONSOLATION_ROUND_COPY, RoundPanel } from '@/windows/host/RoundPanel';
  * the winner does not come back into the main field, because that is the thing
  * a host will otherwise announce wrongly.
  *
+ * The **field is listed by name** beside the question, not just counted
+ * (issue #102). It is fixed the moment the lottery closes and cannot change
+ * afterwards, so this is the last point at which a host can look at it and say
+ * "that is wrong" — after the button it is on the projector, and a wrong list
+ * there is a correction made in front of the room rather than a question asked
+ * at the laptop. A count alone cannot be checked against anything; the numbers
+ * can.
+ *
  * **The board**, while it runs. Drawn by `RoundPanel` in the side event's own
  * words rather than by a second board of its own: the host is running two
  * tournaments at once and cannot afford two different screens to read
@@ -33,7 +41,7 @@ import { CONSOLATION_ROUND_COPY, RoundPanel } from '@/windows/host/RoundPanel';
  */
 export function ConsolationPanel({
   isOffered,
-  fieldSize,
+  field,
   blockers,
   summary,
   board,
@@ -57,7 +65,14 @@ export function ConsolationPanel({
   onShowOnBeamer,
 }: {
   isOffered: boolean;
-  fieldSize: number;
+  /**
+   * Who is in the side event, in qualifying-draw order — the stored field of
+   * issue #102, not a live reading of who is out.
+   *
+   * The whole list rather than its size, because the host is being asked to
+   * commit to it. Its length is still what the question is worded with.
+   */
+  field: readonly Group[];
   blockers: readonly ConsolationBlocker[];
   /** Null while the side event has not been started. */
   summary: ConsolationSummary | null;
@@ -94,7 +109,32 @@ export function ConsolationPanel({
         data-consolation="offer"
       >
         <h2 className="wm-display text-host-lg font-bold">{de.consolation.offerTitle}</h2>
-        <p className="text-host-sm text-wm-text-muted">{de.consolation.offer({ n: fieldSize })}</p>
+        <p className="text-host-sm text-wm-text-muted">
+          {de.consolation.offer({ n: field.length })}
+        </p>
+
+        {/*
+          The field itself, before anything is started. Rendered as the same
+          chips the `Hoffnungsrunde` panel uses for its pot, so a host moving
+          between the two panels is reading one design rather than two.
+        */}
+        <section className="flex flex-col gap-1" data-consolation-field="">
+          <h3 className="wm-label">
+            {de.consolation.fieldTitle} <span className="wm-tnum">{field.length}</span>
+          </h3>
+          <ul className="flex flex-wrap gap-1">
+            {field.map((entry) => (
+              <li
+                key={entry.id}
+                className="rounded-wm-sm bg-wm-surface px-2 py-1 text-host-sm text-wm-text"
+                data-group-id={entry.id}
+              >
+                {groupLabel(entry.id, byId, participant).text}
+              </li>
+            ))}
+          </ul>
+          <p className="text-host-sm text-wm-text-muted">{de.consolation.fieldHint}</p>
+        </section>
 
         <div className="flex gap-2">
           <button

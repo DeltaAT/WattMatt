@@ -174,6 +174,11 @@ export function midTournament(overrides: Partial<Tournament> = {}): Tournament {
       draws: [{ groupId: groupId(3), accepted: false }],
       fallbackUsed: 'BYES',
     },
+    // The one first-round loser the lottery did not take, written down when
+    // that lottery closed and immutable since (issue #102,
+    // docs/TOURNAMENT-RULES.md §10). Group 3 lost the qualifying round and
+    // then declined its second chance, which is exactly what puts it here.
+    consolationField: [groupId(3)],
     bracket: {
       size: 4,
       nodes: [

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tournamentSchema } from '@/domain/types';
 
 /**
- * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v8)".
+ * The `.wattmatt` file itself — docs/FILE-FORMAT.md §"Schema (v9)".
  *
  * Separate from `tournamentSchema` because the two answer different questions.
  * `Tournament` is what the store owns and what every domain function operates
@@ -66,8 +66,19 @@ import { tournamentSchema } from '@/domain/types';
  * absent direction is one the draw, the tree and every table picker would have
  * to default separately, and four copies of a default are four places for them
  * to disagree.
+ *
+ * v9 gave the tournament a `consolationField` (issue #102,
+ * docs/TOURNAMENT-RULES.md §10) — the `Trostrunde`'s field, written down at the
+ * moment the `Hoffnungsrunde` closes instead of being worked out later from
+ * `group.status`. A v8 file has no such list, and unlike every field above it
+ * cannot honestly be reconstructed at the moment of migration: whether the
+ * lottery has closed is exactly the question that decides whether the list is
+ * fixed yet, so `v8ToV9` writes **null** — "not fixed" — and the first commit
+ * after the file is opened fixes it from the qualifying round and the lottery
+ * records the file already carries. Required rather than optional, because null
+ * is a real answer here and an absent field would be a second way of saying it.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const appStampSchema = z.object({
   name: z.literal('WattMatt'),
@@ -77,7 +88,7 @@ export type AppStamp = z.infer<typeof appStampSchema>;
 
 /**
  * The tournament fields sit at the top level rather than nested under a
- * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v8)" writes
+ * `tournament` key, because that is how FILE-FORMAT.md §"Schema (v9)" writes
  * them — and the file is meant to be repairable in Notepad, which is easier
  * with one level less of nesting.
  *
