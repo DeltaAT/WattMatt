@@ -203,19 +203,59 @@ Two lengths in it are relative rather than tokens, and deliberately so:
   stays true across the type ladder if it is stated in numerals; the row keeps `wm-display`
   and its type step for exactly this reason, since that is what `ch` is measured in.
 
+Five steps, and the bottom two are not the group rounds'. `hero` / `h1` / `h2` are the three
+densities those scenes ladder through, where the box *is* the picture; `h3` / `body` are the
+`Turnierbaum`'s badge (issue #103), where it sits beside a name and therefore starts a step
+under it. The ladder stops at `body` because 32 px is where the projector stops (§2). A caller
+whose box can never carry a result — the badge, whose slot draws the outcome around it — turns
+the glyph slot off (`glyphs={false}`), and then **both** halves of the mirror go, so the
+numeral is still centred on the box's axis.
+
 The glyph slot is **mirrored** — the same width, empty, on the far side of the numeral (issue
 #100). `justify-center` centres the row, so with a glyph on one side only the numeral itself sat
 half a glyph right of the box's middle, and a box stretched to the width of a match card sat a
 long way right of it. `text-align: center` was true and the picture was still off-centre. Centre
 on the numeral, never on the text box, and check it optically at 10 m.
 
-**Bracket node** (`BRACKET`, issue #90) — two name slots, and the number of the table the
-match is on in the top-right corner. The table is a *reference*, not content: no larger than
-the names at any density (`beamer-h3` → `beamer-body`, issue #100), muted, and **absolutely
-positioned**, so the names keep every pixel they had and no node changes height when a match
-starts or ends. It lands over the box each slot reserves for `SIEGER` / `AUSGESCHIEDEN`, which
-can never collide with it — that word appears only once the match is decided, and a decided
-match has no table to name.
+**Bracket node** (`BRACKET`, issues #90, #103) — the full anatomy, in the order a node is
+read:
+
+| Element | Where | Size | Why it is where it is |
+| --- | --- | --- | --- |
+| Result state | the whole slot | — | 6 px left border, tint, `✓`/`✗` and the German word `SIEGER` / `AUSGESCHIEDEN` (§1) |
+| Group number | before the name, in a `GroupBox` | `beamer-h3` → `beamer-body` | the identity the room knows each other by, kept past the naming phase |
+| Name | the rest of the row, `flex-1 truncate` | `beamer-h2` → `beamer-body` | the content; everything else gives way to it |
+| Table number | absolute, node's top-right | `beamer-h3` → `beamer-body` | a reference, and out of the flow so it costs the name nothing |
+
+Two slots per node, and every one of the four is present at a field of sixteen with a
+forty-character name and a two-digit table. Only the name is elastic: the number and the table
+are `shrink-0` and short, and `useFitToStage` scales what is left rather than clipping it.
+
+The **group number** stays visible as a badge beside the name for the rest of the event
+(issues #23, #103). Up to the naming phase a participant *is* their number
+(docs/TOURNAMENT-RULES.md §0), and dropping it at the exact moment the tournament gets
+interesting takes the label half the room knows each other by. It is `@/ui/GroupBox` at its two
+smallest steps — literally the box off the round board, so nobody has to learn that this is the
+same number — always `NEUTRAL`, because the result is already drawn on the slot around it three
+times over.
+
+Subordinate to the name, and at the densest step not by size: the names are on the 32 px floor
+themselves at a field of sixteen, so the badge sits at the same size and is told apart by being
+one or two numerals in a box against a name of up to forty characters. It is never taken below
+that floor — a number nobody at the back can read is not an identity. `min-w-[2ch]` makes a `7`
+the width of a `12`, and a slot with nobody in it yet — an open slot, a `Freilos` — reserves the
+badge invisibly, so names line up down a column and nothing moves when the host finishes typing
+a name into a tree the room is already watching.
+
+**The `Trostrunde`'s tree carries no badge at all.** It never enters the naming phase (issue
+#91), so its slots are already numbers and a badge would print each one twice — reserved space
+included, since with no badge anywhere there is nothing to line up with.
+
+The **table** is a *reference*, not content: no larger than the names at any density
+(`beamer-h3` → `beamer-body`, issue #100), muted, and **absolutely positioned**, so the names
+keep every pixel they had and no node changes height when a match starts or ends. It lands over
+the box each slot reserves for `SIEGER` / `AUSGESCHIEDEN`, which can never collide with it —
+that word appears only once the match is decided, and a decided match has no table to name.
 
 It keeps the **bare number** while the group rounds went back to the word (issue #100), and
 that divergence is a decision rather than a leftover. `Tisch` came back to the round board

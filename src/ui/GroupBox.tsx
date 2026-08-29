@@ -35,13 +35,19 @@
 /**
  * How big the box is drawn, named for the type step its number takes.
  *
- * Three steps, matching the three densities both group-round scenes already
- * ladder through. Each scene keeps its own thresholds — a board of sections and
- * a grid of pairings do not get crowded at the same count — and maps them onto
- * these, so the two agree about what a `hero` box looks like without agreeing
- * about when to use one.
+ * The top three are the group rounds': each of those scenes keeps its own
+ * thresholds — a board of sections and a grid of pairings do not get crowded at
+ * the same count — and maps them onto these, so the two agree about what a
+ * `hero` box looks like without agreeing about when to use one.
+ *
+ * The bottom two are the `Turnierbaum`'s (issue #103). There the box is not the
+ * participant, it is the badge beside their name, so it starts a step under the
+ * name rather than a step over everything else. `body` is the floor of the
+ * ladder because 32 px is the floor of the projector (docs/STYLEGUIDE.md §2) —
+ * a number nobody at the back can read is not an identity, and the number is
+ * the thing half the room knows each other by.
  */
-export type GroupBoxScale = 'hero' | 'h1' | 'h2';
+export type GroupBoxScale = 'hero' | 'h1' | 'h2' | 'h3' | 'body';
 
 /**
  * What has happened to this participant.
@@ -58,6 +64,7 @@ export function GroupBox({
   state,
   scale,
   flip = false,
+  glyphs = true,
 }: {
   /** The bare number, `groupNumber` in `@/windows/groupLabel`. */
   number: string;
@@ -72,6 +79,26 @@ export function GroupBox({
    * `STATE_BOX` and only the animation is behind this flag.
    */
   flip?: boolean;
+  /**
+   * Whether the box reserves the two slots the result glyph lives in.
+   *
+   * True everywhere a result can land in the box, which is every group-round
+   * scene — there the slots are the whole reason nothing moves when a match is
+   * decided, and turning them off would be turning off issue #77.
+   *
+   * False only where the box can never carry one. On a `Turnierbaum` node the
+   * result is drawn on the slot around the badge — its border, its tint, its
+   * own glyph and the German word — so a second glyph slot inside the badge
+   * would reserve room for a signal that is already being made three times, and
+   * reserve it twice over at that. On a tree of sixteen those two empty slots
+   * are three numerals of width per badge and four badges across the board,
+   * taken out of the names (issue #103).
+   *
+   * The mirror survives either way: both slots are drawn or neither is, so the
+   * numeral stays centred on the box's axis rather than half a glyph right of
+   * it (issue #100).
+   */
+  glyphs?: boolean;
 }) {
   return (
     <span
@@ -89,13 +116,15 @@ export function GroupBox({
        * glyphs have different advance widths, and nothing may move when a
        * result lands — inside the box as much as outside it.
        */}
-      <span
-        aria-hidden="true"
-        className={`w-[1.2em] shrink-0 text-center font-bold ${ICON_TYPE[scale]}`}
-        data-outcome-icon=""
-      >
-        {STATE_ICON[state]}
-      </span>
+      {glyphs ? (
+        <span
+          aria-hidden="true"
+          className={`w-[1.2em] shrink-0 text-center font-bold ${ICON_TYPE[scale]}`}
+          data-outcome-icon=""
+        >
+          {STATE_ICON[state]}
+        </span>
+      ) : null}
 
       {/*
        * `min-w-[2ch]` is the issue's "single- and double-digit numbers look like
@@ -127,11 +156,13 @@ export function GroupBox({
        * state, and the geometry is still identical across the three — both
        * slots are reserved whether or not there is a glyph to put in one.
        */}
-      <span
-        aria-hidden="true"
-        className={`w-[1.2em] shrink-0 ${ICON_TYPE[scale]}`}
-        data-outcome-balance=""
-      />
+      {glyphs ? (
+        <span
+          aria-hidden="true"
+          className={`w-[1.2em] shrink-0 ${ICON_TYPE[scale]}`}
+          data-outcome-balance=""
+        />
+      ) : null}
     </span>
   );
 }
@@ -178,17 +209,26 @@ const STATE_ANIMATION: Record<Exclude<GroupBoxState, 'NEUTRAL'>, string> = {
  * does not touch its border": 16 px beside a 160 px numeral is a rim, not a
  * margin. Radii are the `--wm-radius` tokens of docs/STYLEGUIDE.md §3 and the
  * padding lands on its 8 px grid.
+ *
+ * The two badge steps keep going down the same slope. They are drawn beside a
+ * name rather than as the picture, so the rim thins with the numeral and the
+ * radius stops at `md`: a 24 px corner on a 32 px number is a pill, and a pill
+ * beside a name reads as a tag on it rather than as the number it is.
  */
 const BOX: Record<GroupBoxScale, string> = {
   hero: 'gap-4 rounded-wm-xl px-8 py-3',
   h1: 'gap-3 rounded-wm-xl px-6 py-2',
   h2: 'gap-3 rounded-wm-lg px-4 py-2',
+  h3: 'gap-2 rounded-wm-md px-3 py-1',
+  body: 'gap-2 rounded-wm-md px-2 py-1',
 };
 
 const NUMBER_TYPE: Record<GroupBoxScale, string> = {
   hero: 'text-beamer-hero',
   h1: 'text-beamer-h1',
   h2: 'text-beamer-h2',
+  h3: 'text-beamer-h3',
+  body: 'text-beamer-body',
 };
 
 /**
@@ -203,4 +243,6 @@ const ICON_TYPE: Record<GroupBoxScale, string> = {
   hero: 'text-beamer-h3',
   h1: 'text-beamer-body',
   h2: 'text-beamer-body',
+  h3: 'text-beamer-body',
+  body: 'text-beamer-body',
 };
