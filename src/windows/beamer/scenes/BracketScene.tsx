@@ -17,6 +17,7 @@ import type {
   Table,
 } from '@/domain/types';
 import { de } from '@/i18n';
+import { GroupBox, type GroupBoxScale } from '@/ui';
 import { fitNameType, type NameType } from '@/ui/nameFit';
 import { chipKey, type BracketAdvance } from '@/windows/beamer/useBracketAdvance';
 import { useFitToStage } from '@/windows/beamer/useFitToStage';
@@ -61,6 +62,13 @@ import type { CSSProperties } from 'react';
  * names keep every pixel they had. It appears only while the match is actually
  * being played — `bracketNodeTableId` — because a decided node still remembers
  * where it was played and that table is somebody else's by then.
+ *
+ * **Every name keeps its number** (issue #103). The naming phase replaces a
+ * number with a name on the wall, and the number is what half the room knows
+ * each other by — so it comes back as a badge beside the name, in the box it
+ * has sat in all evening (`NodeNumber`). Only on the main field's tree: the
+ * `Trostrunde` is played in numbers from start to finish (issue #91), so there
+ * the number is already the label.
  */
 export function BracketScene({
   tournament,
@@ -153,6 +161,11 @@ export function BracketScene({
     type: NAME_TYPE[nameDensity(drawnField)],
     tables: new Map(tournament.tables.map((table) => [table.id, table])),
     tableType: TABLE_TYPE[nameDensity(drawnField)],
+    // Only the main field's tree carries the badge (issue #103). The
+    // `Trostrunde` never enters the naming phase, so its slots *are* numbers
+    // (issue #91) and a badge there would say every number twice.
+    numbers: track === 'MAIN',
+    numberScale: NUMBER_SCALE[nameDensity(drawnField)],
     advance,
     settled,
   };
@@ -383,6 +396,76 @@ function NodeTable({ node, chips }: { node: BracketNode; chips: ChipContext }) {
 }
 
 /**
+ * The group's number, beside the name that replaced it (issue #103).
+ *
+ * The number a participant has carried since the first `Auslosung` is the
+ * identity of the whole event (docs/TOURNAMENT-RULES.md §0) and it is what most
+ * of the room knows each other by — and up to now it vanished at exactly the
+ * moment the tournament got interesting, because the naming phase swapped it
+ * for a name (issue #23). #23 always said it should not: "the group number
+ * stays visible as a badge next to the name for the rest of the event". This
+ * is the tree keeping that promise.
+ *
+ * **It is the same object it was all evening**, `@/ui/GroupBox` (issue #88), at
+ * the two steps that fit beside a name. A second way of drawing a number would
+ * make the badge a new thing to learn at the one moment nobody has attention to
+ * spare; being literally the box off the round board is what lets somebody find
+ * their number here without being told it is the same number.
+ *
+ * **Subordinate, and not by size alone** — the same three-way argument the
+ * table number makes (issue #100, docs/STYLEGUIDE.md §4). A step under the name
+ * where the ladder has one left, and at a field of sixteen, where the names are
+ * themselves on the 32 px floor and there is no step left under them, by the
+ * two things that are not size: it is one or two numerals against a name of up
+ * to forty characters, and it is inside a badge rather than in the run of text.
+ * Below the floor is not on offer — a number nobody can read is not an
+ * identity, which is the whole of the issue's "someone who only knows their
+ * number can find themselves at 10 m".
+ *
+ * **The slot is reserved even when it is empty**, and that is what makes the
+ * issue's fixed-width task true across a *board* rather than within one badge.
+ * `min-w-[2ch]` already makes a `7` the width of a `12`; this keeps the names
+ * of every node in the column starting at the same x, whether the slot holds a
+ * participant, a `Freilos`, or the winner of a match still being played below.
+ * It is also what stops the board twitching during the naming phase, where the
+ * host is typing names into a tree the room is already looking at: the badge
+ * appears, and not one name moves.
+ */
+function NodeNumber({ groupId, chips }: { groupId: GroupId | null; chips: ChipContext }) {
+  if (!chips.numbers) {
+    return null;
+  }
+
+  const group = groupId === null ? undefined : chips.groups.get(groupId);
+  /*
+   * Drawn only beside an actual name. A group the host has not named yet is
+   * still `Gruppe 7` in the slot (`groupLabel`), and `7` beside `Gruppe 7` is
+   * the number said twice — which is exactly why the `Trostrunde` has no badge
+   * at all. The space stays reserved, so nothing moves when the name lands.
+   */
+  const named = group !== undefined && group.name !== null;
+
+  return (
+    <span
+      className={named ? 'shrink-0' : 'shrink-0 invisible'}
+      aria-hidden={named ? undefined : 'true'}
+      data-node-number={named ? '' : undefined}
+    >
+      <GroupBox
+        number={named ? String(group.number) : ''}
+        // Never a result. The slot around this badge already carries the
+        // outcome three times over — border, tint and the German word — and a
+        // fourth copy inside the number would be the one place on the board
+        // where a colour is doing nothing but repeating itself.
+        state="NEUTRAL"
+        scale={chips.numberScale}
+        glyphs={false}
+      />
+    </span>
+  );
+}
+
+/**
  * One participant in a match of the tree.
  *
  * The three signals of docs/STYLEGUIDE.md §1 live here together so they cannot
@@ -421,6 +504,8 @@ function Slot({ node, side, chips }: { node: BracketNode; side: BracketSide; chi
       >
         {OUTCOME_ICON[outcome]}
       </span>
+
+      <NodeNumber groupId={groupId} chips={chips} />
 
       {/*
        * Stepped down towards the 32 px floor before the ellipsis takes over
@@ -502,6 +587,10 @@ interface ChipContext {
   tables: ReadonlyMap<TableId, Table>;
   /** The type step that table is drawn at — always under the names. */
   tableType: string;
+  /** Whether this tree puts a group number beside its names (issue #103). */
+  numbers: boolean;
+  /** The `GroupBox` step that number is drawn at — always under the names. */
+  numberScale: GroupBoxScale;
   advance: BracketAdvance;
   settled: boolean;
 }
@@ -612,6 +701,26 @@ const TABLE_TYPE: Record<NameDensity, string> = {
   roomy: 'text-beamer-h3',
   normal: 'text-beamer-body',
   dense: 'text-beamer-body',
+};
+
+/**
+ * How big the group number's badge is (issue #103).
+ *
+ * The same ladder as the table's, one step under the names and stopping at the
+ * 32 px floor, and the same reasoning: both are references beside the content
+ * rather than the content, and neither may fall below what the back of the room
+ * can read (docs/STYLEGUIDE.md §2, §4).
+ *
+ * Deliberately the same rungs rather than a ladder of its own, so the two
+ * things a node says besides the names are said at one size. A badge and a
+ * table number at different steps in the same 400 px box would read as a
+ * hierarchy between them, and there is none: one answers "is this me", the
+ * other "where".
+ */
+const NUMBER_SCALE: Record<NameDensity, GroupBoxScale> = {
+  roomy: 'h3',
+  normal: 'body',
+  dense: 'body',
 };
 
 /** How many rows of the drawn tree one node of a column spans. */

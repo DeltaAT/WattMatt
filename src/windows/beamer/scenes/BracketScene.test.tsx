@@ -113,6 +113,26 @@ function tablesOn(markup: string): Record<string, string> {
   return found;
 }
 
+/**
+ * The group number each slot puts beside its name, keyed by chip (issue #103).
+ *
+ * A slot that reserves the badge without filling it is deliberately absent
+ * rather than empty-string: `data-node-number` is only written on the ones the
+ * room can actually see.
+ */
+function numbersOn(markup: string): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const [, key, rest] of markup.matchAll(
+    /data-chip="([^"]+)"([\s\S]*?)data-outcome-slot=""/g,
+  )) {
+    const badge = /data-node-number=""[\s\S]*?data-group-number="">([^<]*)</.exec(rest ?? '');
+    if (badge !== null) {
+      found[key ?? ''] = badge[1] ?? '';
+    }
+  }
+  return found;
+}
+
 /** The nodes of one round, in the order the tree draws them. */
 function nodesOf(document: Tournament, round: string): readonly BracketNodeId[] {
   return (document.bracket?.nodes ?? [])
@@ -190,6 +210,275 @@ describe('the bracket scene', () => {
     });
 
     expect(scene(short)).toContain(de.outcome.bye);
+  });
+});
+
+/*
+ * Issue #103. The naming phase (issue #23) swaps a number for a name at exactly
+ * the moment the tournament gets interesting — and the number is what most of
+ * the room knows each other by. #23 always said it should stay: "the group
+ * number stays visible as a badge next to the name for the rest of the event."
+ * This is the tree keeping that promise.
+ */
+describe('the group number beside the name', () => {
+  /** A field of 16 whose names are the longest a host may enter. */
+  function worstCase(): Tournament {
+    const long = 'M'.repeat(40);
+    return drawBracket(
+      tournament({
+        phase: 'NAMING',
+        groups: Array.from({ length: 16 }, (_unused, index) =>
+          group(index + 1, { name: `${long}${String(index)}`.slice(0, 40) }),
+        ),
+        nextGroupNumber: 17,
+        tables: Array.from({ length: 4 }, (_unused, index) => table(index + 1)),
+        nextTableNumber: 5,
+      }),
+      { at: FIXED_NOW },
+    );
+  }
+
+  /** A tree drawn in numbers, the way the `Trostrunde`'s is (issue #91). */
+  function nameless(size: number): Tournament {
+    const groups = Array.from({ length: size }, (_unused, index) => group(index + 1));
+    return tournament({
+      phase: 'BRACKET',
+      groups,
+      nextGroupNumber: size + 1,
+      bracket: buildBracket(groups, { rng: createRng('seed'), size }),
+    });
+  }
+
+  /** The class list of the badge's own box — the `GroupBox` it is made of. */
+  function badgeBox(markup: string): string[] {
+    const found = /data-node-number=""><span class="([^"]*)"/.exec(markup)?.[1] ?? '';
+    return found.split(' ').filter(Boolean);
+  }
+
+  /** The class list of the numeral inside the badge. */
+  function badgeNumber(markup: string): string[] {
+    const found =
+      /data-node-number=""[\s\S]*?<span class="([^"]*)" data-group-number/.exec(markup)?.[1] ?? '';
+    return found.split(' ').filter(Boolean);
+  }
+
+  it('puts one on every slot of the tree that has a name', () => {
+    const numbers = numbersOn(scene(drawn(8)));
+
+    // A field of eight is eight participants in the first round, and every one
+    // of them is on the wall with the number they have carried all evening.
+    expect(Object.keys(numbers)).toHaveLength(8);
+    expect(Object.values(numbers).sort((a, b) => Number(a) - Number(b))).toEqual(
+      Array.from({ length: 8 }, (_unused, index) => String(index + 1)),
+    );
+  });
+
+  /* The number and the name have to belong to the same participant, or the
+   * badge is worse than nothing: it tells the room somebody else's number. */
+  it('gives each name the number that participant carries', () => {
+    const markup = scene(drawn(8));
+    const pairs = [
+      ...markup.matchAll(/data-group-number="">(\d+)<[\s\S]*?truncate[^>]*>Team (\d+)</g),
+    ];
+
+    expect(pairs).toHaveLength(8);
+    for (const [, badge, name] of pairs) {
+      expect(badge).toBe(name);
+    }
+  });
+
+  /* "Applies to the third-place node and the final as well." The two are drawn
+   * by different branches of the scene — the final inside the grid, the
+   * third-place match in a section under it — so both are worth naming. */
+  it('reaches the Finale and the Spiel um Platz 3', () => {
+    const document = lastTwo();
+    const numbers = numbersOn(scene(document));
+    const ends = (document.bracket?.nodes ?? []).filter(
+      (node) => node.round === 'FINAL' || node.round === 'THIRD_PLACE',
+    );
+
+    expect(ends).toHaveLength(2);
+    for (const node of ends) {
+      expect(numbers[`${String(node.id)}:A`], String(node.round)).toBeDefined();
+      expect(numbers[`${String(node.id)}:B`], String(node.round)).toBeDefined();
+    }
+  });
+
+  /*
+   * "Reuse the group box component (#88) at a small scale, so the number looks
+   * the same here as it did in the group rounds." Literally that box: the 2 px
+   * border, the neutral paint and the tabular display numeral it has worn all
+   * evening.
+   */
+  it('is the same box the group rounds drew the number in', () => {
+    const markup = scene(drawn(8));
+
+    expect(badgeBox(markup)).toContain('border-[2px]');
+    expect(badgeBox(markup)).toContain('bg-wm-bg-elevated');
+    expect(badgeNumber(markup)).toContain('wm-display');
+    expect(badgeNumber(markup)).toContain('wm-tnum');
+  });
+
+  /*
+   * "Fixed-width badge, so single- and double-digit numbers do not shift the
+   * name's position between nodes." `min-w-[2ch]` on tabular digits is what
+   * makes a `7` reserve exactly the room a `12` needs.
+   */
+  it('gives a one-digit number the same badge as a two-digit one', () => {
+    const markup = scene(drawn(16));
+    const boxes = [...markup.matchAll(/data-node-number=""><span class="([^"]*)"/g)].map(
+      (found) => found[1],
+    );
+    const numerals = [
+      ...markup.matchAll(/data-node-number=""[\s\S]*?<span class="([^"]*)" data-group-number/g),
+    ].map((found) => found[1]);
+
+    expect(badgeNumber(markup)).toContain('min-w-[2ch]');
+    // Sixteen participants, so `7` and `12` are both on this board.
+    expect(boxes).toHaveLength(16);
+    expect(new Set(boxes).size).toBe(1);
+    expect(new Set(numerals).size).toBe(1);
+  });
+
+  /*
+   * The same task across a *board* rather than within one badge. A slot with
+   * nobody in it yet still holds the space, so every name in a column starts at
+   * the same x — and so the board does not twitch during the naming phase,
+   * where the host is typing names into a tree the room is already watching.
+   */
+  it('holds the space open on a slot with no name in it', () => {
+    const markup = scene(drawn(16));
+
+    // 16 nodes and 32 slots, of which the first round's 16 are filled; the
+    // other 16 are waiting for somebody to arrive.
+    expect(Object.keys(numbersOn(markup))).toHaveLength(16);
+    expect([...markup.matchAll(/class="shrink-0 invisible"/g)]).toHaveLength(16);
+    expect(markup).toContain('class="shrink-0 invisible" aria-hidden="true"');
+  });
+
+  /* The badge is beside a *name*. A group the host has not named yet is still
+   * `Gruppe 7` in the slot, and `7` beside `Gruppe 7` is the number twice. */
+  it('says nothing beside a participant who has no name yet', () => {
+    const half = drawn(8);
+    const document: Tournament = {
+      ...half,
+      groups: half.groups.map((entry) => (entry.number > 4 ? { ...entry, name: null } : entry)),
+    };
+    const markup = scene(document);
+
+    expect(Object.keys(numbersOn(markup))).toHaveLength(4);
+    // Four named, four not, and eight slots nobody has reached — twelve slots
+    // holding the space that stops the four names moving when the host
+    // finishes typing.
+    expect([...markup.matchAll(/class="shrink-0 invisible"/g)]).toHaveLength(12);
+  });
+
+  /*
+   * "Not applicable to the Trostrunde." Its bracket is numbers-only from start
+   * to finish (issue #91), so the number is already the label there — a badge
+   * would print it twice on every slot of the tree.
+   */
+  it('is left off the Trostrunde entirely', () => {
+    const markup = renderToStaticMarkup(
+      <BracketScene
+        tournament={toTournamentSnapshot(nameless(8))}
+        track="CONSOLATION"
+        settled
+        advance={AT_REST}
+      />,
+    );
+
+    expect(markup).toContain(de.consolation.label);
+    expect(markup).not.toContain('data-node-number');
+    // Not even the reserved space: with no badge anywhere on this tree there is
+    // nothing for a slot to line itself up with.
+    expect(markup).not.toContain('shrink-0 invisible');
+  });
+
+  /*
+   * "The number is subordinate to the name." A step under it wherever the
+   * ladder has one left, and never below the 32 px floor of
+   * docs/STYLEGUIDE.md §2 — the same three rungs the table number walks, and
+   * the same argument at the bottom of them (issue #100): at a field of sixteen
+   * the names are on the floor themselves, so what tells the badge apart is
+   * everything except size.
+   */
+  it('is drawn no larger than the names and never below the floor', () => {
+    for (const [size, name, badge] of [
+      [4, 'text-beamer-h2', 'text-beamer-h3'],
+      [8, 'text-beamer-h3', 'text-beamer-body'],
+      [16, 'text-beamer-body', 'text-beamer-body'],
+    ] as const) {
+      const markup = scene(drawn(size, 2));
+
+      expect(badgeNumber(markup), `field of ${String(size)}`).toContain(badge);
+      expect(badgeNumber(markup), `field of ${String(size)}`).not.toContain('text-beamer-caption');
+      // The name is the dominant element: the badge never steps above it.
+      expect(markup, `field of ${String(size)}`).toContain(`truncate font-semibold ${name}`);
+    }
+  });
+
+  /*
+   * "Does not eat into the name's space: names still get the auto-fit and
+   * truncation behaviour from #23." The badge is `shrink-0` beside a name that
+   * is still `min-w-0 flex-1 truncate`, so a forty-character name steps down to
+   * the floor and then ellipses exactly as it did before there was a badge.
+   */
+  it('leaves the name its auto-fit and its ellipsis', () => {
+    const markup = scene(worstCase());
+
+    expect(markup).toContain('min-w-0 flex-1 truncate font-semibold text-beamer-body');
+    expect(markup).toContain('class="shrink-0" data-node-number=""');
+  });
+
+  /*
+   * The issue's second acceptance criterion, with all four elements of the node
+   * present at once: name, number, table and result colour. Nothing is dropped
+   * and nothing is counted — `useFitToStage` scales whatever is left (issue
+   * #55) — and the table is still out of the flow, so the badge is the only
+   * thing that joined the row.
+   */
+  it('fits a field of 16 with the longest names, a table and a result', () => {
+    const long = worstCase();
+    const first = long.bracket?.nodes[0];
+    const markup = scene(
+      setBracketWinner(long, first?.id as BracketNodeId, first?.slotA as GroupId),
+    );
+
+    expect(markup.match(/data-bracket-node="/g)).toHaveLength(16);
+    // Sixteen in the first round, and the one who has already won a match is on
+    // the wall twice — in the slot they won and in the one above.
+    expect(Object.keys(numbersOn(markup))).toHaveLength(17);
+    expect(Object.keys(tablesOn(markup))).not.toHaveLength(0);
+    expect(markup).toContain('data-outcome="WINNER"');
+    expect(markup).toContain('beamer-fit');
+    // Still absolutely positioned: the badge did not push the table into the
+    // flow, so the names gave width to the badge and to nothing else.
+    expect(markup).toMatch(/class="[^"]*absolute[^"]*"\s+data-node-table/);
+  });
+
+  /*
+   * The result is drawn on the slot around the badge — border, tint, glyph and
+   * the German word — so the badge itself stays neutral. A fourth copy inside
+   * the number would be the one place on the board where a colour repeats
+   * itself, and it would make the box a second result signal to read.
+   */
+  it('never carries the result itself', () => {
+    const document = drawn(4);
+    const semi = document.bracket?.nodes[0];
+    const markup = scene(
+      setBracketWinner(document, semi?.id as BracketNodeId, semi?.slotA as GroupId),
+    );
+    const boxes = [...markup.matchAll(/data-node-number=""><span class="([^"]*)"/g)].map(
+      (found) => found[1] ?? '',
+    );
+
+    expect(markup).toContain('data-outcome="WINNER"');
+    expect(boxes).not.toHaveLength(0);
+    for (const box of boxes) {
+      expect(box).toContain('bg-wm-bg-elevated');
+      expect(box).not.toContain('wm-result-ring');
+    }
   });
 });
 

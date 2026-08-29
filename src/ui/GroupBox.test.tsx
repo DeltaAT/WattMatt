@@ -18,8 +18,12 @@ import { GroupBox, type GroupBoxScale, type GroupBoxState } from '@/ui/GroupBox'
  *    criterion — a wider box must not imply anything about who is in it.
  */
 
-const box = (props: { number: string; state: GroupBoxState; scale: GroupBoxScale }) =>
-  renderToStaticMarkup(<GroupBox {...props} />);
+const box = (props: {
+  number: string;
+  state: GroupBoxState;
+  scale: GroupBoxScale;
+  glyphs?: boolean;
+}) => renderToStaticMarkup(<GroupBox {...props} />);
 
 /** The class list of the box itself, in the order it is written. */
 function boxClasses(markup: string): string[] {
@@ -42,7 +46,7 @@ function numberClasses(markup: string): string[] {
 const DOT = String.fromCharCode(0xb7);
 
 const STATES: GroupBoxState[] = ['NEUTRAL', 'WINNER', 'LOSER'];
-const SCALES: GroupBoxScale[] = ['hero', 'h1', 'h2'];
+const SCALES: GroupBoxScale[] = ['hero', 'h1', 'h2', 'h3', 'body'];
 
 describe('the group box', () => {
   it('draws the number it is given', () => {
@@ -226,6 +230,95 @@ describe('the group box', () => {
       ),
     );
 
-    expect(steps).toEqual(['text-beamer-hero', 'text-beamer-h1', 'text-beamer-h2']);
+    expect(steps).toEqual([
+      'text-beamer-hero',
+      'text-beamer-h1',
+      'text-beamer-h2',
+      'text-beamer-h3',
+      'text-beamer-body',
+    ]);
+  });
+
+  /*
+   * The two steps the `Turnierbaum` badge is drawn at (issue #103). There the
+   * box sits beside a name rather than being the picture, so the ladder had to
+   * grow downwards — but only to the 32 px floor of docs/STYLEGUIDE.md §2,
+   * because the number is what half the room knows each other by and one
+   * nobody at the back can read is not an identity.
+   */
+  it('goes down to the beamer floor and no further', () => {
+    const steps = SCALES.map((scale) =>
+      numberClasses(box({ number: '7', state: 'NEUTRAL', scale })).find((name) =>
+        name.startsWith('text-beamer-'),
+      ),
+    );
+
+    expect(steps).toContain('text-beamer-body');
+    expect(steps).not.toContain('text-beamer-caption');
+  });
+
+  /*
+   * Issue #103. On a bracket node the result is drawn on the slot around the
+   * badge — its border, its tint, its own glyph and the German word — so the
+   * two slots inside the badge would reserve room for a signal already being
+   * made three times. At a field of sixteen that is three numerals of width per
+   * badge, four badges across the board, taken out of the names.
+   */
+  describe('a box that will never carry a result', () => {
+    it('reserves no room for the glyph', () => {
+      const markup = box({ number: '7', state: 'NEUTRAL', scale: 'body', glyphs: false });
+
+      expect(markup).not.toContain('data-outcome-icon');
+      expect(markup).not.toContain('data-outcome-balance');
+      expect(markup).toContain('>7<');
+    });
+
+    /*
+     * The mirror is what centres the numeral on the box's axis rather than
+     * half a glyph right of it (issue #100). Dropping one slot and keeping the
+     * other would put the fault back; both go, so the numeral is still centred.
+     */
+    it('drops both slots or neither', () => {
+      for (const scale of SCALES) {
+        const bare = box({ number: '12', state: 'NEUTRAL', scale, glyphs: false });
+        const full = box({ number: '12', state: 'NEUTRAL', scale });
+
+        expect(bare.includes('data-outcome-icon'), scale).toBe(
+          bare.includes('data-outcome-balance'),
+        );
+        expect(full).toContain('data-outcome-icon');
+        expect(full).toContain('data-outcome-balance');
+      }
+    });
+
+    /* Geometry is the box's promise (issue #88): dropping the glyph changes
+     * what is inside it, never the padding, the radius or the border. */
+    it('is the same box it was with them', () => {
+      for (const scale of SCALES) {
+        const bare = box({ number: '7', state: 'NEUTRAL', scale, glyphs: false });
+        const full = box({ number: '7', state: 'NEUTRAL', scale });
+
+        expect(geometry(bare), scale).toEqual(geometry(full));
+        expect(numberClasses(bare), scale).toEqual(numberClasses(full));
+      }
+    });
+
+    /* Still the fixed width the issue asks a badge for: `min-w-[2ch]` is on
+     * the numeral, so it survives the glyph slots going away. */
+    it('still gives a 7 the width of a 12', () => {
+      const one = box({ number: '7', state: 'NEUTRAL', scale: 'body', glyphs: false });
+      const two = box({ number: '12', state: 'NEUTRAL', scale: 'body', glyphs: false });
+
+      expect(numberClasses(two)).toEqual(numberClasses(one));
+      expect(numberClasses(one)).toContain('min-w-[2ch]');
+      expect(numberClasses(one)).toContain('wm-tnum');
+    });
+
+    /* The glyph is the default, and the group rounds must keep it: there the
+     * reserved slot is the whole of why nothing moves when a result lands
+     * (issue #77). */
+    it('keeps them unless a caller says otherwise', () => {
+      expect(box({ number: '7', state: 'WINNER', scale: 'h1' })).toContain('✓');
+    });
   });
 });
